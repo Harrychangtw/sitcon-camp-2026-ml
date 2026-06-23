@@ -1,0 +1,25 @@
+{
+  "name": "sitcon-camp-2026-ml",
+  "version": "0.0.0",
+  "private": true,
+  "packageManager": "pnpm@9.15.9",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "dev": "turbo run dev --parallel",
+    "build": "turbo run build",
+    "typecheck": "turbo run typecheck",
+    "lint": "eslint .",
+    "clean": "turbo run clean"
+  },
+  "devDependencies": {
+    "@eslint/js": "9.39.4",
+    "eslint": "9.39.4",
+    "eslint-plugin-react-hooks": "7.1.1",
+    "globals": "17.7.0",
+    "turbo": "2.9.18",
+    "typescript": "5.9.3",
+    "typescript-eslint": "8.62.0"
+  }
+}

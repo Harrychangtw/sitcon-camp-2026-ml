@@ -1,0 +1,31 @@
+# dependencies
+node_modules
+.pnpm-store
+
+# build output
+dist
+.next
+out
+build
+*.tsbuildinfo
+
+# turbo
+.turbo
+
+# python / uv
+.venv
+__pycache__
+*.pyc
+.ruff_cache
+
+# precompute heavy artifacts (small JSON manifests ARE committed; large binaries are NOT)
+public/data/**/*.onnx
+public/data/**/*.bin
+
+# editor / os
+.DS_Store
+*.log
+.env
+.env.local
+.vscode/*
+!.vscode/extensions.json
