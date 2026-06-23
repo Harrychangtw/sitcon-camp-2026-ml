@@ -1,0 +1,4 @@
+{
+  "extends": "@camp/tsconfig/react-library.json",
+  "include": ["src"]
+}
