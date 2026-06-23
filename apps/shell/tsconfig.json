@@ -1,0 +1,19 @@
+{
+  "extends": "@camp/tsconfig/nextjs.json",
+  "compilerOptions": {
+    "baseUrl": ".",
+    "paths": {
+      "@camp/ui": ["../../packages/ui/src"],
+      "@camp/viz": ["../../packages/viz/src"],
+      "@camp/data": ["../../packages/data/src"],
+      "@/*": ["./*"]
+    }
+  },
+  "include": [
+    "next-env.d.ts",
+    "**/*.ts",
+    "**/*.tsx",
+    ".next/types/**/*.ts"
+  ],
+  "exclude": ["node_modules"]
+}
