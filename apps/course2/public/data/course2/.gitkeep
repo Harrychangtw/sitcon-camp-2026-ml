@@ -1,0 +1,3 @@
+# Precompute output lands here.
+# `uv run camp-precompute make-data` writes manifest.json into this folder.
+# Large binaries (*.onnx, *.bin) are gitignored; small JSON is committed.

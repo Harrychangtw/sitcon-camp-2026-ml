@@ -1,0 +1,12 @@
+{
+  "extends": "@camp/tsconfig/vite.json",
+  "compilerOptions": {
+    "baseUrl": ".",
+    "paths": {
+      "@camp/ui": ["../../packages/ui/src"],
+      "@camp/viz": ["../../packages/viz/src"],
+      "@camp/data": ["../../packages/data/src"]
+    }
+  },
+  "include": ["src"]
+}
