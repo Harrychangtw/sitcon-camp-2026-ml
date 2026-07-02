@@ -29,3 +29,8 @@ public/data/**/*.bin
 .env.local
 .vscode/*
 !.vscode/extensions.json
+slides/reference
+slides/decks/png
+
+# Affinity source files (large binaries; export PNG/PDF for the repo instead)
+*.af

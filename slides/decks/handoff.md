@@ -12,6 +12,16 @@ Machine Learning curriculum. Your job is to turn a curriculum spec into
 **Affinity**. You are NOT building anything — no HTML, no slide framework, no
 code. Your entire deliverable is edits to one markdown file.
 
+**Three things the output must get right:**
+1. **Affinity-migratable** — each slide splits into a `TEXT` block (exact strings
+   to typeset, copy-paste, no rewriting) and a `LAYOUT` block (how to arrange),
+   with explicit footer values. Harry should never have to interpret, only place.
+2. **Runs end to end** — a complete, continuous deck from cover to resources, not
+   fragments. Every loop written; each slide's exit sets up the next.
+3. **Leaves room for the interactive parts** — the browser stations are the core
+   of the course; give each one its own hand-off slide (and a debrief where
+   useful) so the deck accounts for that time instead of skipping it.
+
 ## Step 1 — Read these before writing anything (in order)
 1. `slides/decks/course2.md` — the file you will fill in. Read its
    **"For the writing agent — read this first"** section and the **SKELETON**.
@@ -35,18 +45,27 @@ the wrap-up. Do **not** rebuild station content as static slides. When a beat is
 "students explore in the tool," the slide is a short framing/transition slide and
 should carry `→ hand off to <station>`.
 
-## Step 3 — Write, one loop at a time
-Fill in the per-slide entries in `slides/decks/course2.md` using the template
-that's already in that file. Work **sequentially, loop by loop** (Front matter →
-Loop 0 → 1 → 2 → 3 → 4), so voice and density stay consistent.
+## Step 3 — Write the whole deck, loop by loop
+Fill in the per-slide entries in `slides/decks/course2.md` using the
+**Affinity-friendly format defined in that file** (`TEXT` block + `LAYOUT` block;
+there's a worked example). Work **sequentially, loop by loop** (Front matter →
+Loop 0 → 1 → 2 → 3 → 4) so voice and density stay consistent, and **go all the
+way to the end** — the goal is a deck that runs cover → resources.
 
-- Replace the `TODO` lines with real slide entries; renumber contiguously as you
-  add/remove slides.
-- **CHECKPOINT:** after you finish **Loop 0**, stop and show Harry the Loop 0
-  slides for a voice/density calibration pass before continuing. Don't write all
-  five loops blind.
-- Fill the "Notes back to Harry" section at the bottom as you go (open questions,
-  slides blocked on a station screenshot, beats that didn't map to an archetype).
+- Replace the `TODO` lines with real slide entries; renumber contiguously.
+- **One calibration checkpoint:** after **Loop 0**, stop and show Harry those
+  slides to confirm the *format + voice* are right before you commit the other
+  four loops. After his nod, continue straight through to the end without further
+  pauses.
+- **Every station gets a hand-off slide** (fill `INTERACTIVE / STATION`: the knob
+  students turn + what to notice), plus a short debrief slide where it earns one.
+  Size each loop's slides to its time budget (L0~40 / L1~40 / L2~50 / L3~50 /
+  L4~15 min); station time lives inside those budgets.
+- **Finish with a continuity pass:** reread cover → resources and confirm footer
+  `NN / TT` is contiguous (TT correct), each station has its slide(s), each loop's
+  撞牆 → new-tool → re-explore beat is intact, and no `TODO` remains.
+- Fill the "Notes back to Harry" section as you go (open questions, slides blocked
+  on a not-yet-built station screenshot, beats that didn't map to an archetype).
 
 ## Copy & voice rules
 - **zh-primary** (Traditional Chinese; audience = Taiwanese high-schoolers).
@@ -72,13 +91,16 @@ Loop 0 → 1 → 2 → 3 → 4), so voice and density stay consistent.
 - Don't invent pedagogy beyond `docs/course-spec.md`.
 
 ## Definition of done
-- `slides/decks/course2.md` has every loop's beats turned into slide entries,
-  no `TODO` lines left, contiguous numbering.
-- Each slide has: archetype, footer label, loop/beat, title (with tiers/lime
-  marked), body/component content, Affinity layout notes, assets needed, hand-off.
+- `slides/decks/course2.md` covers every loop end to end, no `TODO` left, footer
+  `NN / TT` contiguous with TT filled in.
+- Each slide has a `TEXT` block (verbatim strings, tiers + lime marked) and a
+  `LAYOUT` block (archetype skeleton, placement, notes), plus `ASSETS` and
+  `INTERACTIVE / STATION`.
+- Every station has a hand-off slide (and a debrief where useful); the deck
+  accounts for interaction time, doesn't skip it.
 - The "Notes back to Harry" section captures every open question and blocker.
-- Harry can lay out each slide in Affinity from its entry alone, with no
-  follow-up questions.
+- Harry can typeset each slide in Affinity by copy-pasting the `TEXT` block and
+  following `LAYOUT` — no follow-up questions.
 
 ## Your first action
 Read the three inputs in Step 1, then reply with a **one-paragraph plan for Loop
