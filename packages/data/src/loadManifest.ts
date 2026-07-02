@@ -8,6 +8,8 @@ export interface ManifestArtifact {
   kind: string;
   /** Path relative to the manifest, e.g. "mlp/loss.json". */
   path: string;
+  /** Optional station id this artifact belongs to, e.g. "next-token". */
+  station?: string;
   /** Optional size in bytes, for display. */
   bytes?: number;
 }

@@ -1,0 +1,824 @@
+{
+  "generator": "camp-precompute next-token",
+  "generatedAt": "2026-07-02T09:26:46.853391+00:00",
+  "station": "next-token",
+  "topN": 12,
+  "note": "Word-level bigram next-token table. Keyed on the LAST token of the prompt; falls back to the unigram distribution for unknown context. logit = log(prob); the browser applies softmax(logit / temperature) and top-k.",
+  "vocabSize": 100,
+  "suggestions": [
+    "the cat sat on the",
+    "once upon a",
+    "i want to",
+    "machine learning is",
+    "the weather today is",
+    "a language model is just a next token"
+  ],
+  "fallback": [
+    {
+      "token": "the",
+      "logit": -2.0894
+    },
+    {
+      "token": "a",
+      "logit": -2.7433
+    },
+    {
+      "token": "to",
+      "logit": -2.9104
+    },
+    {
+      "token": "model",
+      "logit": -3.2288
+    },
+    {
+      "token": "is",
+      "logit": -3.3624
+    },
+    {
+      "token": "and",
+      "logit": -3.5165
+    },
+    {
+      "token": "next",
+      "logit": -3.922
+    },
+    {
+      "token": "on",
+      "logit": -4.2097
+    },
+    {
+      "token": "with",
+      "logit": -4.2097
+    },
+    {
+      "token": "ball",
+      "logit": -4.2097
+    },
+    {
+      "token": "data",
+      "logit": -4.2097
+    },
+    {
+      "token": "i",
+      "logit": -4.2097
+    }
+  ],
+  "bigram": {
+    "a": [
+      {
+        "token": "time",
+        "logit": -1.8718
+      },
+      {
+        "token": "small",
+        "logit": -1.8718
+      },
+      {
+        "token": "model",
+        "logit": -1.8718
+      },
+      {
+        "token": "young",
+        "logit": -2.5649
+      },
+      {
+        "token": "language",
+        "logit": -2.5649
+      },
+      {
+        "token": "next",
+        "logit": -2.5649
+      },
+      {
+        "token": "little",
+        "logit": -2.5649
+      },
+      {
+        "token": "transformer",
+        "logit": -2.5649
+      },
+      {
+        "token": "sentence",
+        "logit": -2.5649
+      },
+      {
+        "token": "good",
+        "logit": -2.5649
+      }
+    ],
+    "about": [
+      {
+        "token": "finding",
+        "logit": 0.0
+      }
+    ],
+    "across": [
+      {
+        "token": "the",
+        "logit": 0.0
+      }
+    ],
+    "and": [
+      {
+        "token": "the",
+        "logit": -1.7918
+      },
+      {
+        "token": "warm",
+        "logit": -1.7918
+      },
+      {
+        "token": "bright",
+        "logit": -1.7918
+      },
+      {
+        "token": "then",
+        "logit": -1.7918
+      },
+      {
+        "token": "started",
+        "logit": -1.7918
+      },
+      {
+        "token": "threw",
+        "logit": -1.7918
+      }
+    ],
+    "ball": [
+      {
+        "token": "and",
+        "logit": -0.6931
+      },
+      {
+        "token": "back",
+        "logit": -0.6931
+      }
+    ],
+    "be": [
+      {
+        "token": "or",
+        "logit": -0.6931
+      },
+      {
+        "token": "is",
+        "logit": -0.6931
+      }
+    ],
+    "build": [
+      {
+        "token": "a",
+        "logit": 0.0
+      }
+    ],
+    "can": [
+      {
+        "token": "write",
+        "logit": 0.0
+      }
+    ],
+    "cat": [
+      {
+        "token": "sat",
+        "logit": -0.6931
+      },
+      {
+        "token": "chased",
+        "logit": -0.6931
+      }
+    ],
+    "chased": [
+      {
+        "token": "the",
+        "logit": 0.0
+      }
+    ],
+    "cloudy": [
+      {
+        "token": "with",
+        "logit": 0.0
+      }
+    ],
+    "data": [
+      {
+        "token": "and",
+        "logit": 0.0
+      }
+    ],
+    "dog": [
+      {
+        "token": "sat",
+        "logit": -0.6931
+      },
+      {
+        "token": "ran",
+        "logit": -0.6931
+      }
+    ],
+    "finally": [
+      {
+        "token": "works",
+        "logit": 0.0
+      }
+    ],
+    "finding": [
+      {
+        "token": "good",
+        "logit": 0.0
+      }
+    ],
+    "from": [
+      {
+        "token": "data",
+        "logit": 0.0
+      }
+    ],
+    "fun": [
+      {
+        "token": "when",
+        "logit": 0.0
+      }
+    ],
+    "good": [
+      {
+        "token": "patterns",
+        "logit": -0.6931
+      },
+      {
+        "token": "model",
+        "logit": -0.6931
+      }
+    ],
+    "high": [
+      {
+        "token": "confidence",
+        "logit": 0.0
+      }
+    ],
+    "how": [
+      {
+        "token": "a",
+        "logit": 0.0
+      }
+    ],
+    "i": [
+      {
+        "token": "want",
+        "logit": 0.0
+      }
+    ],
+    "in": [
+      {
+        "token": "data",
+        "logit": -0.6931
+      },
+      {
+        "token": "context",
+        "logit": -0.6931
+      }
+    ],
+    "is": [
+      {
+        "token": "just",
+        "logit": -1.9459
+      },
+      {
+        "token": "mostly",
+        "logit": -1.9459
+      },
+      {
+        "token": "fun",
+        "logit": -1.9459
+      },
+      {
+        "token": "sunny",
+        "logit": -1.9459
+      },
+      {
+        "token": "cloudy",
+        "logit": -1.9459
+      },
+      {
+        "token": "the",
+        "logit": -1.9459
+      },
+      {
+        "token": "often",
+        "logit": -1.9459
+      }
+    ],
+    "just": [
+      {
+        "token": "a",
+        "logit": 0.0
+      }
+    ],
+    "language": [
+      {
+        "token": "model",
+        "logit": 0.0
+      }
+    ],
+    "laptop": [
+      {
+        "token": "and",
+        "logit": 0.0
+      }
+    ],
+    "learn": [
+      {
+        "token": "how",
+        "logit": 0.0
+      }
+    ],
+    "learning": [
+      {
+        "token": "is",
+        "logit": 0.0
+      }
+    ],
+    "learns": [
+      {
+        "token": "to",
+        "logit": 0.0
+      }
+    ],
+    "likely": [
+      {
+        "token": "word",
+        "logit": 0.0
+      }
+    ],
+    "little": [
+      {
+        "token": "rain",
+        "logit": 0.0
+      }
+    ],
+    "machine": [
+      {
+        "token": "learning",
+        "logit": 0.0
+      }
+    ],
+    "mat": [
+      {
+        "token": "and",
+        "logit": 0.0
+      }
+    ],
+    "matters": [
+      {
+        "token": "so",
+        "logit": 0.0
+      }
+    ],
+    "model": [
+      {
+        "token": "learns",
+        "logit": -1.7918
+      },
+      {
+        "token": "is",
+        "logit": -1.7918
+      },
+      {
+        "token": "finally",
+        "logit": -1.7918
+      },
+      {
+        "token": "that",
+        "logit": -1.7918
+      },
+      {
+        "token": "on",
+        "logit": -1.7918
+      },
+      {
+        "token": "predicts",
+        "logit": -1.7918
+      }
+    ],
+    "most": [
+      {
+        "token": "likely",
+        "logit": 0.0
+      }
+    ],
+    "mostly": [
+      {
+        "token": "about",
+        "logit": 0.0
+      }
+    ],
+    "mouse": [
+      {
+        "token": "across",
+        "logit": 0.0
+      }
+    ],
+    "next": [
+      {
+        "token": "token",
+        "logit": -0.6931
+      },
+      {
+        "token": "word",
+        "logit": -0.6931
+      }
+    ],
+    "not": [
+      {
+        "token": "to",
+        "logit": 0.0
+      }
+    ],
+    "often": [
+      {
+        "token": "the",
+        "logit": 0.0
+      }
+    ],
+    "on": [
+      {
+        "token": "the",
+        "logit": -0.4055
+      },
+      {
+        "token": "data",
+        "logit": -1.0986
+      }
+    ],
+    "once": [
+      {
+        "token": "upon",
+        "logit": 0.0
+      }
+    ],
+    "opened": [
+      {
+        "token": "the",
+        "logit": 0.0
+      }
+    ],
+    "or": [
+      {
+        "token": "not",
+        "logit": 0.0
+      }
+    ],
+    "order": [
+      {
+        "token": "matters",
+        "logit": 0.0
+      }
+    ],
+    "park": [
+      {
+        "token": "to",
+        "logit": 0.0
+      }
+    ],
+    "patterns": [
+      {
+        "token": "in",
+        "logit": 0.0
+      }
+    ],
+    "picked": [
+      {
+        "token": "up",
+        "logit": 0.0
+      }
+    ],
+    "play": [
+      {
+        "token": "with",
+        "logit": 0.0
+      }
+    ],
+    "predict": [
+      {
+        "token": "the",
+        "logit": 0.0
+      }
+    ],
+    "predicts": [
+      {
+        "token": "the",
+        "logit": 0.0
+      }
+    ],
+    "ran": [
+      {
+        "token": "to",
+        "logit": 0.0
+      }
+    ],
+    "reads": [
+      {
+        "token": "a",
+        "logit": 0.0
+      }
+    ],
+    "robot": [
+      {
+        "token": "wanted",
+        "logit": -0.6931
+      },
+      {
+        "token": "picked",
+        "logit": -0.6931
+      }
+    ],
+    "sat": [
+      {
+        "token": "on",
+        "logit": 0.0
+      }
+    ],
+    "small": [
+      {
+        "token": "robot",
+        "logit": -0.6931
+      },
+      {
+        "token": "model",
+        "logit": -0.6931
+      }
+    ],
+    "so": [
+      {
+        "token": "much",
+        "logit": 0.0
+      }
+    ],
+    "started": [
+      {
+        "token": "to",
+        "logit": 0.0
+      }
+    ],
+    "student": [
+      {
+        "token": "wanted",
+        "logit": -0.6931
+      },
+      {
+        "token": "opened",
+        "logit": -0.6931
+      }
+    ],
+    "sunny": [
+      {
+        "token": "and",
+        "logit": 0.0
+      }
+    ],
+    "test": [
+      {
+        "token": "the",
+        "logit": 0.0
+      }
+    ],
+    "that": [
+      {
+        "token": "can",
+        "logit": 0.0
+      }
+    ],
+    "the": [
+      {
+        "token": "ball",
+        "logit": -2.1203
+      },
+      {
+        "token": "next",
+        "logit": -2.1203
+      },
+      {
+        "token": "model",
+        "logit": -2.1203
+      },
+      {
+        "token": "cat",
+        "logit": -2.5257
+      },
+      {
+        "token": "dog",
+        "logit": -2.5257
+      },
+      {
+        "token": "weather",
+        "logit": -2.5257
+      },
+      {
+        "token": "mat",
+        "logit": -3.2189
+      },
+      {
+        "token": "rug",
+        "logit": -3.2189
+      },
+      {
+        "token": "mouse",
+        "logit": -3.2189
+      },
+      {
+        "token": "room",
+        "logit": -3.2189
+      },
+      {
+        "token": "park",
+        "logit": -3.2189
+      },
+      {
+        "token": "question",
+        "logit": -3.2189
+      }
+    ],
+    "then": [
+      {
+        "token": "we",
+        "logit": 0.0
+      }
+    ],
+    "threw": [
+      {
+        "token": "the",
+        "logit": 0.0
+      }
+    ],
+    "time": [
+      {
+        "token": "a",
+        "logit": 0.0
+      }
+    ],
+    "to": [
+      {
+        "token": "learn",
+        "logit": -1.7047
+      },
+      {
+        "token": "build",
+        "logit": -1.7047
+      },
+      {
+        "token": "be",
+        "logit": -1.7047
+      },
+      {
+        "token": "the",
+        "logit": -2.3979
+      },
+      {
+        "token": "play",
+        "logit": -2.3979
+      },
+      {
+        "token": "predict",
+        "logit": -2.3979
+      },
+      {
+        "token": "understand",
+        "logit": -2.3979
+      },
+      {
+        "token": "code",
+        "logit": -2.3979
+      }
+    ],
+    "today": [
+      {
+        "token": "is",
+        "logit": 0.0
+      }
+    ],
+    "token": [
+      {
+        "token": "from",
+        "logit": -0.6931
+      },
+      {
+        "token": "predictor",
+        "logit": -0.6931
+      }
+    ],
+    "train": [
+      {
+        "token": "the",
+        "logit": 0.0
+      }
+    ],
+    "transformer": [
+      {
+        "token": "reads",
+        "logit": 0.0
+      }
+    ],
+    "understand": [
+      {
+        "token": "why",
+        "logit": 0.0
+      }
+    ],
+    "up": [
+      {
+        "token": "the",
+        "logit": 0.0
+      }
+    ],
+    "upon": [
+      {
+        "token": "a",
+        "logit": 0.0
+      }
+    ],
+    "want": [
+      {
+        "token": "to",
+        "logit": 0.0
+      }
+    ],
+    "wanted": [
+      {
+        "token": "to",
+        "logit": 0.0
+      }
+    ],
+    "warm": [
+      {
+        "token": "and",
+        "logit": 0.0
+      }
+    ],
+    "we": [
+      {
+        "token": "train",
+        "logit": -0.6931
+      },
+      {
+        "token": "test",
+        "logit": -0.6931
+      }
+    ],
+    "weather": [
+      {
+        "token": "today",
+        "logit": 0.0
+      }
+    ],
+    "when": [
+      {
+        "token": "the",
+        "logit": 0.0
+      }
+    ],
+    "why": [
+      {
+        "token": "order",
+        "logit": 0.0
+      }
+    ],
+    "with": [
+      {
+        "token": "the",
+        "logit": -1.0986
+      },
+      {
+        "token": "a",
+        "logit": -1.0986
+      },
+      {
+        "token": "high",
+        "logit": -1.0986
+      }
+    ],
+    "word": [
+      {
+        "token": "with",
+        "logit": -1.0986
+      },
+      {
+        "token": "is",
+        "logit": -1.0986
+      },
+      {
+        "token": "in",
+        "logit": -1.0986
+      }
+    ],
+    "write": [
+      {
+        "token": "text",
+        "logit": 0.0
+      }
+    ],
+    "young": [
+      {
+        "token": "student",
+        "logit": 0.0
+      }
+    ]
+  }
+}
