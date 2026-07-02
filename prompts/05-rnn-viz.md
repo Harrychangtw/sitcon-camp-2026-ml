@@ -80,6 +80,19 @@ pnpm --filter @app/course2 dev   # open http://localhost:5173/rnn-viz
 Step through a sequence; watch the heatmap change per step. Confirm `Heatmap`
 still works in `/next-token` (you didn't break 04). No console errors.
 
+## Design language (follow `prompts/DESIGN.md`)
+
+Read `prompts/DESIGN.md`. Verify the one-time `@camp/ui` token retune is already
+done; if not, do it. Station-specific notes:
+
+- The hidden-state `Heatmap` uses the **single-hue ramp** (near-black → lime); if
+  the state has signed values, use the restrained diverging scale (purple ↔ lime
+  through grey) from `DESIGN.md`.
+- The **active step** is the one thing marked in **lime** (highlighted column /
+  border); consumed tokens and past steps stay greyscale.
+- Reuse the **shared `Heatmap`** — don't fork it or its color logic.
+- Step / token / axis labels use the `label-mono` idiom.
+
 ## Definition of Done (checked by `prompts/validate.md`)
 
 Shared contract (`prompts/README.md` items 1–7), plus **rnn-viz-specific**:
@@ -91,6 +104,9 @@ Shared contract (`prompts/README.md` items 1–7), plus **rnn-viz-specific**:
       `Heatmap` updates per step.
 - [ ] `Heatmap` is the **shared `@camp/viz` primitive** (reused/extended, not a
       station-local copy); `/next-token` still renders correctly.
+- [ ] **Design:** follows `prompts/DESIGN.md` — single-hue/diverging heatmap ramp,
+      lime marks the active step, `label-mono` labels; reuses the shared
+      `Heatmap` color logic (no hard-coded hexes).
 - [ ] `pnpm typecheck && pnpm lint && pnpm build` are green.
 
 ## Report when done

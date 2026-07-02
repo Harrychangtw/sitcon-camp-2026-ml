@@ -86,6 +86,20 @@ pnpm --filter @app/course2 dev   # open http://localhost:5173/transformer
 
 Hover tokens; switch layer/head and watch attention change. No console errors.
 
+## Design language (follow `prompts/DESIGN.md`)
+
+Read `prompts/DESIGN.md`. Verify the one-time `@camp/ui` token retune is already
+done; if not, do it. Station-specific notes:
+
+- The token row sits on near-black; tokens in `text-fg`, labels via `label-mono`.
+- Attention links are **greyscale with opacity/width ∝ weight** (the deck's
+  distribution idiom); the **focused token and its links** light up in **lime** —
+  the rest recede.
+- If you visually distinguish **heads**, use the **cyan/purple categorical** hues
+  (2–3 max), not a rainbow — heads are categories, attention strength is opacity.
+- `AttentionLines` reads colors from **theme vars / props**, never hard-coded.
+- Layer / head selectors use the uppercase/tracked + `label-mono` idioms.
+
 ## Definition of Done (checked by `prompts/validate.md`)
 
 Shared contract (`prompts/README.md` items 1–7), plus **transformer-specific**:
@@ -97,6 +111,9 @@ Shared contract (`prompts/README.md` items 1–7), plus **transformer-specific**
       hard-coded, **not** computed in-browser).
 - [ ] Hover/select a token → its attention links light up.
 - [ ] Layer **and** head selectors change the displayed attention.
+- [ ] **Design:** follows `prompts/DESIGN.md` — greyscale links with opacity ∝
+      weight, lime on the focused token + its links, cyan/purple only for heads;
+      `AttentionLines` reads colors from theme vars/props (no hard-coded hexes).
 - [ ] `pnpm typecheck && pnpm lint && pnpm build` are green.
 
 ## Report when done

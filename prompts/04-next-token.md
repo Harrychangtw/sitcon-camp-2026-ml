@@ -94,6 +94,19 @@ pnpm --filter @app/course2 dev   # open http://localhost:5173/next-token
 Type a prompt; slide temperature and watch the distribution sharpen/flatten;
 change top-k. No console errors; no onnx/three at module scope.
 
+## Design language (follow `prompts/DESIGN.md`)
+
+Read `prompts/DESIGN.md`. Verify the one-time `@camp/ui` token retune is already
+done; if not, do it. Station-specific notes:
+
+- The probability display (bars and/or the new `Heatmap`) is a **single-hue ramp**
+  (near-black → lime); the **argmax** token is the one mark in full **lime**.
+- Style the bar field like the deck's distribution bars: thin bars, one color,
+  magnitude via height/opacity — not per-token hues.
+- `Heatmap` must read its color scale from **theme vars / props** (it's reused by
+  05-rnn-viz), never hard-coded — keep it themeable.
+- Temperature / top-k / token labels use the `label-mono` idiom.
+
 ## Definition of Done (checked by `prompts/validate.md`)
 
 Shared contract (`prompts/README.md` items 1–7), plus **next-token-specific**:
@@ -108,6 +121,9 @@ Shared contract (`prompts/README.md` items 1–7), plus **next-token-specific**:
       greedy highlights the argmax.
 - [ ] If ONNX is used, it's lazy/guarded and the session is released on unmount;
       no `onnxruntime-web` at module scope.
+- [ ] **Design:** follows `prompts/DESIGN.md` — single-hue (near-black → lime)
+      distribution, lime on the argmax; `Heatmap` reads its scale from theme
+      vars/props (no hard-coded hexes).
 - [ ] `pnpm typecheck && pnpm lint && pnpm build` are green.
 
 ## Report when done

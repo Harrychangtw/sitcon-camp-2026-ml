@@ -87,6 +87,21 @@ pnpm --filter @app/course2 dev   # open http://localhost:5173/tokenizer
 Type text, flip schemes, confirm ids appear and BPE subword-splits a rare word.
 No console errors.
 
+## Design language (follow `prompts/DESIGN.md`)
+
+Read `prompts/DESIGN.md` first — and, since this is **session 1**, do its
+**one-time `@camp/ui` token retune** (palette: bg `#0A0A0A`, lime accent
+`#D6FB00`, cyan/purple categoricals) here; later sessions assume it's done.
+Station-specific notes:
+
+- Token chips are **thin-bordered square-ish cards** (`border border-border`) on
+  near-black; token text in `text-fg`, its **id** as a `label-mono` caption
+  (`font-mono text-xs uppercase tracking-wide text-muted`).
+- Whitespace / `▁` markers in `text-muted` so they read as structure, not noise.
+- **Lime** marks only the chip under inspection (hovered, or the rare word's BPE
+  subword split you're calling out) — everything else stays greyscale.
+- Scheme toggle + labels use the uppercase/tracked heading idiom.
+
 ## Definition of Done (checked by `prompts/validate.md`)
 
 Shared contract (see `prompts/README.md` items 1–7), plus these **tokenizer-
@@ -100,6 +115,9 @@ specific** criteria:
 - [ ] Each token shows an **id** from the loaded vocab.
 - [ ] BPE visibly splits at least one rare/unknown word into subword pieces.
 - [ ] No new primitive was added to `@camp/viz` (chips are DOM).
+- [ ] **Design:** follows `prompts/DESIGN.md` — theme utilities (no hard-coded
+      hexes), mono/uppercase labels, lime marks only the inspected chip. Since
+      this is session 1, the `@camp/ui` token retune is done.
 - [ ] `pnpm typecheck && pnpm lint && pnpm build` are green.
 
 ## Report when done

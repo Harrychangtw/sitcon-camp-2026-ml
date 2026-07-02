@@ -93,6 +93,21 @@ pnpm --filter @app/course2 dev   # open http://localhost:5173/embedding
 Toggle 2D/3D, search a word, confirm neighbours light up. Rotate the 3D view.
 No console errors; no three import at module scope.
 
+## Design language (follow `prompts/DESIGN.md`)
+
+Read `prompts/DESIGN.md`. Verify the one-time `@camp/ui` token retune is already
+done (session 1's job); if not, do it. Station-specific notes:
+
+- Scatter points render **greyscale** (`fg`/`muted`) on near-black by default — a
+  quiet field. When "color by category" is on, use the **cyan/purple categorical
+  hues** (plus greys) for the clusters — this is exactly what they're for; don't
+  rainbow.
+- The searched word **and its neighbours** are the only marks in **lime**
+  (`accent`); dim the rest. At most one "hot" cluster at a time.
+- `Scatter3D` (and `Scatter2D`) must read colors from **theme CSS vars / props**,
+  not hard-coded hues — accent/categoricals/greys come from `@camp/ui` tokens.
+- Axis / legend / neighbour-list labels use the `label-mono` idiom.
+
 ## Definition of Done (checked by `prompts/validate.md`)
 
 Shared contract (`prompts/README.md` items 1–7), plus **embedding-specific**:
@@ -106,6 +121,9 @@ Shared contract (`prompts/README.md` items 1–7), plus **embedding-specific**:
 - [ ] Searching a word highlights it and shows its nearest neighbours.
 - [ ] No three.js or fetch inside the station file; no lesson data inside
       `@camp/viz`.
+- [ ] **Design:** follows `prompts/DESIGN.md` — greyscale points, lime for the
+      searched word + neighbours, cyan/purple for categories; colors come from
+      theme vars/props (no hard-coded hexes).
 - [ ] `pnpm typecheck && pnpm lint && pnpm build` are green.
 
 ## Report when done

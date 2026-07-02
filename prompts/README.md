@@ -25,6 +25,12 @@ stations reuse viz primitives that earlier ones flesh out. Build sequentially.
 
 `LossCurve` is a `@camp/viz` stub but no Course 2 station needs it — leave it.
 
+**`DESIGN.md`** is the shared visual language (the course deck's palette + the
+`harrychang.me` editorial idioms). Every station follows it; session 1
+(`01-tokenizer`) does the **one-time `@camp/ui` token retune** it describes
+(near-black `#0A0A0A` surface, lime `#D6FB00` focus accent, cyan/purple
+categoricals), and later sessions verify rather than redo it.
+
 ## Why sequential, not parallel
 
 The six sessions are **not independent**. They share three files/surfaces and
@@ -70,6 +76,11 @@ be **objectively checkable**, not "does it look right":
 7. **The route renders** at `/<station-id>` in `pnpm --filter @app/course2 dev`
    with no console errors, and delivers the station's **specific goal** (defined
    per-prompt).
+8. **Follows the design language** in `prompts/DESIGN.md` — theme utilities only
+   (no hard-coded hexes), mono/uppercase micro-labels, lime accent reserved for
+   the focused/active element, viz colors from theme vars/props. The `@camp/ui`
+   token retune is done once (session 1) and reused.
 
 Each station prompt restates #7 as concrete, checkable, station-specific
-criteria. `validate.md` verifies 1–7 for all six.
+criteria, and #8 as station-specific design notes. `validate.md` verifies 1–8
+for all six.

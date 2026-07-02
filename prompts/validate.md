@@ -90,6 +90,22 @@ and the station-specific behavior from its prompt actually works:
 - **transformer:** hovering a token lights its attention links; layer **and**
   head selectors change the display.
 
+**F. Design-language conformance (item 8 — `prompts/DESIGN.md`)**
+- **Tokens retuned once:** `packages/ui/src/theme.css` `.dark` block matches the
+  deck palette — bg `10 10 10` (`#0A0A0A`), accent `214 251 0` (`#D6FB00`), panel
+  `23 23 23`, muted `158 158 158`; cyan/purple categoricals exist if used. There
+  is **one** retune, not per-station divergence.
+- **No hard-coded hexes:** grep station `.tsx` and `packages/viz/*` for
+  `#[0-9a-fA-F]{3,6}` / `rgb(` / `hsl(` color literals — colors should come from
+  theme utilities (`bg-bg`, `text-fg`, `text-muted`, `accent`, `border-border`)
+  or CSS vars/props. Flag literals (a neutral SVG `none`/`currentColor` is fine).
+- **Idioms present:** micro-labels use `font-mono ... uppercase` (the `label-mono`
+  idiom); the lime accent marks only the focused/active element (not every mark).
+- **Motion (if any):** guarded by `prefers-reduced-motion`.
+- Judgment call, but check it against the station's **Design language** section +
+  its Design checkbox. Verify on the running route where you can; otherwise mark
+  "code-reviewed, not run."
+
 > Prefer verifying routes via the running dev server (browser tools or a manual
 > pass). If you can't drive a browser, fall back to reading the station source
 > against its rubric and **say so** in the report — mark those items
@@ -109,7 +125,7 @@ and the station-specific behavior from its prompt actually works:
 
 Produce a single table — one row per station — with columns:
 
-`station | build gate (tc/lint/build) | artifact+manifest | loads via @camp/data | golden-rule compliance | primitive real & shared | route renders goal | VERDICT`
+`station | build gate (tc/lint/build) | artifact+manifest | loads via @camp/data | golden-rule compliance | primitive real & shared | route renders goal | design (DESIGN.md) | VERDICT`
 
 Use ✅ / ⚠️ / ❌ per cell. Then:
 

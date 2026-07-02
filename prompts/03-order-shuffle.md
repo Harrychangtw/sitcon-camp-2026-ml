@@ -80,6 +80,19 @@ pnpm --filter @app/course2 dev   # open http://localhost:5173/order-shuffle
 Shuffle words; confirm BoW prediction is unchanged and the order-aware one moves.
 No console errors.
 
+## Design language (follow `prompts/DESIGN.md`)
+
+Read `prompts/DESIGN.md`. Verify the one-time `@camp/ui` token retune is already
+done; if not, do it. Station-specific notes:
+
+- Word chips are **thin-bordered cards** on near-black; the dragged/active chip
+  gets the **lime** outline, the rest stay greyscale.
+- The two prediction panels carry `label-mono` headers — `BAG-OF-WORDS` and
+  `ORDER-AWARE` — uppercase/tracked.
+- Prediction bars are **single-hue, opacity/width-encoded** (no rainbow); **lime**
+  marks the winning / just-changed label so the order-aware panel visibly
+  "reacts" while bag-of-words sits still.
+
 ## Definition of Done (checked by `prompts/validate.md`)
 
 Shared contract (`prompts/README.md` items 1–7), plus **order-shuffle-specific**:
@@ -91,6 +104,9 @@ Shared contract (`prompts/README.md` items 1–7), plus **order-shuffle-specific
       shuffle) and order-aware (**changes** under shuffle).
 - [ ] The order-aware prediction comes from the **precomputed artifact**, not
       an in-browser model.
+- [ ] **Design:** follows `prompts/DESIGN.md` — thin-bordered chips, `label-mono`
+      panel headers, single-hue opacity-encoded bars, lime on the changed label;
+      theme utilities only (no hard-coded hexes).
 - [ ] `pnpm typecheck && pnpm lint && pnpm build` are green.
 
 ## Report when done
