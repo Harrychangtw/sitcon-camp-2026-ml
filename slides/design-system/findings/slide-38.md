@@ -1,0 +1,9 @@
+# Slide 38 — Conclusions
+- **Archetype**: section-divider
+- **Grid & layout**: Full-bleed background image (glitch/datamosh texture) fills the frame. Text block sits in the left third to left-half, vertically around the lower-middle. Two stacked left-aligned lines: an eyebrow/kicker "Section 04." above a large CJK title line. Footer band still present (left "SITCON 2026" faint over texture, center "38/41", right "Conclusions"). Left safe-area margin aligns the text stack. (slide 38)
+- **Type roles**: head — the kicker "Section 04." is a smaller grey Latin label; the title "當 AI 變聰明，我們該問什麼問題？" is the large CJK head line, white, heaviest weight. Two-tier heading: grey kicker + white title. Title ~1.6–2× the kicker. (slide 38)
+- **Color / tokens**: Background is a vivid full-bleed glitch/scanline image dominated by blues/purples with horizontal RGB-shift streaks and colored noise (magenta/cyan/green speckle) — an image, not a token color. Foreground uses the white-vs-grey split: kicker "Section 04." in grey, title in white. No lime accent; no viridis ramp (the multicolor is the datamosh photo). Footer text is low-contrast grey over the busy image. (slide 38)
+- **Components present**: Section-divider text block = kicker label ("Section 04.") + CJK section title. Full-bleed background image treatment. No capsules, no chart. (slide 38)
+- **Motion hints**: Glitch texture implies a transition/impact moment between sections; possibly animated glitch on entry (not determinable). (slide 38)
+- **Reusable pattern**: This slide is an instance of "numbered section-divider over full-bleed glitch background, left-anchored kicker + title".
+- **One-offs / inconsistencies**: The heavy glitch/datamosh photographic background is a divider-only treatment, unlike the flat near-black backgrounds of content slides — canonical for section dividers but not for content. Footer contrast is compromised by the busy image (incidental). (slide 38)

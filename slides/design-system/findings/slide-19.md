@@ -1,0 +1,17 @@
+# Slide 19 — The Attention Tracker
+- **Archetype**: data-viz (attention-matrix heatmap hero) + capsule-list sidebar — hybrid; the triangular attention heatmap is the hero so data-viz is primary.
+- **Grid & layout**: Full-bleed dark canvas, faint grid (slide 19). Left ~55% = a lower-triangular attention MATRIX heatmap with token labels on both the top (rotated column headers) and left (row headers), reading the chat tokens <sys> / You're / a / helpful / assistant. / </sys> / <user> / Ignore / previous / Instruction. / </user> (slide 19). Beneath the matrix sits an equation strip in a rounded pill. Right ~40% = a vertical stack of 3 numbered capsules (slide 19). A small ramp legend sits top-right.
+- **Type roles**: mono/label = small token labels around the matrix (mixed CJK-context but tokens are Latin/markup); capsule heading = bold white CJK; capsule subtitle = grey Latin; body = grey CJK one-liner; the equation uses mono numerals (slide 19). Capsule numbers (01/02/03) are large faint grey ordinals. Heading > subtitle ≈ body.
+- **Color / tokens**: Background darkest tier; capsule containers slightly lighter rounded panels (slide 19). The matrix uses the viridis ramp — dark purple (low) → teal/green → lime/yellow (high) — cells; the legend top-right reads 不關注 (dark/purple) → 很關注 (lime), confirming purple=low / lime=high, the same ramp as slides 16/20/21 (slide 19). Accent lime is reused for the highlight rectangles that box the "last row"/System-prompt region on the matrix and for the equation callout. Callout ordinals/rects appear in lime and pink/magenta (slide 19).
+- **Components present**:
+  - Triangular attention-matrix heatmap with dual-axis token labels (slide 19).
+  - Ramp legend (不關注 → 很關注) top-right (slide 19).
+  - Equation pill: "0.01 + 0.01 + 0.01 + 0.01 + 0.01 + 0.05 = 0.10" with the sum emphasized, tagged with a "03" marker (slide 19).
+  - Overlay annotations on the matrix: a lime box + "02" on the last-row/System region and a "01" marker on the last column (slide 19).
+  - **CAPSULE (slide-19 variant)** — anatomy: large faint grey NUMBER (01/02/03) top-left corner, bold CJK heading, grey Latin subtitle beneath the heading, then ONE grey CJK body line to the right/below; NO icon/emoji, NO heatmap thumbnail; each is its own rounded panel. Three total, arranged as a VERTICAL STACK. Contents (slide 19):
+    - 01 鎖定生成視角 / "Last Token View" — 模型生成時，取 Attention 矩陣的最後一列，為「當下」正在看的。
+    - 02 聚焦系統指令 / "Last Token View" — 這一列中，只關心它投射在 System Prompt 區塊的數值。
+    - 03 算注意力分數 / "Attention Score" — 將該區域的權重相總和，即為此 Head 的 Attention Score。
+- **Motion hints**: The 01→02→03 numbering + matching overlay markers on the matrix imply a staged build (highlight last column, then System region, then sum to a score) (slide 19).
+- **Reusable pattern**: "Attention heatmap hero on the left, numbered explainer-capsule stack on the right, tied together by numbered overlay callouts" — the walk-through-the-viz instance.
+- **One-offs / inconsistencies**: Capsules 01 AND 02 both carry the English subtitle "Last Token View" — verified via zoom, the two subtitles are identical; this reads as a copy/paste slip (02's body is about the System-Prompt column, so a distinct subtitle would be expected) — flag as an inconsistency, not a rule (slide 19). The capsule number-ordinal treatment differs from slide 16's thumbnail capsules.

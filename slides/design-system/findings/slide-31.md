@@ -1,0 +1,13 @@
+# Slide 31 — Exp 1: Context Length
+- **Archetype**: capsule-list
+- **Grid & layout**: Two-column split with no top title bar. Left ~35% holds a large left-aligned section title ("實驗小結") vertically centered. Right ~60% holds a vertical stack of 3 full-width capsules, evenly spaced with gutters between them. A faint dot/line grid is visible in the background. Standard footer present (slide 31).
+- **Type roles**: head (very large bold CJK title on the left; bold CJK capsule headings), body (CJK capsule body lines, regular weight), mono/label-ish (Latin en subtitles under each capsule heading, lighter/smaller). Mixed CJK+Latin appears inside body lines (e.g. "Focus Score 隨著…", "2k Tokens 後…") on shared baselines.
+- **Color / tokens**: Near-black background. Left title in bright white, bold. Capsules are dark elevated cards (slightly lighter-than-background fill) with rounded corners and a subtle border. Capsule zh heading in white; en subtitle in mid-grey. Body text in a light near-white grey. No lime accent used on this slide; no viridis ramp.
+- **Components present**: 3 CAPSULES, arranged as a vertical stack (one column), each full card-width.
+  - Anatomy (uniform across all 3): left cell = emoji icon above/beside a two-line label block (bold zh heading + smaller grey en subtitle); a thin vertical divider rule; right cell = a single multi-line body paragraph. Internal padding is generous; corners rounded.
+  - Capsule 1: emoji = line-chart-on-grid glyph; heading "長度稀釋" / subtitle "Context Dilution"; body "Focus Score 隨著輸入長度增加而衰減。若文章過長，連良性文本的注意力也會被分散。" (slide 31, capsule crop).
+  - Capsule 2: emoji = ocean wave 🌊; heading "動態閾值" / subtitle "Adaptive Threshold"; body "固定閾值在長文中會導致誤判。應設計為隨輸入長度下降的數值。".
+  - Capsule 3: emoji = pushpin 📌; heading "規模法則" / subtitle "Scaling Laws"; body "在 8B 模型相對穩定；但 0.6B 小模型在 2k Tokens 後無法有效分辨。".
+- **Motion hints**: Even 3-item vertical stack lends itself to sequential top-to-bottom reveal (not confirmed from static frame).
+- **Reusable pattern**: This slide is an instance of "big left title + right stack of icon capsules" — a summary/recap layout.
+- **One-offs / inconsistencies**: Nothing incidental; the three capsules are highly consistent (same emoji-heading-rule-body anatomy), making this the canonical capsule pattern for the deck.

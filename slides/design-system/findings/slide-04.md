@@ -1,0 +1,10 @@
+# Slide 04 — The Injection Threat
+- **Archetype**: section-divider
+- **Grid & layout**: Full-bleed. Unlike the other slides, the entire background is a vivid full-bleed glitch/datamosh image (horizontal scanline smear in green / magenta / blue / purple, brightening toward the right) rather than the flat near-black grid (slide 4). Title block is left-anchored, sitting on the lower-left third, vertically around the lower-middle. Two stacked lines. Large empty area to the right lets the glitch texture read (slide 4).
+- **Type roles**: HEAD appears. Line 1 "Section 01." in grey (dimmer). Line 2 "為什麼要「打開」LLM?" in brighter/white head type — grey-eyebrow / bright-heading split (slide 4). Mixed script: Latin "Section 01." and "LLM" inline with CJK; fullwidth quotes 「」 and a halfwidth "?" (slide 4).
+- **Color / tokens**: Background tier = full-bleed glitch image (the only non-flat background in slides 1–7), palette overlaps the deck's viridis/spectral ramp (greens + purples). Foreground: grey eyebrow vs white heading. No lime accent visible (slide 4).
+- **Components present**: (1) Section eyebrow + heading title block. (2) Footer. No capsules present.
+- **Footer (shared component)**: left "SITCON 2026", center "4/41", right "The Injection Threat" — LOW CONFIDENCE: footer-right is rendered over the glitch and only "The Inje…" is legibly resolvable in crops; inferred to "The Injection Threat" from section context (slides 5–7 carry the same label). Footer text appears darker/less legible here than on flat slides (slide 4).
+- **Motion hints**: The glitch background suggests possible animated noise on entry, but nothing in the still confirms motion.
+- **Reusable pattern**: This slide is an instance of a section-divider — "Section NN." eyebrow + section question over a full-bleed thematic (glitch) background.
+- **One-offs / inconsistencies**: Full-bleed glitch imagery is unique to section dividers and breaks the otherwise flat near-black + grid system; treat as the divider treatment, not a general background rule. Footer legibility over the image is an accident of the busy background.

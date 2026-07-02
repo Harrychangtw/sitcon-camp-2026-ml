@@ -1,0 +1,12 @@
+# Slide 11 — How LLMs "Listen"
+- **Archetype**: section-divider
+- **Grid & layout**: Full-bleed divider (slide 11). Title block sits in the lower-left quadrant, left-aligned, near the left margin. The rest of the frame is filled by a full-bleed glitch/datamosh background image. A small top-center header/icon reads "LLM Visualization" (tiny, dim). Footer at bottom: left SITCON 2026, center 11/41, right "How LLMs 'Listen'".
+- **Type roles**: head — a two-line section label. Line 1 "Section 02." (Latin, dim/grey, smaller kicker) over line 2 怎麼用「注意力」找內鬼？ (CJK, brighter/white, larger). Mixed script: Latin kicker + CJK title. Title ~1.5–2× the kicker.
+- **Color / tokens**: Background is a dark canvas overlaid with a multicolor glitch texture (horizontal scanline streaks in RGB-ish greens/magentas/blues concentrated toward the right and bottom) — a decorative image, not a token ramp. Foreground: grey "Section 02." kicker (dim tier) vs white CJK title (bright tier) — the white-vs-grey split as kicker-vs-title. No lime. The glitch is NOT viridis; it is chromatic noise.
+- **Components present**:
+  - Section kicker + title pair ("Section 02." / 怎麼用「注意力」找內鬼？).
+  - Full-bleed glitch background image.
+  - Small top-center "LLM Visualization" label with a leading icon.
+- **Motion hints**: Glitch/datamosh imagery strongly implies an animated noise transition into the section; not confirmable from still.
+- **Reusable pattern**: This slide is an instance of a numbered section divider ("Section NN." kicker + CJK title, lower-left) over a full-bleed thematic image.
+- **One-offs / inconsistencies**: The glitch background is bespoke to this section opener. The tiny top-center "LLM Visualization" tag also appears on slide 14's top-center — appears to be a running section/tool label distinct from the footer, worth noting.

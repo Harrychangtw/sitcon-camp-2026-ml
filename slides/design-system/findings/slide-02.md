@@ -1,0 +1,10 @@
+# Slide 02 — About
+- **Archetype**: other (about / speaker-bio, two-column)
+- **Grid & layout**: Full-bleed near-black with the faint recurring background grid (slide 2). Content sits on a horizontal band roughly at vertical center. Two-column layout: LEFT column (left ~third) holds the name + email; RIGHT column (starts near horizontal center, occupies center-right) holds two stacked bio paragraph groups. Both columns are baseline/top aligned to the same upper edge of the content band. Large empty margins top and bottom (slide 2).
+- **Type roles**: HEAD and BODY appear. Left: "Harry Chang" is very large Latin head type in white (biggest element on slide); directly beneath, "chiwei@harrychang.me" is a smaller grey line (email), giving a white-name / grey-detail split analogous to the title split (slide 2). Right column: BODY-size CJK text in white/near-white, two groups. Group 1: "興趣與專長：" (label line) / "影片剪輯、攝影、軟體工程". Group 2: "奧義智慧研究實習生＆準臺大資工生" / "研究成果發表於 TMLR 及 EACL" (slide 2). Mixed script: Latin acronyms "TMLR", "EACL" sit inline in CJK with word-spacing; fullwidth punctuation (、＆：) used throughout.
+- **Color / tokens**: Background darkest near-black. Foreground two-tier: white (name, bio body) vs grey (email subline). No lime accent, no viridis ramp on this slide (slide 2).
+- **Components present**: (1) Name + email identity block (left). (2) Two-group bio text block (right), each group = optional label line + content line(s). (3) Footer. No capsules present — the right column is plain stacked text groups, not bordered cards.
+- **Footer (shared component)**: left "SITCON 2026", center "2/41", right "About" (slide 2).
+- **Motion hints**: None evident.
+- **Reusable pattern**: This slide is an instance of a two-column bio/about — oversized name on the left, right-column detail paragraphs.
+- **One-offs / inconsistencies**: The very large left-column name is the slide's dominant element and is bigger relative to body than the cover title-to-metadata relationship; note as an about-page treatment. Bio groups have no icons/dividers — confirms these are lists, not capsules.

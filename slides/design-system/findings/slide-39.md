@@ -1,0 +1,15 @@
+# Slide 39 — Conclusions
+- **Archetype**: capsule-list
+- **Grid & layout**: Three-column layout of equal-width capsule cards arranged as a single horizontal ROW, centered vertically in the body. Above/behind them a large centered title "總回顧" sits at the top-center, overlapping a faint oversized ghost word "Takeaway" behind it. A faint grid/graph-paper texture underlies the whole slide. Footer band (left "SITCON 2026", center "39/41", right "Conclusions"). Consistent gutters between the three cards; symmetric left/right outer margins. (slide 39)
+- **Type roles**: head — foreground title "總回顧" (white, bold, centered) layered over a much larger, very-low-contrast grey ghost "Takeaway" (Latin, decorative background lettering). Capsule headings CJK bold white; capsule body CJK grey. Body ~1× base; capsule heading ~1.4× body; ghost word is the largest element but lowest contrast. Mixed script: CJK foreground title + Latin ghost word behind it. (slide 39)
+- **Color / tokens**: Near-black background with faint grid lines (very low-contrast). White-vs-grey title split appears as literal layering: white "總回顧" over grey ghost "Takeaway". Capsules are dark elevated rounded rectangles with subtle borders. Body light-grey. Icons/emoji are colored. No lime accent on this slide; no viridis. (slide 39)
+- **Components present**: Layered title (foreground CJK + background ghost Latin) + a ROW of three CAPSULES.
+  Capsule anatomy (consistent): rounded dark card; TOP row = CJK bold heading on the left with an emoji/icon on the right edge, separated from the body by a thin horizontal divider rule; BELOW the rule = a single multi-line CJK body sentence. Internal padding comfortable. Count = 3. Grid placement = one horizontal row, three equal columns. Orientation = row.
+  The three capsules:
+  1. heading 打開箱子 + icon 🎁/box — divider — body 防禦不應只是在外圍堆疊系統提示詞，深入模型內部的變化，能看見更真實的威脅。
+  2. heading 量化分心 + icon 💡(bulb) — divider — body Prompt Injection 的本質是一場「注意力的劫持」，而這是可以被精準量化與追蹤的。
+  3. heading 壓力測試 + icon 🔧(wrench) — divider — body 再優雅的學術解法都有其現實極限，需要持續的對各種變因邊界測試。
+  Note: this is a different capsule variant from slide 37's. Here the card is vertical — heading + icon(top-right) row, a HORIZONTAL divider rule, then body below, and NO en-subtitle. Slide 37's card is horizontal — icon(far-left) + heading/en-subtitle, a VERTICAL divider, body on the right. (slide 39)
+- **Motion hints**: Three cards likely reveal left-to-right; ghost word may fade in. Not confirmable from static image. (slide 39)
+- **Reusable pattern**: This slide is an instance of "centered layered title + three-across capsule row" conclusion recap.
+- **One-offs / inconsistencies**: Capsule anatomy differs from slide 37 (here: icon top-right, HORIZONTAL divider, body below, three cards in a horizontal row, no en-subtitle; there: icon far-left, VERTICAL divider, body beside heading, four cards in a vertical column, with en-subtitle). The oversized low-contrast ghost background word "Takeaway" and faint grid are decorative one-offs to flag. Capsule body #2 mixes Latin "Prompt Injection" inline with CJK. (slide 39)

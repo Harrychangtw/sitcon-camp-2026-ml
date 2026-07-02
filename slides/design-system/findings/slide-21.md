@@ -1,0 +1,11 @@
+# Slide 21 — The Attention Tracker
+- **Archetype**: data-viz (small-multiples grid of distribution thumbnails) with a centered statement overlay.
+- **Grid & layout**: Full-bleed dark canvas tiled edge-to-edge with a GRID of small rounded-rectangle chart thumbnails (roughly 8 columns × 6 rows) (slide 21). The center 2–3 tiles are left empty/darkened to clear a stage for a centered 2-line CJK statement overlaid on top (slide 21). Otherwise the tiles fill the whole frame as a texture/wall. Statement is horizontally centered in the void.
+- **Type roles**: statement = large CJK, the only prominent text, with a lime emphasis run; thumbnails carry no readable labels (pure visual texture) (slide 21). No mono. Pure CJK statement with full-width 「」 brackets.
+- **Color / tokens**: Background darkest tier; each thumbnail a slightly-lighter rounded dark panel (slide 21). Statement white tier with a lime-accent run on 每盞聚光燈 (slide 21). Every thumbnail contains one or two small distribution curves drawn in the viridis endpoints — purple and lime, often overlapping — reusing the danger/safe pair from slides 19/20 across dozens of "heads" (slide 21).
+- **Components present**:
+  - Small-multiples wall of ~40+ distribution-curve thumbnails, each = one attention head's normal-vs-attack score distributions (purple + lime overlaid) (slide 21).
+  - Centered 2-line CJK statement: "輸入大量「正常語句」與「注入攻擊」／ 記錄每盞聚光燈的分數變化。" with 每盞聚光燈 in lime (slide 21).
+- **Motion hints**: The full wall of per-head thumbnails implies a mass/aggregate reveal (all heads populate) contrasting the single curve of slide 20 (slide 21) — inferred.
+- **Reusable pattern**: "Small-multiples wall of per-head distributions as a full-bleed backdrop with a centered lime-emphasis statement in a cleared center void" — the scale/aggregate instance.
+- **One-offs / inconsistencies**: Clearing center tiles to seat the statement is a composition trick specific to this slide; the empty tiles are intentional negative space, not missing data (slide 21). Thumbnail curve pairs vary in overlap/separation tile-to-tile — that variance is the content (which heads separate normal vs attack), not a style inconsistency.

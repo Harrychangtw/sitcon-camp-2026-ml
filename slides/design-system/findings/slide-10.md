@@ -1,0 +1,11 @@
+# Slide 10 — The Injection Threat
+- **Archetype**: statement
+- **Grid & layout**: Single centered text block on a full-bleed near-black canvas with a faint square grid texture (slide 10). The block is left-aligned but optically centered in the vertical middle, occupying roughly the middle band, with generous empty margins above and below. Left edge of text starts around the left-third boundary (indented, not flush-left). Footer at bottom.
+- **Type roles**: body/statement type only — no capsule, no large display head. Three lines of large-ish CJK statement text. Two weight/emphasis registers: a lead line and a two-line rhetorical question. Inline underlines mark two key phrases (外部防堵, 特徵掃描) in the first line. Latin absent except punctuation. All CJK, uniform sizing with weight/color used for emphasis rather than size.
+- **Color / tokens**: Near-black background, faint grid. Foreground split: white statement text for the first two lines vs a LIME-accent final line (看模型什麼時候「分心」了？) which is the payoff/question. Lime is used here as TEXT color (not a border), highlighting the punchline. Underlines under 外部防堵 and 特徵掃描 are white. No viridis.
+- **Components present**:
+  - Statement text block (1): line 1 這些防禦大多停留在<u>外部防堵</u>與<u>特徵掃描</u>; line 2 面對文法自然的語意劫持，我們能不能直接打開大腦，; line 3 (lime) 看模型什麼時候「分心」了？
+  - Inline underline rules on two phrases.
+- **Motion hints**: The lime question line reads as a delayed reveal after the white setup lines (call-and-response), plausibly staged; not confirmed by the still.
+- **Reusable pattern**: This slide is an instance of a full-screen statement where the rhetorical payoff line is colored lime.
+- **One-offs / inconsistencies**: Lime-as-text-color here contrasts with slide 13's lime-as-border usage — same token, different application; worth flagging for synthesis. Inline underlining of key terms is a device not seen elsewhere in this range.

@@ -1,0 +1,13 @@
+# Slide 18 — The Attention Tracker
+- **Archetype**: other(paper-citation / source-credit slide) — a titled academic reference with a fanned-paper-pages visual; no clean enum fit.
+- **Grid & layout**: Full-bleed dark canvas (slide 18). Top area, centered: a title line, then a centered byline beneath it (slide 18). Center-bottom: a fanned deck of paper-page thumbnails (a front-facing white paper page flanked by tilted grey page thumbnails behind it, spreading left and right) sitting on the lower-center of the slide (slide 18). Symmetric, center-weighted composition.
+- **Type roles**: head = the paper title, mixed-script on one line; body = smaller grey Latin byline; the fanned pages render tiny body/mono paper text as texture, not readable copy (slide 18). Title > byline. Latin-dominant slide (English paper title + authors + venue) (slide 18).
+- **Color / tokens**: Background darkest tier (slide 18). Title uses the white-vs-accent split: "Attention Tracker:" is set in the lime accent while the rest of the title "Detecting Prompt Injection Attacks in LLMs" is white; byline "Kuo-Han Hung et al. | NAACL 2025" is grey tier (slide 18). The paper thumbnails are white/off-white sheets — a light surface used purely as imagery, not a background tier change. No viridis ramp.
+- **Components present**:
+  - Title line with lime accent run + white remainder (slide 18).
+  - Grey byline (authors + venue) (slide 18).
+  - Fanned paper-pages image cluster (one front white page + several tilted grey page thumbnails behind) as the hero visual (slide 18).
+  - Tiny top citation line (see one-offs).
+- **Motion hints**: Fanned pages could animate/spread on entry (slide 18) — inferred, low confidence.
+- **Reusable pattern**: "Cite-the-source slide: accent+white title over a fanned paper-thumbnail visual" — the reference/credit instance.
+- **One-offs / inconsistencies**: A very small grey citation line runs across the very top edge (partly cropped/hard to read) — incidental metadata, not canonical layout (slide 18). The light-colored paper imagery is the only bright surface in the range and is content, not a design token. Title here is roughly ~half the size of the oversized watermark titles on slides 15/16 and is high-contrast rather than watermark-grey.

@@ -1,0 +1,9 @@
+# Slide 40 — Conclusions
+- **Archetype**: statement
+- **Grid & layout**: Single centered two-line statement occupying the vertical middle of the frame, horizontally centered (slightly right of true center / optically centered). Vast empty margins above and below — a deliberately sparse, high-impact quote layout. Faint grid/graph-paper texture across the whole background. Footer band (left "SITCON 2026", center "40/41", right "Conclusions"). No columns; effectively full-bleed emptiness with one centered text block. (slide 40)
+- **Type roles**: head only — two large CJK statement lines, heaviest weight, no body or mono. Line 1 white, line 2 lime. Both lines are the same large display size (~equal), far larger than footer text. Latin "API" is set inline within the CJK of line 1 with spacing around it. (slide 40)
+- **Color / tokens**: Near-black background with very faint grid lines. This is the slide where the LIME accent is used as the primary emphasis device: line 1 "不要只當一個呼叫 API 的使用者。" in WHITE, line 2 "去拆解它、質疑它、看透它。" in LIME. Clear white-vs-lime contrast to mark the imperative payoff line. No viridis; no capsules. Footer text low-contrast grey. (slide 40)
+- **Components present**: A single centered two-line statement (call-to-action quote). Line 1 white (the setup), line 2 lime (the imperative). No other components. (slide 40)
+- **Motion hints**: Likely staged: white line first, lime line revealed as the punchline. Not confirmable from static image. (slide 40)
+- **Reusable pattern**: This slide is an instance of "centered big-statement CTA with lime payoff line".
+- **One-offs / inconsistencies**: Strongest/most literal use of the lime accent in this range — reserved for the concluding imperative. CJK uses full-width period 。 as line terminator (typographic detail). Inline Latin "API" within CJK shows the mixed-script spacing convention. (slide 40)

@@ -1,0 +1,9 @@
+# Slide 25 — The Attention Tracker
+- **Archetype**: statement
+- **Grid & layout**: Single centered text block (slide 25). The block is horizontally centered as a group but the text within is left-aligned, occupying roughly the middle horizontal band and center-left vertically. Generous empty margins all around — the slide is mostly negative space, no imagery. A faint grid/dot texture is barely visible in the dark background.
+- **Type roles**: head / body. One bold white CJK lead line (the "question" heading): "但這套防禦，真的能上戰場嗎？" — largest, heaviest. Below a horizontal divider rule, three grey body lines of equal weight/size, each a rhetorical question. No mono. Fullwidth CJK question marks "？" and fullwidth comma "，"; inline is pure CJK aside from none/minimal Latin.
+- **Color / tokens**: Near-black background tier. Foreground split: white heading vs grey body lines. A thin grey horizontal divider rule sits between heading and body. Lime accent is absent on this slide. No viridis/heatmap.
+- **Components present**: (1) Statement heading (white, bold). (2) Horizontal divider rule under the heading. (3) A three-line body list of questions (grey), tightly leaded. No capsules, no icons, no charts.
+- **Motion hints**: The heading-then-divider-then-three-lines structure suggests a possible staged reveal (heading first, then each question line appears in turn), but nothing in the still confirms it.
+- **Reusable pattern**: This slide is an instance of "a quiet full-bleed-dark statement slide: one bold white lead question, a divider, and a short grey list of follow-up questions."
+- **One-offs / inconsistencies**: The divider rule separating a bold lead line from a grey sub-list mirrors the heading/divider idiom seen in capsule internals; here it's used at slide scale. Nothing looks incidental — this reads as a canonical "transition/statement" template.

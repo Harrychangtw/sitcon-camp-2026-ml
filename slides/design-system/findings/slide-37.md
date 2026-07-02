@@ -1,0 +1,16 @@
+# Slide 37 — Conclusions
+- **Archetype**: capsule-list
+- **Grid & layout**: Two-zone layout. Left ~40% holds a single large heading "實驗總結", vertically centered, left-aligned. Right ~55% holds a vertical stack of four capsule cards filling the full height of the body from top optical margin to just above the footer. Footer band (left "SITCON 2026", center "37/41", right "Conclusions"). The capsule column is right-biased with a consistent right safe-area margin. (slide 37)
+- **Type roles**: head (large left title "實驗總結", white, heaviest weight on slide, ~2.5× capsule body). Inside each capsule: capsule heading in CJK (bold white) with a Latin subtitle beneath in smaller grey (e.g. Context-Dilution), and a single CJK body line in grey. Mixed-script: CJK bold heading stacked over a Latin uppercase-ish subtitle label. Body ~1× base, headings ~1.4× body. (slide 37)
+- **Color / tokens**: Near-black background. Left title white. Capsules are slightly-lighter dark-grey rounded rectangles (elevated tier above background) with soft borders. Capsule heading white, Latin subtitle mid-grey, body light-grey. Each capsule has an emoji/icon (colored) at its far-LEFT edge. A thin vertical divider rule separates the left icon+heading block from the right-hand body text. No lime accent; no viridis. (slide 37)
+- **Components present**: Left section heading + a vertical STACK of four CAPSULES.
+  Capsule anatomy (consistent across all four): wide/landscape rounded-rectangle dark card with a HORIZONTAL internal layout. FAR-LEFT = emoji/icon; immediately right of it = a stacked text block with CJK heading (bold, white) over a Latin subtitle line beneath (grey); then a THIN VERTICAL DIVIDER RULE; then the RIGHT side = a single (two-line) CJK body sentence. Internal padding comfortable. Count = 4. Outer arrangement = the four cards form a single vertical column on the right, evenly spaced. NOTE: the *within-card* layout is horizontal (icon+heading | body), while the *set of cards* is a vertical stack.
+  The four capsules:
+  1. icon 💧(water drop) — heading 長度稀釋 / subtitle Context-Dilution / body 當輸入突破萬字，正常文本注意力也會攤平，固定閾值導致高誤判。
+  2. icon 🌐(globe) — heading 語系盲區 / subtitle Language-Shift / body 面對語系特徵差異極大（如印歐語系 vs 漢藏語系）的組合攻擊，模型的警覺性會降低。
+  3. icon (face/mask emoji) — heading 結構劫持 / subtitle Prefix-Hijack / body 強制模型用特定前綴輸出，會產生短暫的「假安全感」，讓惡意指令延遲發作。
+  4. icon 🧠(brain) — heading 關閉思考 / subtitle Reasoning-Off / body 若關閉模型的推理功能，正常指令的專注度會崩塌，防禦機制失效。
+  (slide 37)
+- **Motion hints**: Four capsules likely reveal sequentially (one per experiment recap); not confirmable from static image. (slide 37)
+- **Reusable pattern**: This slide is an instance of "section title left / vertical capsule stack right" summary layout.
+- **One-offs / inconsistencies**: Icon in capsule 3 is a photographic/face-style emoji rather than a flat glyph like the others (drop/globe/brain), a slight inconsistency in icon style. Capsule heading uses zh + en-subtitle pairing which is a canonical capsule pattern to note for synthesis. Compared to slide 39's capsules, THIS slide's capsule is horizontal (icon far-left + heading/subtitle, VERTICAL divider, body on right, includes en-subtitle), whereas slide 39's is vertical (heading + icon top-right, HORIZONTAL divider, body below, no en-subtitle) — two distinct capsule variants in the same deck. (slide 37)

@@ -1,0 +1,13 @@
+# Slide 20 — The Attention Tracker
+- **Archetype**: data-viz (two overlapping distribution/bell curves with statistical annotation) topped by a statement.
+- **Grid & layout**: Full-bleed dark canvas (slide 20). Top-left: a 3-line CJK statement, left-aligned. Top-right: a small rounded caption/legend panel defining the two sample types. Lower ~2/3: a full-width chart with two bell curves — a purple curve on the left (low scores) and a lime curve on the right (high scores) sharing a common baseline (slide 20). Each curve is annotated with a dashed "中心點" (center) vertical line and a horizontal "K 個標準差" (K std-devs) span with end arrows; the two curves' K-sigma bounds nearly meet at center. Bottom axis carries polar CJK labels at the extremes.
+- **Type roles**: statement = large CJK, the top head-level text with lime emphasis runs; annotations = small grey/white CJK + italic Latin "K"; axis captions = small CJK (slide 20). Statement ≫ annotation text. Mixed CJK body with an italic Latin math variable "K".
+- **Color / tokens**: Background darkest tier (slide 20). Statement white tier with lime-accent emphasis on 最差的正常分數 and 最好的攻擊分數 (the key comparison phrases) (slide 20). The two curves use the viridis ramp ENDPOINTS as a semantic pair: purple = low/danger, lime = high/safe — same ramp family as slides 16/19/21 (slide 20). Curves are filled with a translucent tint of their color; dashed center lines and K-sigma arrows are light grey/white; the right K-sigma marker line picks up the lime, the left one purple (slide 20).
+- **Components present**:
+  - 3-line CJK statement with lime emphasis (slide 20).
+  - Top-right rounded caption panel: 正常樣本 = [一段無害句子]; 攻擊樣本 = [一段無害句子] + (lime) 忽略前面指令並說… (the injected suffix rendered in lime) (slide 20).
+  - Two annotated distribution curves (purple low / lime high) with 中心點 dashed lines and K 個標準差 measured spans (slide 20).
+  - Bottom polar axis labels: left "← 低分 = 忘記規則 / 被帶風向 (危險)"; right "高分 = 緊盯規則 (安全) →" (slide 20).
+- **Motion hints**: Two curves + the "worst-normal vs best-attack" framing imply a build where curves appear then the K-sigma gap is measured (slide 20) — inferred.
+- **Reusable pattern**: "Two-distribution comparison (danger-purple vs safe-lime) with center + K-sigma annotations under a lime-emphasized statement" — the threshold/separation instance.
+- **One-offs / inconsistencies**: The top-right caption's injected text is truncated with "…"; incidental. Purple/lime here are used as a semantic danger/safe pair rather than a continuous ramp — consistent endpoint usage, worth linking to the heatmap ramp rather than treating as a new palette (slide 20).

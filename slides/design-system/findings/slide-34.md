@@ -1,0 +1,9 @@
+# Slide 34 — Exp 3: Forced Prefixes
+- **Archetype**: data-viz
+- **Grid & layout**: Identical to slide 33 — left ~35% title ("跨語攻擊：" / "能騙過聚光燈嗎？") + "Key Insight:" numbered 1/2 list; right ~60% viridis heatmap with vertical colorbar. Y = "Injection Language", X = "Command Language". Footer present (slide 34).
+- **Type roles**: Same as slide 33 — bold CJK head, CJK body with bold lead phrases, Latin mono heatmap title ("Qwen3-0.6B Cross-Lingual Focus Score Heatmap") and axis labels, CJK colorbar end-labels 高分/低分.
+- **Color / tokens**: Near-black background; same white-vs-grey title split; same VIRIDIS heatmap + colorbar (高分/yellow top → 低分/dark bottom, labeled 攻擊成功率/攻擊失敗率). ADDED on this frame: dashed rectangular annotation overlays — a yellow (lime) dashed box over the upper-left region of the heatmap and a magenta/pink dashed box over a lower band — highlighting specific language-pair clusters. Same in-body highlighted phrases as slide 33.
+- **Components present**: (1) Two-line title. (2) "Key Insight:" numbered list (2 items). (3) Viridis heatmap + colorbar. (4) Two dashed call-out rectangles overlaid on the heatmap (yellow/lime dashed + magenta dashed).
+- **Motion hints**: This IS the annotated state — slide 34 = slide 33 plus the two dashed highlight rectangles. Strong evidence of a staged build/reveal (base heatmap → annotations appear).
+- **Reusable pattern**: This slide is an instance of "data-viz result + Key-Insight sidebar" (viridis heatmap), identical to slide 33 with annotation overlay added.
+- **One-offs / inconsistencies**: The dashed highlight rectangles (two colors) are the only delta from slide 33 and are per-slide annotations, not a reusable component. On this frame the heatmap title renders cleanly (no doubling), unlike slide 33. Footer "Exp 3: Forced Prefixes" again mismatches the cross-language heatmap content; transcribed verbatim, not reconciled.
