@@ -25,6 +25,34 @@ stations reuse viz primitives that earlier ones flesh out. Build sequentially.
 
 `LossCurve` is a `@camp/viz` stub but no Course 2 station needs it — leave it.
 
+## Wave 2 — upgrades (after all six are built)
+
+The `NNa`-suffixed prompts are a **second wave** run against the already-built,
+already-merged stations. They add: **正體中文 (zh-TW)** UI copy, **bilingual
+content** for tokenizer + embedding (real, large zh-TW data), and a **bbycroft-
+style interactive** transformer. Same one-paste-per-session model; run **in this
+order** (they share `cli.py` / `manifest.json` and each localizes its own station,
+so sequential avoids collisions):
+
+| order | Prompt | What it does |
+|-------|--------|--------------|
+| 1 | `00a-zh-tw-copy.md`          | UI chrome → zh-TW (shell + order-shuffle/next-token/rnn-viz). **No i18n lib** — direct copy. Establishes the glossary convention. |
+| 2 | `01a-tokenizer-bilingual.md` | 中文 + English tokenization (content-language toggle, CJK 斷詞), localizes its own UI. |
+| 3 | `02a-embedding-bilingual.md` | Real pretrained (**zh BGE**) vectors over a **large** zh-TW vocab + English, offline (GPU optional), per-language lazy load, localizes its own UI. |
+| 4 | `06a-transformer-interactive.md` | Self-attention **step-through** modeled on `bbycroft/llm-viz` (subset only), localizes its own UI + commentary. |
+
+**Touch-once rule:** `00a` localizes only the three stations no other wave-2
+prompt rewrites; `01a`/`02a`/`06a` localize *their own* station (they add controls
+that must be localized in the same pass). So every station is edited once.
+
+**Two language axes** (don't conflate): **UI language** = static zh-TW chrome;
+**content language** = a per-lesson 中文/English control over *what the student
+analyzes* (only tokenizer + embedding). **GPU/Vercel:** all model-heavy work is
+**offline precompute** (GPU optional); the runtime only fetches small JSON, so no
+runtime GPU is needed. **License caveat:** `bbycroft/llm-viz` ships **no license**
+(all-rights-reserved) — `06a` prefers a clean-room subset and flags "resolve
+license before any public deploy." `validate.md` has a **Step 3.5** for wave 2.
+
 **`DESIGN.md`** is the shared visual language (the course deck's palette + the
 `harrychang.me` editorial idioms). Every station follows it; session 1
 (`01-tokenizer`) does the **one-time `@camp/ui` token retune** it describes

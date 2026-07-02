@@ -121,6 +121,48 @@ and the station-specific behavior from its prompt actually works:
   per station and `uv run camp-precompute make-data` (or the per-station
   commands) regenerates cleanly: `cd precompute && uv run camp-precompute make-data`.
 
+## Step 3.5 — Wave 2 upgrade checks (only if wave 2 has run)
+
+Wave 2 (`prompts/00a`, `01a`, `02a`, `06a`) layers zh-TW + bilingual data + a
+richer transformer on top of the six built stations. If those sessions have run,
+also verify — each against its own **Definition of Done**:
+
+**zh-TW copy (`00a` + the per-station localizations in `01a`/`02a`/`06a`)**
+- Shell landing/index/nav and **every lesson station** render in **正體中文**;
+  `<html lang>` is `zh-Hant-TW`. No i18n library was added (copy is direct zh-TW).
+- Sidebar labels (`registry.tsx`) match the localized station headers.
+- Do-not-translate glossary terms (`Transformer`, `token`, `BPE`, `embedding`,
+  `attention`, `softmax`, `Q/K/V`, …) are kept English; digits/indices unchanged.
+- CJK label runs drop heavy letter-spacing (uppercase/tracking is Latin-only) but
+  keep the mono/muted label role; `Noto Sans TC`/`PingFang TC` fallbacks render.
+
+**tokenizer bilingual (`01a`)**
+- `vocab.json` carries **both** `zh` and `en` (char/word/BPE + a zh `word.dict`),
+  loaded via `@camp/data`; nothing trained in-browser.
+- A 中文 / English **content** control switches corpus/sample/segmentation.
+- **中文 word mode uses greedy dict 斷詞** and visibly differs from char mode (it
+  does NOT collapse to one-chip-per-字); the `▁` marker is suppressed/repurposed
+  for Chinese and the "no spaces" point is made explicit.
+
+**embedding bilingual + real vectors (`02a`)**
+- Vectors are **real pretrained** (BGE/equivalent), built **offline** (device
+  auto-select); **per-language** `points.<lang>.json`/`neighbors.<lang>.json`
+  exist, are in `manifest.json`, and lazy-load on the 中文/English control.
+- zh vocab is **large** (thousands) yet each shipped JSON is within the size cap
+  (≤ ~3–4 MB/lang); any truncation is `log`ged. Neighbours are semantically
+  sensible; the polysemy takeaway uses a verified zh word (or is word-agnostic).
+
+**transformer interactive (`06a`)**
+- The station is a **step-through** of self-attention (Q·K → scores → softmax →
+  weighted-sum → output) via a scrubber/step + query-token picker — **additive**:
+  the prior attention-matrix/`AttentionLines` result view still works;
+  `attention.json` gained small Q/K/V vectors, loaded via `@camp/data` (nothing
+  forward-passed in-browser). Motion respects `prefers-reduced-motion`.
+- **License audit:** any `bbycroft/llm-viz`-derived code is isolated + attributed;
+  confirm the report flags **license-to-resolve-before-public-deploy**. Preferred
+  outcome: clean-room subset, no copied files. Flag if unlicensed code sits on a
+  public-deploy path.
+
 ## Step 4 — Report (the deliverable)
 
 Produce a single table — one row per station — with columns:
@@ -137,4 +179,9 @@ Use ✅ / ⚠️ / ❌ per cell. Then:
 - **Fix list:** for each FAIL, the smallest concrete change to reach PASS (point
   at the relevant `prompts/0X-*.md` step). Do not apply fixes unless asked.
 
-End with one line: `result: N/6 stations PASS` (list the failing ids).
+- **Wave 2 (if run):** a second short table — one row per upgrade prompt
+  (`00a`, `01a`, `02a`, `06a`) — with a `PASS`/`FAIL` against the Step 3.5 checks,
+  plus the license-flag status for `06a`.
+
+End with one line: `result: N/6 stations PASS` (list the failing ids); if wave 2
+ran, add a second line: `result: wave2 M/4 upgrades PASS` (list the failing ids).
