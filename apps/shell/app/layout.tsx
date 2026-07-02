@@ -8,12 +8,12 @@ import "./globals.css";
 export const metadata: Metadata = {
   title: "SITCON Camp 2026 · ML",
   description:
-    "Interactive stations for the SITCON Camp 2026 Machine Learning curriculum.",
+    "SITCON Camp 2026 Machine Learning 課程的互動式 stations。",
 };
 
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
-    <html lang="en">
+    <html lang="zh-Hant-TW">
       <body>
         <div className="flex min-h-full flex-col">
           <header className="border-b border-border">
@@ -23,7 +23,7 @@ export default function RootLayout({ children }: { children: ReactNode }) {
               </Link>
               <div className="flex items-center gap-4 text-sm text-muted">
                 <Link href="/" className="hover:text-fg">
-                  Home
+                  首頁
                 </Link>
                 <Link href="/#stations" className="hover:text-fg">
                   Stations
@@ -35,8 +35,7 @@ export default function RootLayout({ children }: { children: ReactNode }) {
             {children}
           </main>
           <footer className="border-t border-border px-5 py-4 text-center text-xs text-muted">
-            Built for SITCON Camp 2026 · the browser never trains — it replays
-            precomputed artifacts.
+            為 SITCON Camp 2026 打造 · 瀏覽器從不訓練，只重播事先算好的產物。
           </footer>
         </div>
       </body>
