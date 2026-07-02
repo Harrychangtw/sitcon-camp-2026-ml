@@ -4,10 +4,17 @@ version = "0.0.0"
 description = "Precompute pipeline for SITCON Camp 2026 ML stations: does heavy compute ahead of time and exports small artifacts (ONNX, JSON) the browser plays back."
 readme = "README.md"
 requires-python = ">=3.10"
-# numpy is the only dependency for now. Heavier deps (torch, onnx, transformers)
-# land when the real pipeline is built.
+# numpy is the base dependency. The embedding station needs a real pretrained
+# embedder (sentence-transformers → torch/transformers) plus offline word-list
+# sourcing (wordfreq gives frequency-ranked words; OpenCC converts zh Simplified
+# → Traditional for zh-TW). All of this is PRECOMPUTE-ONLY: it runs offline and
+# exports small JSON. The browser never sees any of these.
 dependencies = [
   "numpy>=1.26",
+  "scikit-learn>=1.4",
+  "sentence-transformers>=3.0",
+  "wordfreq>=3.1",
+  "opencc>=1.1",
 ]
 
 [project.scripts]

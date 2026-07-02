@@ -12,6 +12,7 @@ import argparse
 import json
 import math
 import re
+import zlib
 from collections import Counter, defaultdict
 from datetime import datetime, timezone
 from itertools import permutations
@@ -20,6 +21,7 @@ from pathlib import Path
 import numpy as np
 
 from .embedding import build_embedding
+from .rnn import rnn_viz
 
 COURSE = "course2"
 MANIFEST_VERSION = 1
@@ -213,6 +215,20 @@ def upsert_manifest_artifact(out_dir: Path, artifact: dict) -> None:
     artifacts.append(artifact)
     artifacts.sort(key=lambda a: a["id"])
     manifest["artifacts"] = artifacts
+    manifest_path.write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")
+
+
+def remove_manifest_artifact(out_dir: Path, artifact_id: str) -> None:
+    """Drop an artifact entry from manifest.json by id (no-op if absent)."""
+    manifest_path = out_dir / "manifest.json"
+    if not manifest_path.exists():
+        return
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    before = manifest.get("artifacts", [])
+    after = [a for a in before if a.get("id") != artifact_id]
+    if len(after) == len(before):
+        return
+    manifest["artifacts"] = after
     manifest_path.write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")
 
 
@@ -420,32 +436,79 @@ but the model is lossy but the tokens are still useful
 # word that BPE must subword-split.
 TOKENIZER_SEED = "the model reads tokens not letters but tokenization is lossy"
 
+# --- Chinese (zh-TW) content axis --------------------------------------------
+# The bilingual upgrade: a second corpus/vocab the student can switch to. Chinese
+# has no spaces, so char / 詞 / BPE genuinely diverge — each 漢字 is a char-token,
+# but a 詞 like「機器學習」spans several characters with no delimiter (斷詞 is a
+# real problem), and BPE-style subwords sit in between.
+#
+# The corpus is co-designed so all three schemes VISIBLY differ on the seed:
+#   - 機器 / 學習 / 模型 recur → BPE merges them into whole 詞 (same as the dict).
+#   - the FUNCTION-word pairs「不是」「讀的」recur even more → BPE merges them too,
+#     but the 詞典 keeps 不·是 and 讀·的 apart. So BPE lands strictly between raw
+#     chars and dictionary 斷詞 — driven by frequency, not by a word list.
+ZH_TOKENIZER_CORPUS = """
+機器學習模型讀的是不是字也不是詞
+模型讀的是不是字模型讀的也不是詞
+機器學習讓模型讀懂不是讀懂字
+字不是詞詞不是字也不是字
+模型讀的是讀的不是字讀的也不是詞
+機器學習就是讓模型讀不是讀字
+一個模型讀再讀一個不是讀詞
+機器讀的是機器學習讀的也是
+學習讓機器讀懂不是讀懂字也不是詞
+模型不是讀字模型不是讀詞模型讀的是
+機器學習的模型讀的是不是讀字
+機器學習模型不是字不是詞讀的是
+""".strip()
+
+# The seed the zh textarea opens with. No space around "token" on purpose: the
+# lesson is "中文 沒有空格", so the teaching sentence must not contain one.
+ZH_TOKENIZER_SEED = "機器學習模型讀的是token，不是字也不是詞"
+
+# The 詞典 (word list) the browser greedy-longest-matches for 斷詞. Common 詞 plus
+# the single-char 詞 that appear; "機器學習" is deliberately ABSENT so it segments
+# to 機器·學習 (visibly more than one chip), and「不是」「讀的」are absent so word
+# mode keeps them split where BPE merges them.
+ZH_WORDS = [
+    "機器", "學習", "模型", "讀懂", "一個", "就是", "token",
+    "讀", "的", "是", "不", "字", "也", "詞", "讓", "再", "懂",
+]
+
 # Splits text into word / punctuation units (words are lowercased downstream).
 _UNIT_RE = re.compile(r"[A-Za-z0-9]+|[^\sA-Za-z0-9]")
+
+# Han-run / ASCII-word / single-symbol splitter for the Chinese BPE path.
+_HAN_RE = re.compile(r"[一-鿿]")
+_ZH_UNIT_RE = re.compile(r"[一-鿿]+|[A-Za-z0-9]+|[^\s]")
 
 
 def _units(text: str) -> list[str]:
     return _UNIT_RE.findall(text)
 
 
-def _train_bpe(corpus: str, num_merges: int) -> tuple[list[list[str]], list[str]]:
-    """Train a tiny BPE. Returns (ordered merges, sorted vocab of subwords).
+def _bpe_from_freqs(
+    freqs: Counter[str],
+    num_merges: int,
+    space_mark: str,
+    max_len: int | None = None,
+) -> tuple[list[list[str]], list[str]]:
+    """Core BPE trainer over a word→frequency table.
 
-    Each word is represented as ``[SPACE_MARK, c0, c1, ...]`` so a leading-space
-    marker participates in merges (SentencePiece style). The most frequent
-    adjacent pair is merged repeatedly, up to ``num_merges`` times.
+    Each word becomes ``[space_mark, c0, c1, ...]`` (English, SentencePiece
+    style) or ``[c0, c1, ...]`` when ``space_mark`` is "" (Chinese — no spaces,
+    so no leading-space marker). The most frequent adjacent pair is merged
+    repeatedly, up to ``num_merges`` times.
+
+    ``max_len`` caps the character length of a merge product. English needs no
+    cap (subwords like "token" run long); Chinese uses max_len=2, because its
+    BPE "words" are whole 漢字 runs (no spaces to bound them) and, on this tiny
+    corpus, an uncapped trainer would greedily fuse entire sentence fragments
+    into one absurd token. Capping keeps BPE producing short subword pieces that
+    honestly sit between single 字 and multi-character 詞.
     """
-    # word -> frequency (lowercased alphanumeric words only; punctuation is a
-    # single symbol and needs no merging).
-    freqs: Counter[str] = Counter()
-    for unit in _units(corpus):
-        if unit.isalnum():
-            freqs[unit.lower()] += 1
-
-    # Represent each word as a list of symbols, starting with the space marker.
-    words: dict[str, list[str]] = {
-        w: [SPACE_MARK, *list(w)] for w in freqs
-    }
+    prefix = [space_mark] if space_mark else []
+    words: dict[str, list[str]] = {w: [*prefix, *list(w)] for w in freqs}
 
     merges: list[list[str]] = []
     for _ in range(num_merges):
@@ -453,6 +516,8 @@ def _train_bpe(corpus: str, num_merges: int) -> tuple[list[list[str]], list[str]
         for w, syms in words.items():
             f = freqs[w]
             for a, b in zip(syms, syms[1:]):
+                if max_len is not None and len(a) + len(b) > max_len:
+                    continue
                 pair_counts[(a, b)] += f
         if not pair_counts:
             break
@@ -477,7 +542,7 @@ def _train_bpe(corpus: str, num_merges: int) -> tuple[list[list[str]], list[str]
     # product. We add merge products (not just surviving symbols) so that any
     # subword the browser can produce when encoding an *unseen* word — e.g.
     # "at" inside "tokenization" — still resolves to a real id, not UNK.
-    vocab: set[str] = {SPACE_MARK}
+    vocab: set[str] = set(prefix)
     for w in freqs:
         vocab.update(list(w))
     for a, b in merges:
@@ -485,8 +550,25 @@ def _train_bpe(corpus: str, num_merges: int) -> tuple[list[list[str]], list[str]
     return merges, sorted(vocab)
 
 
-def build_tokenizer_vocab() -> dict:
-    """Build the char / word / BPE lookup tables the station loads."""
+def _train_bpe(corpus: str, num_merges: int) -> tuple[list[list[str]], list[str]]:
+    """Train English BPE over lowercased alphanumeric words (with ▁ marker)."""
+    freqs: Counter[str] = Counter()
+    for unit in _units(corpus):
+        if unit.isalnum():
+            freqs[unit.lower()] += 1
+    return _bpe_from_freqs(freqs, num_merges, SPACE_MARK)
+
+
+def _train_bpe_zh(corpus: str, num_merges: int) -> tuple[list[list[str]], list[str]]:
+    """Train Chinese BPE over maximal runs of 漢字 (no space marker)."""
+    freqs: Counter[str] = Counter()
+    for run in re.findall(r"[一-鿿]+", corpus):
+        freqs[run] += 1
+    return _bpe_from_freqs(freqs, num_merges, "", max_len=2)
+
+
+def _build_lang_en() -> dict:
+    """English char / word / BPE lookup tables."""
     corpus = TOKENIZER_CORPUS
 
     # CHAR scheme: every character in the corpus (plus a space so char-mode can
@@ -504,13 +586,57 @@ def build_tokenizer_vocab() -> dict:
     bpe_vocab = {s: UNK_ID + 1 + i for i, s in enumerate(subwords)}
 
     return {
-        "generatedBy": "camp-precompute tokenizer",
-        "spaceMarker": SPACE_MARK,
-        "unkId": UNK_ID,
         "sampleText": TOKENIZER_SEED,
         "char": {"vocab": char_vocab},
         "word": {"vocab": word_vocab},
         "bpe": {"vocab": bpe_vocab, "merges": merges},
+    }
+
+
+def _build_lang_zh() -> dict:
+    """Chinese char / 詞 / BPE lookup tables + the greedy-斷詞 word list."""
+    corpus = ZH_TOKENIZER_CORPUS
+    seen = corpus + ZH_TOKENIZER_SEED
+
+    # CHAR scheme: every non-space character across corpus + seed (漢字, ASCII,
+    # punctuation), stable id. No whitespace: Chinese has no spaces to id.
+    chars = sorted({ch for ch in seen if not ch.isspace()})
+    char_vocab = {ch: UNK_ID + 1 + i for i, ch in enumerate(chars)}
+
+    # WORD scheme: the curated 詞典. `dict` is the greedy-match list the browser
+    # walks; `vocab` gives each entry a stable id.
+    word_list = sorted(set(ZH_WORDS))
+    word_vocab = {w: UNK_ID + 1 + i for i, w in enumerate(word_list)}
+
+    # BPE scheme: merges over 漢字 runs, plus atomic ASCII words / punctuation so
+    # the browser resolves "token" and「，」to an id instead of UNK.
+    merges, subwords = _train_bpe_zh(corpus, num_merges=200)
+    bpe_set = set(subwords)
+    for unit in _ZH_UNIT_RE.findall(seen):
+        if _HAN_RE.search(unit):
+            continue
+        bpe_set.add(unit.lower() if unit.isalnum() else unit)
+    bpe_list = sorted(bpe_set)
+    bpe_vocab = {s: UNK_ID + 1 + i for i, s in enumerate(bpe_list)}
+
+    return {
+        "sampleText": ZH_TOKENIZER_SEED,
+        "char": {"vocab": char_vocab},
+        "word": {"vocab": word_vocab, "dict": word_list},
+        "bpe": {"vocab": bpe_vocab, "merges": merges},
+    }
+
+
+def build_tokenizer_vocab() -> dict:
+    """Build the bilingual char / word / BPE lookup tables the station loads."""
+    return {
+        "generatedBy": "camp-precompute tokenizer",
+        "spaceMarker": SPACE_MARK,
+        "unkId": UNK_ID,
+        "languages": {
+            "en": _build_lang_en(),
+            "zh": _build_lang_zh(),
+        },
     }
 
 
@@ -551,8 +677,11 @@ def tokenizer(out_dir: Path) -> Path:
 
 
 def embedding(out_dir: Path) -> list[Path]:
-    """Build the embedding station's points/neighbors and register them."""
+    """Build the embedding station's per-language points/neighbors and register."""
     entries = build_embedding(out_dir)
+    # Drop the retired single-file (synthetic, English-only) manifest ids.
+    for stale_id in ("embedding-points", "embedding-neighbors"):
+        remove_manifest_artifact(out_dir, stale_id)
     paths = []
     for entry in entries:
         art_path = out_dir / entry["path"]
@@ -560,6 +689,240 @@ def embedding(out_dir: Path) -> list[Path]:
         upsert_manifest_artifact(out_dir, entry)
         paths.append(art_path)
     return paths
+
+
+# ---------------------------------------------------------------------------
+# transformer station
+# ---------------------------------------------------------------------------
+# The payoff station: self-attention. Every token can look at every other token
+# directly, and different heads/layers attend differently. Running a real
+# transformer is heavy → offline; the browser only replays the weights.
+#
+# Following embedding.py's precedent, we DON'T ship a trained model (that needs
+# torch + a corpus + training time). A randomly-initialised tiny transformer
+# would instead emit near-uniform noise — which defeats the whole lesson ("heads
+# attend differently", "attention specializes across layers"). So we synthesise a
+# STRUCTURED attention tensor with hand-designed, recognisable per-head patterns,
+# each row a real softmax distribution over keys. This is honest for the lesson:
+# the *shapes* students see (a local head, a content-word head, a first-token
+# sink; sharp early layers → diffuse later ones) are exactly the patterns real
+# transformers learn — without pretending to be trained weights.
+
+# Function words get low salience so the "content head" ignores them; content
+# words (nouns/verbs) pull attention. Kept lowercase; matched case-insensitively.
+TRANSFORMER_FUNCTION_WORDS = {
+    "the", "a", "an", "on", "in", "into", "up", "to", "of", "and", "is", "it",
+    "she", "he", "they", "with", "at", "for", "over", "then",
+}
+
+# Human-readable head roles, surfaced in the UI so students can name what they
+# see. Index i == head i. (These are the patterns _head_affinity builds.)
+TRANSFORMER_HEAD_LABELS = ["local", "content", "first-token"]
+TRANSFORMER_N_LAYERS = 3
+
+# A few short sentences; each token is a word so links read cleanly.
+TRANSFORMER_SENTENCES = [
+    {"sentenceId": "cat-mat", "text": "the cat sat on the mat"},
+    {"sentenceId": "poured-glass", "text": "she poured water into the glass"},
+    {"sentenceId": "robot-ball", "text": "the robot picked up the ball"},
+]
+
+
+def _transformer_salience(tokens: list[str]) -> np.ndarray:
+    """Content words → 1.0, function words → 0.2 (higher = more attended-to)."""
+    return np.array(
+        [0.2 if t.lower() in TRANSFORMER_FUNCTION_WORDS else 1.0 for t in tokens]
+    )
+
+
+def _head_affinity(tokens: list[str], head: int) -> np.ndarray:
+    """Raw per-head affinity matrix (n×n, higher = stronger), roughly in [0,1].
+
+    Head 0 (local):       each query attends to nearby tokens (distance decay).
+    Head 1 (content):     every query attends to salient content tokens.
+    Head 2 (first-token): every query attends to token 0 (a classic BOS sink).
+    A small self-attention bump is added to every head.
+    """
+    n = len(tokens)
+    idx = np.arange(n)
+    if head == 0:
+        dist = np.abs(idx[:, None] - idx[None, :]).astype(float)
+        aff = 1.0 - dist / max(n - 1, 1)
+    elif head == 1:
+        sal = _transformer_salience(tokens)
+        aff = np.tile(sal, (n, 1))
+    else:
+        aff = np.zeros((n, n))
+        aff[:, 0] = 1.0
+    aff = aff + 0.25 * np.eye(n)  # a little self-attention everywhere
+    return aff
+
+
+def _affinity_logits(tokens: list[str], layer: int, head: int) -> np.ndarray:
+    """Pre-softmax attention logits for one (layer, head): the head affinity with
+    a depth-dependent gain (sharp early layers → diffuse later ones)."""
+    aff = _head_affinity(tokens, head)
+    # Logit gain shrinks with depth → deeper layers flatten toward global mixing.
+    gain = 3.0 / (1.0 + 0.9 * layer)
+    return aff * gain
+
+
+def _attention_matrix(tokens: list[str], layer: int, head: int) -> list[list[float]]:
+    """Softmax the head affinity into a [q][k] distribution, sharper in early
+    layers and more diffuse (global) in later ones."""
+    logits = _affinity_logits(tokens, layer, head)
+    logits = logits - logits.max(axis=1, keepdims=True)
+    ex = np.exp(logits)
+    probs = ex / ex.sum(axis=1, keepdims=True)
+    return [[round(float(p), 4) for p in row] for row in probs]
+
+
+# The 06a "mechanism" upgrade: tiny per-token Q/K/V vectors so the browser can
+# SHOW the dot products that build the scores students then see soft-maxed. The
+# browser only does light arithmetic on them (8-dim dot products + a softmax
+# over ≤6 scores) — no model, no training.
+TRANSFORMER_QKV_DIM = 8
+
+
+def _factor_qk(logits: np.ndarray, dim: int) -> tuple[np.ndarray, np.ndarray]:
+    """Factor an n×n logit matrix into per-token Q, K (n×dim) such that
+    Q @ K.T / sqrt(dim) == logits (exactly, up to float precision).
+
+    The sentences are short (n ≤ dim), so a full-rank SVD factorisation of
+    sqrt(dim)·logits is exact: the dot products students watch in the browser
+    rebuild the SAME scores that produced the shipped attention matrices.
+    """
+    target = logits * math.sqrt(dim)
+    u, s, vt = np.linalg.svd(target)
+    r = min(dim, len(s))
+    root = np.sqrt(s[:r])
+    n = logits.shape[0]
+    q = np.zeros((n, dim))
+    k = np.zeros((n, dim))
+    q[:, :r] = u[:, :r] * root
+    k[:, :r] = vt[:r, :].T * root
+    return q, k
+
+
+def _value_vectors(tokens: list[str], layer: int, head: int, dim: int) -> np.ndarray:
+    """Small deterministic V vectors in [-1, 1]. Seeded per (token, layer, head)
+    so the same word carries the same V wherever it appears — the weighted sum
+    the browser shows is stable and reproducible."""
+    rows = []
+    for tok in tokens:
+        seed = zlib.crc32(f"{tok}|{layer}|{head}".encode("utf-8"))
+        rng = np.random.default_rng(seed)
+        rows.append(rng.uniform(-1.0, 1.0, dim))
+    return np.array(rows)
+
+
+def _head_qkv(tokens: list[str], layer: int, head: int) -> dict:
+    """Q/K/V vectors (each [token][dim]) for one (layer, head), with the Q/K
+    factorisation verified against the shipped attention matrix."""
+    dim = TRANSFORMER_QKV_DIM
+    logits = _affinity_logits(tokens, layer, head)
+    q, k = _factor_qk(logits, dim)
+    v = _value_vectors(tokens, layer, head, dim)
+
+    # Round for export, then verify the browser's arithmetic (rounded vectors →
+    # dot products → softmax) still reproduces the shipped matrix.
+    q = np.round(q, 4)
+    k = np.round(k, 4)
+    scores = (q @ k.T) / math.sqrt(dim)
+    scores = scores - scores.max(axis=1, keepdims=True)
+    ex = np.exp(scores)
+    probs = ex / ex.sum(axis=1, keepdims=True)
+    shipped = np.array(_attention_matrix(tokens, layer, head))
+    if not np.allclose(probs, shipped, atol=5e-3):
+        raise SystemExit(
+            f"transformer: Q/K factorisation drifted from the attention matrix "
+            f"(layer={layer}, head={head}, max err={np.abs(probs - shipped).max():.4f})"
+        )
+
+    return {
+        "q": [[round(float(x), 4) for x in row] for row in q],
+        "k": [[round(float(x), 4) for x in row] for row in k],
+        "v": [[round(float(x), 3) for x in row] for row in v],
+    }
+
+
+def build_transformer() -> dict:
+    """Build the attention tensor payload (pure data, no I/O)."""
+    sentences = []
+    for spec in TRANSFORMER_SENTENCES:
+        tokens = re.findall(r"[a-z]+", spec["text"].lower())
+        layers = [
+            {
+                # The RESULT view's tensor — unchanged shape, kept additive.
+                "heads": [
+                    _attention_matrix(tokens, layer, head)
+                    for head in range(len(TRANSFORMER_HEAD_LABELS))
+                ],
+                # The MECHANISM view's vectors: qkv[h].q/k/v are [token][dim],
+                # factored so softmax(Q·Kᵀ/√d) reproduces heads[h] exactly.
+                "qkv": [
+                    _head_qkv(tokens, layer, head)
+                    for head in range(len(TRANSFORMER_HEAD_LABELS))
+                ],
+            }
+            for layer in range(TRANSFORMER_N_LAYERS)
+        ]
+        sentences.append(
+            {
+                "sentenceId": spec["sentenceId"],
+                "tokens": tokens,
+                "layers": layers,
+            }
+        )
+    return {
+        "generator": "camp-precompute transformer",
+        "generatedAt": datetime.now(timezone.utc).isoformat(),
+        "station": "transformer",
+        "note": (
+            "Self-attention weights for a few sentences. layers[l].heads[h] is a "
+            "[query][key] matrix; each row is a softmax distribution over keys. "
+            "Synthesised offline with hand-designed head patterns (local / "
+            "content-word / first-token sink), sharp in early layers and diffuse "
+            "in later ones. layers[l].qkv[h] adds tiny per-token Q/K/V vectors "
+            "(dim qkvDim) factored so softmax(Q·Kᵀ/√d) reproduces heads[h] — the "
+            "browser replays them and does only light dot-product/softmax "
+            "arithmetic, never a model forward pass."
+        ),
+        "layers": TRANSFORMER_N_LAYERS,
+        "heads": len(TRANSFORMER_HEAD_LABELS),
+        "headLabels": TRANSFORMER_HEAD_LABELS,
+        "qkvDim": TRANSFORMER_QKV_DIM,
+        "sentences": sentences,
+    }
+
+
+def transformer(out_dir: Path) -> Path:
+    """Write transformer/attention.json and register it in the manifest."""
+    station_dir = out_dir / "transformer"
+    station_dir.mkdir(parents=True, exist_ok=True)
+
+    payload = build_transformer()
+    art_path = station_dir / "attention.json"
+    art_path.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
+
+    upsert_manifest_artifact(
+        out_dir,
+        {
+            "id": "transformer-attention",
+            "kind": "json",
+            "path": "transformer/attention.json",
+            "station": "transformer",
+            "bytes": art_path.stat().st_size,
+            "description": (
+                "Precomputed self-attention tensor ([layer][head][query][key]) "
+                "plus per-token Q/K/V vectors (qkv, factored to reproduce it) "
+                "for the Transformer station's step-through. Replayed "
+                "in-browser; only light dot-product/softmax arithmetic runs "
+                "there."
+            ),
+        },
+    )
+    return art_path
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -624,6 +987,29 @@ def main(argv: list[str] | None = None) -> int:
         help="Output directory (defaults to apps/course2/public/data/course2).",
     )
 
+    p_rnn = sub.add_parser(
+        "rnn-viz",
+        help="Write the RNN Viz station's per-timestep hidden-state activations.",
+    )
+    p_rnn.add_argument(
+        "--out",
+        type=Path,
+        default=None,
+        help="Output directory (defaults to apps/course2/public/data/course2).",
+    )
+
+    p_tf = sub.add_parser(
+        "transformer",
+        help="Write the Transformer station's attention.json and register it in "
+        "manifest.json.",
+    )
+    p_tf.add_argument(
+        "--out",
+        type=Path,
+        default=None,
+        help="Output directory (defaults to apps/course2/public/data/course2).",
+    )
+
     args = parser.parse_args(argv)
 
     if args.command == "make-data":
@@ -655,6 +1041,20 @@ def main(argv: list[str] | None = None) -> int:
         out_dir = args.out or default_out_dir()
         for path in embedding(out_dir):
             print(f"wrote {path}")
+        return 0
+
+    if args.command == "rnn-viz":
+        out_dir = args.out or default_out_dir()
+        path = rnn_viz(out_dir)
+        print(f"wrote {path}")
+        print(f"updated {out_dir / 'manifest.json'}")
+        return 0
+
+    if args.command == "transformer":
+        out_dir = args.out or default_out_dir()
+        path = transformer(out_dir)
+        print(f"wrote {path}")
+        print(f"updated {out_dir / 'manifest.json'}")
         return 0
 
     parser.error(f"unknown command: {args.command}")
