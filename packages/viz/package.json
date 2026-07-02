@@ -13,7 +13,8 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "d3": "7.9.0"
+    "d3": "7.9.0",
+    "three": "0.171.0"
   },
   "peerDependencies": {
     "react": ">=18",
@@ -22,6 +23,7 @@
   "devDependencies": {
     "@camp/tsconfig": "workspace:*",
     "@types/d3": "7.4.3",
+    "@types/three": "0.171.0",
     "@types/react": "19.2.17",
     "@types/react-dom": "19.2.3",
     "react": "19.2.7",

@@ -11,5 +11,42 @@
     0.75,
     1.0
   ],
-  "artifacts": []
+  "artifacts": [
+    {
+      "id": "embedding-neighbors",
+      "kind": "json",
+      "path": "embedding/neighbors.json",
+      "station": "embedding",
+      "bytes": 153976
+    },
+    {
+      "id": "embedding-points",
+      "kind": "json",
+      "path": "embedding/points.json",
+      "station": "embedding",
+      "bytes": 18534
+    },
+    {
+      "id": "next-token-distributions",
+      "kind": "json",
+      "path": "next-token/distributions.json",
+      "station": "next-token",
+      "bytes": 12625
+    },
+    {
+      "id": "order-shuffle-predictions",
+      "kind": "json",
+      "path": "order-shuffle/predictions.json",
+      "station": "order-shuffle",
+      "bytes": 26917
+    },
+    {
+      "id": "tokenizer-vocab",
+      "kind": "json",
+      "path": "tokenizer/vocab.json",
+      "station": "tokenizer",
+      "bytes": 6880,
+      "description": "Char / word / BPE lookup tables (vocab + ordered merges) for the Tokenizer station. Segmentation runs in the browser; this only supplies ids."
+    }
+  ]
 }

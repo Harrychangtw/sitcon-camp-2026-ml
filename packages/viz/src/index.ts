@@ -19,3 +19,13 @@ export type { HeatmapProps } from "./Heatmap";
 
 export { useResizeObserver } from "./useResizeObserver";
 export type { Size } from "./useResizeObserver";
+
+export {
+  useThemeColors,
+  readThemeColors,
+  categoryPalette,
+  categoryColorMap,
+  rgbCss,
+  mix,
+} from "./theme";
+export type { ThemeColors, RGB } from "./theme";
