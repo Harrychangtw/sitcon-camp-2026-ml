@@ -1,10 +1,12 @@
 /**
- * EMBEDDING STATION — "tokens gain geometry."
+ * EMBEDDING STATION — "token 只是 id，語意從哪裡來？"
  *
- * Students browse precomputed word vectors projected to 2D/3D, search a word,
- * and watch its nearest neighbours light up: distance ≈ similarity. The heavy
- * work (vectors, PCA, neighbour search) is done offline by the precompute
- * pipeline; this station only loads two small JSON files and plots them.
+ * Students browse REAL pretrained word vectors (BGE, zh-TW + English) projected
+ * to 2D/3D, search a word, and watch its nearest neighbours light up: 距離 ≈
+ * 相似度. The heavy work (embedding thousands of words, PCA, k-means, neighbour
+ * search) is done offline by the precompute pipeline; this station only loads two
+ * small JSON files per language and plots them. The 語言 control swaps which
+ * language's data is loaded (lazily — the files are big, so we fetch on demand).
  */
 import { useEffect, useMemo, useState } from "react";
 import {
@@ -24,6 +26,7 @@ import {
 import { loadJSON } from "@camp/data";
 
 type Dim = "2d" | "3d";
+type Lang = "zh" | "en";
 
 interface EmbeddingPoint {
   word: string;
@@ -41,33 +44,46 @@ interface Neighbor {
 type NeighborMap = Record<string, Neighbor[]>;
 
 const MAX_K = 15; // must match precompute TOP_K
-const CANVAS_H = 460;
+
+const PLACEHOLDER: Record<Lang, string> = {
+  zh: "例如 貓、藍色、快樂…",
+  en: "例如 dog、blue、seven…",
+};
 
 export function EmbeddingStation() {
   // 1. STATE
-  const [dim, setDim] = useState<Dim>("2d");
+  const [lang, setLang] = useState<Lang>("zh");
+  // Default to 3D: the cloud is explorable (drag to orbit, scroll to zoom via
+  // Scatter3D's OrbitControls). 2D stays one click away for the flat cluster read.
+  const [dim, setDim] = useState<Dim>("3d");
   const [query, setQuery] = useState("");
   const [colorBy, setColorBy] = useState(true);
   const [k, setK] = useState(8);
 
-  // 2. DATA — loaded from precomputed artifacts (never hard-coded coordinates).
+  // 2. DATA — the active language's precomputed artifacts. Lazy-loaded per lang
+  // (the files are large, so we never fetch both up front).
   const [points, setPoints] = useState<EmbeddingPoint[]>([]);
   const [neighbors, setNeighbors] = useState<NeighborMap>({});
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     let alive = true;
+    setLoading(true);
+    setPoints([]);
+    setNeighbors({});
     Promise.all([
-      loadJSON<EmbeddingPoint[]>("/data/course2/embedding/points.json"),
-      loadJSON<NeighborMap>("/data/course2/embedding/neighbors.json"),
+      loadJSON<EmbeddingPoint[]>(`/data/course2/embedding/points.${lang}.json`),
+      loadJSON<NeighborMap>(`/data/course2/embedding/neighbors.${lang}.json`),
     ]).then(([pts, nbs]) => {
       if (!alive) return;
       setPoints(pts);
       setNeighbors(nbs);
+      setLoading(false);
     });
     return () => {
       alive = false;
     };
-  }, []);
+  }, [lang]);
 
   // 3. DERIVED STATE — pure functions of the loaded data + controls.
   const wordSet = useMemo(() => new Set(points.map((p) => p.word)), [points]);
@@ -101,7 +117,8 @@ export function EmbeddingStation() {
     [focusWord, nearest],
   );
 
-  // Category legend (colors come straight from the theme palette).
+  // Category legend (colors come straight from the theme palette). Categories are
+  // k-means clusters, each labelled by its most-central word.
   const colors = useThemeColors();
   const categories = useMemo(
     () => Array.from(new Set(points.map((p) => p.category))),
@@ -117,11 +134,25 @@ export function EmbeddingStation() {
   return (
     <StationLayout
       title="Embedding"
-      subtitle="Tokens are just ids — where does meaning come from?"
+      subtitle="token 只是一堆 id，語意是從哪裡來的？"
+      fullBleed
       controls={
         <>
+          <SegmentedControl<Lang>
+            label="語言 / Language"
+            value={lang}
+            onChange={(v) => {
+              setLang(v);
+              setQuery("");
+            }}
+            options={[
+              { label: "中文", value: "zh" },
+              { label: "English", value: "en" },
+            ]}
+          />
+
           <SegmentedControl<Dim>
-            label="Projection"
+            label="投影"
             value={dim}
             onChange={setDim}
             options={[
@@ -131,15 +162,13 @@ export function EmbeddingStation() {
           />
 
           <label className="flex flex-col gap-1.5">
-            <span className="font-mono text-xs uppercase tracking-wide text-muted">
-              Search word
-            </span>
+            <span className="font-mono text-xs text-muted">搜尋詞</span>
             <input
               type="text"
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               list="embedding-words"
-              placeholder="e.g. dog, blue, seven…"
+              placeholder={PLACEHOLDER[lang]}
               className="rounded-md border border-border bg-panel px-3 py-2 text-sm text-fg placeholder:text-muted focus:border-accent focus:outline-none"
             />
             <datalist id="embedding-words">
@@ -149,13 +178,13 @@ export function EmbeddingStation() {
             </datalist>
             {notFound ? (
               <span className="font-mono text-xs text-warning">
-                &ldquo;{query.trim()}&rdquo; is not in the vocabulary.
+                「{query.trim()}」不在詞彙表裡。
               </span>
             ) : null}
           </label>
 
           <LabeledSlider
-            label="Neighbours (k)"
+            label="鄰居數（k）"
             min={1}
             max={MAX_K}
             step={1}
@@ -164,17 +193,13 @@ export function EmbeddingStation() {
             format={(v) => `${v}`}
           />
 
-          <Toggle
-            label="Color by category"
-            checked={colorBy}
-            onChange={setColorBy}
-          />
+          <Toggle label="依類別上色" checked={colorBy} onChange={setColorBy} />
 
-          {/* Neighbour list — the "distance ≈ similarity" beat, made literal. */}
+          {/* Neighbour list — the "距離 ≈ 相似度" beat, made literal. */}
           {focusWord ? (
             <div className="flex flex-col gap-2 border-t border-border/30 pt-3">
-              <span className="font-mono text-xs uppercase tracking-wide text-accent">
-                {focusWord} · nearest {nearest.length}
+              <span className="font-mono text-xs text-accent">
+                {focusWord} · 最近的 {nearest.length} 個
               </span>
               <ol className="flex flex-col gap-1">
                 {nearest.map((n, i) => (
@@ -193,11 +218,9 @@ export function EmbeddingStation() {
                 ))}
               </ol>
             </div>
-          ) : colorBy ? (
+          ) : colorBy && categories.length > 0 ? (
             <div className="flex flex-col gap-2 border-t border-border/30 pt-3">
-              <span className="font-mono text-xs uppercase tracking-wide text-muted">
-                Categories
-              </span>
+              <span className="font-mono text-xs text-muted">類別（k-means 群集）</span>
               <div className="flex flex-wrap gap-x-3 gap-y-1">
                 {categories.map((c) => (
                   <span
@@ -220,25 +243,27 @@ export function EmbeddingStation() {
       }
       takeaway={
         <span>
-          Distance ≈ similarity: related words land near each other (turn on{" "}
-          <em>color by category</em> and the clusters pop). But it breaks at the
-          seams — search{" "}
-          <span className="font-mono text-accent">turkey</span> (a country{" "}
-          <em>and</em> a bird): it&rsquo;s stranded <em>between</em> the country
-          and animal clusters, and its nearest neighbours split across both.
-          Meaning isn&rsquo;t one clean point.
+          這些是<em>真實</em>的 embedding（用預訓練模型算出的 vector，離線投影到
+          2D／3D）。距離 ≈ 相似度：意思相近的詞會落在彼此附近（打開
+          <em>依類別上色</em>，群集就會浮現）。但語意不是一個乾淨的點。搜尋{" "}
+          <span className="font-mono text-accent">蘋果</span>
+          ：它既是水果，也是那家做手機的公司，所以最近的鄰居混在一起，有
+          <em>水果</em>，也有<em>手機</em>、<em>電腦</em>、<em>微軟</em>。連
+          <em>結果</em>、<em>果然</em>都被拉進來，只因為共用了「果」這個字，
+          形狀也會滲進語意裡。（切到 English，<span className="font-mono">apple</span>{" "}
+          也一樣：鄰居混著 fruit 和 iphone、mac。）
         </span>
       }
     >
       <div className="flex h-full flex-col gap-3">
         <p className="text-sm text-muted">
-          {points.length > 0
-            ? `${points.length} words projected to ${dim.toUpperCase()} (offline PCA). `
-            : "Loading embeddings… "}
+          {loading
+            ? "載入 embedding 中… "
+            : `${points.length} 個詞投影到 ${dim.toUpperCase()}（離線 PCA）。`}
           {focusWord
-            ? "Its nearest neighbours are lit in lime."
-            : "Search a word to light up its nearest neighbours."}
-          {dim === "3d" ? " Drag to orbit; scroll to zoom." : ""}
+            ? "它最近的鄰居會以亮綠色標示。"
+            : "搜尋一個詞，點亮它最近的鄰居。"}
+          {dim === "3d" ? " 拖曳可旋轉視角，滾動可縮放。" : ""}
         </p>
         <div className="min-h-0 flex-1">
           {dim === "3d" ? (
@@ -246,14 +271,14 @@ export function EmbeddingStation() {
               data={scatterData}
               colorBy={colorBy}
               highlight={highlight}
-              height={CANVAS_H}
+              fill
             />
           ) : (
             <Scatter2D
               data={scatterData}
               colorBy={colorBy}
               highlight={highlight}
-              height={CANVAS_H}
+              fill
             />
           )}
         </div>

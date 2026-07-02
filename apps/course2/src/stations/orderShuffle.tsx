@@ -56,6 +56,16 @@ interface OrderShufflePayload {
 
 const DATA_URL = "/data/course2/order-shuffle/predictions.json";
 
+// Display-only zh-TW names for the artifact's label keys. The keys themselves
+// (positive/negative/neutral) still drive logits + winner matching — we only
+// translate what's shown.
+const LABEL_ZH: Record<string, string> = {
+  positive: "正面",
+  negative: "負面",
+  neutral: "中性",
+};
+const labelZh = (label: string) => LABEL_ZH[label] ?? label;
+
 // --- bag-of-words, in-browser (light, order-invariant) -----------------------
 
 /**
@@ -123,15 +133,19 @@ function PredictionPanel({
   return (
     <div className="flex flex-1 flex-col gap-3 rounded-md border border-border bg-panel p-4">
       <div className="flex items-baseline justify-between">
-        <h3 className="font-mono text-xs uppercase tracking-wide text-muted">
+        <h3
+          className={`font-mono text-xs text-muted ${
+            /[一-鿿]/.test(heading) ? "" : "uppercase tracking-wide"
+          }`}
+        >
           {heading}
         </h3>
         <span
-          className={`font-mono text-xs uppercase tracking-wide ${
+          className={`font-mono text-xs ${
             highlightWinner ? "text-accent" : "text-muted"
           }`}
         >
-          {prediction.label}
+          {labelZh(prediction.label)}
         </span>
       </div>
 
@@ -142,9 +156,9 @@ function PredictionPanel({
           const lit = highlightWinner && isWinner;
           return (
             <div key={label} className="flex flex-col gap-1">
-              <div className="flex items-baseline justify-between font-mono text-[11px] uppercase tracking-wide">
+              <div className="flex items-baseline justify-between font-mono text-[11px]">
                 <span className={lit ? "text-accent" : "text-muted"}>
-                  {label}
+                  {labelZh(label)}
                 </span>
                 <span className={lit ? "text-accent" : "text-muted"}>
                   {(value * 100).toFixed(0)}%
@@ -286,13 +300,13 @@ export function OrderShuffleStation() {
 
   return (
     <StationLayout
-      title="Order Shuffle"
-      subtitle="Does word order matter? Shuffle a sentence and watch which model notices."
+      title="打亂詞序"
+      subtitle="詞序重要嗎？打亂一個句子，看哪個模型會注意到。"
       controls={
         <>
           {payload ? (
             <SegmentedControl<string>
-              label="Sentence"
+              label="選擇句子"
               value={sentenceId ?? ""}
               onChange={selectSentence}
               options={payload.sentences.map((s, i) => ({
@@ -303,13 +317,12 @@ export function OrderShuffleStation() {
           ) : null}
 
           <div className="text-sm text-muted">
-            Tap two chips to swap them, or shuffle the whole sentence. Watch the
-            two predictions below react — or not.
+            點兩個詞塊交換它們，或整句打亂。看下方兩個預測有沒有反應。
           </div>
 
           <RunButton
-            label="Shuffle"
-            runningLabel="Shuffling…"
+            label="打亂"
+            runningLabel="打亂中…"
             durationMs={400}
             onRun={doShuffle}
           />
@@ -317,27 +330,26 @@ export function OrderShuffleStation() {
           <button
             type="button"
             onClick={() => sentence && selectSentence(sentence.sentenceId)}
-            className="rounded-md border border-border px-3 py-2 text-left font-mono text-xs uppercase tracking-wide text-muted transition-colors hover:border-accent hover:text-accent"
+            className="rounded-md border border-border px-3 py-2 text-left font-mono text-xs text-muted transition-colors hover:border-accent hover:text-accent"
           >
-            Reset order
+            還原詞序
           </button>
         </>
       }
       takeaway={
         <span>
-          Shuffle the words and the <strong>bag-of-words</strong> model
-          can&rsquo;t tell — it only sees a pile of words. The{" "}
-          <span className="text-accent">order-aware</span> model can. Meaning
-          lives in order — which is why we need models that read a sequence.
+          打亂這些詞，<strong>bag-of-words</strong> 模型看不出差別，它眼裡只有
+          一堆詞。<span className="text-accent">順序感知</span>的模型看得出來。
+          語意藏在順序裡，這就是我們需要能讀懂序列的模型的原因。
         </span>
       }
     >
       {error ? (
         <div className="rounded-md border border-warning/40 bg-warning/10 p-3 text-sm text-warning">
-          Couldn&rsquo;t load predictions: {error}
+          無法載入預測結果：{error}
         </div>
       ) : !sentence || !orderAware || !bow ? (
-        <div className="text-sm text-muted">Loading predictions…</div>
+        <div className="text-sm text-muted">載入預測結果中…</div>
       ) : (
         <div className="flex h-full min-h-0 flex-col gap-6">
           <div className="flex flex-col gap-2">
@@ -382,7 +394,7 @@ export function OrderShuffleStation() {
               highlightWinner={false}
             />
             <PredictionPanel
-              heading="Order-aware"
+              heading="順序感知"
               prediction={orderAware}
               labels={sentence.labels}
               highlightWinner

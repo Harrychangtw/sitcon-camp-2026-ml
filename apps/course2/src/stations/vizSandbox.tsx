@@ -11,6 +11,7 @@ import {
   LossCurve,
   Scatter2D,
   Scatter3D,
+  VectorStrip,
   type ScatterPoint,
 } from "@camp/viz";
 import { loadManifest, type CourseManifest } from "@camp/data";
@@ -46,6 +47,21 @@ const lossSeries = [
 const matrix = Array.from({ length: 8 }, (_, r) =>
   Array.from({ length: 8 }, (_, c) => Math.sin(r * 0.6) * Math.cos(c * 0.6)),
 );
+
+// AttentionLines is interactive (hover a token → its links light up), so the
+// sandbox drives focusToken from local state, mirroring the transformer station.
+function AttentionLinesDemo() {
+  const [focus, setFocus] = useState<number | null>(null);
+  return (
+    <AttentionLines
+      tokens={tokens}
+      weights={attention}
+      focusToken={focus}
+      onFocusToken={setFocus}
+      height={220}
+    />
+  );
+}
 
 function Section({ title, children }: { title: string; children: ReactNode }) {
   return (
@@ -108,14 +124,33 @@ export function VizSandbox() {
         <Section title="Scatter3D (stub)">
           <Scatter3D data={scatter3d} height={300} />
         </Section>
-        <Section title="AttentionLines (stub)">
-          <AttentionLines tokens={tokens} weights={attention} height={220} />
+        <Section title="AttentionLines (working)">
+          <AttentionLinesDemo />
         </Section>
         <Section title="LossCurve (stub)">
           <LossCurve series={lossSeries} height={260} />
         </Section>
         <Section title="Heatmap (stub)">
           <Heatmap matrix={matrix} height={300} />
+        </Section>
+        <Section title="VectorStrip (working)">
+          <div className="flex flex-col gap-2">
+            {[1, 0.55, 0.15].map((emphasis, r) => (
+              <div key={r} className="flex items-center gap-3">
+                <span className="w-24 font-mono text-[10px] uppercase tracking-wide text-muted">
+                  emphasis {emphasis.toFixed(2)}
+                </span>
+                <VectorStrip
+                  values={Array.from({ length: 8 }, (_, i) =>
+                    Math.sin((i + 1) * (r + 1) * 0.7),
+                  )}
+                  maxAbs={1}
+                  emphasis={emphasis}
+                  highlight={r === 0}
+                />
+              </div>
+            ))}
+          </div>
         </Section>
         <ManifestProbe />
       </div>

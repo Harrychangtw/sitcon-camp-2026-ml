@@ -8,8 +8,8 @@ function NotFound() {
   return (
     <div className="flex h-full items-center justify-center p-8 text-center text-muted">
       <div>
-        <p className="text-lg font-semibold text-fg">Station not found</p>
-        <p className="mt-1 text-sm">Pick a station from the sidebar.</p>
+        <p className="text-lg font-semibold text-fg">找不到這個 station</p>
+        <p className="mt-1 text-sm">請從側邊欄選一個 station。</p>
       </div>
     </div>
   );
