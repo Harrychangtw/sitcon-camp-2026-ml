@@ -27,6 +27,10 @@ module.exports = {
           DEFAULT: "rgb(var(--camp-accent) / <alpha-value>)",
           fg: "rgb(var(--camp-accent-fg) / <alpha-value>)",
         },
+        // Categorical hues (cyan / purple) — used only to distinguish groups,
+        // never as the focus accent. See prompts/DESIGN.md.
+        accent2: "rgb(var(--camp-accent-2) / <alpha-value>)",
+        accent3: "rgb(var(--camp-accent-3) / <alpha-value>)",
         positive: "rgb(var(--camp-positive) / <alpha-value>)",
         warning: "rgb(var(--camp-warning) / <alpha-value>)",
       },

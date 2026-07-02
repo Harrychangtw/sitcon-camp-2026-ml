@@ -17,6 +17,9 @@ export type { LossCurveProps, LossSeries } from "./LossCurve";
 export { Heatmap } from "./Heatmap";
 export type { HeatmapProps } from "./Heatmap";
 
+export { VectorStrip } from "./VectorStrip";
+export type { VectorStripProps } from "./VectorStrip";
+
 export { useResizeObserver } from "./useResizeObserver";
 export type { Size } from "./useResizeObserver";
 

@@ -22,20 +22,30 @@
   --camp-muted: 100 116 139;
   --camp-panel: 248 250 252;
   --camp-border: 226 232 240;
-  --camp-accent: 79 70 229;
+  /* Light keeps a legible, darkened lime so a light class still reads on-brand. */
+  --camp-accent: 101 118 0;
   --camp-accent-fg: 255 255 255;
+  --camp-accent-2: 8 145 178;
+  --camp-accent-3: 114 53 255;
   --camp-positive: 22 163 74;
   --camp-warning: 217 119 6;
 }
 
+/*
+ * Dark is the canonical Course 2 surface (see prompts/DESIGN.md): a near-black
+ * editorial ground, a neon-lime FOCUS accent, and a small cyan/purple
+ * categorical palette. Channels are the course deck's palette.
+ */
 .dark {
-  --camp-bg: 2 6 23;
-  --camp-fg: 226 232 240;
-  --camp-muted: 148 163 184;
-  --camp-panel: 15 23 42;
-  --camp-border: 30 41 59;
-  --camp-accent: 129 140 248;
-  --camp-accent-fg: 15 23 42;
+  --camp-bg: 10 10 10;
+  --camp-fg: 255 255 255;
+  --camp-muted: 158 158 158;
+  --camp-panel: 23 23 23;
+  --camp-border: 88 88 88;
+  --camp-accent: 214 251 0;
+  --camp-accent-fg: 10 10 10;
+  --camp-accent-2: 52 227 237;
+  --camp-accent-3: 114 53 255;
   --camp-positive: 74 222 128;
   --camp-warning: 251 191 36;
 }

@@ -28,8 +28,10 @@ export interface Scatter2DProps {
    * greyscale base.
    */
   highlight?: string[];
-  /** Pixel height; width is responsive to the container. Default 360. */
+  /** Pixel height; width is responsive to the container. Default 360. Ignored when `fill`. */
   height?: number;
+  /** Fill the parent's height instead of using `height` (parent must size it). */
+  fill?: boolean;
   /**
    * TODO(lasso): when lasso selection lands, this fires with the points inside
    * the drawn region. The hook is wired now so stations can depend on the
@@ -62,12 +64,15 @@ export function Scatter2D({
   colorBy = true,
   highlight,
   height = 360,
+  fill = false,
   onSelect,
 }: Scatter2DProps) {
   const { ref, size } = useResizeObserver<HTMLDivElement>();
   const [hover, setHover] = useState<number | null>(null);
   const colors = useThemeColors();
   const width = size.width;
+  // In fill mode the parent controls height; otherwise use the fixed prop.
+  const h = fill ? size.height : height;
 
   // onSelect is reserved for the lasso hook (not yet implemented). Referenced
   // here so the wiring is visible and intentional to future implementers.
@@ -83,11 +88,11 @@ export function Scatter2D({
       .range([MARGIN.left, innerRight]);
     const yScale = scaleLinear()
       .domain(domainOf(data.map((d) => d.y)))
-      .range([height - MARGIN.bottom, MARGIN.top]);
+      .range([h - MARGIN.bottom, MARGIN.top]);
     const categories = Array.from(new Set(data.map((d) => d.category ?? "•")));
     const catColors = categoryColorMap(colors, categories);
     return { xScale, yScale, catColors };
-  }, [data, width, height, colors]);
+  }, [data, width, h, colors]);
 
   const hovered = hover !== null ? data[hover] : undefined;
 
@@ -103,9 +108,13 @@ export function Scatter2D({
   }
 
   return (
-    <div ref={ref} className="relative w-full" style={{ height }}>
-      {width > 0 ? (
-        <svg width={width} height={height} role="img" aria-label="2D scatter plot">
+    <div
+      ref={ref}
+      className={fill ? "relative h-full w-full" : "relative w-full"}
+      style={fill ? undefined : { height }}
+    >
+      {width > 0 && h > 0 ? (
+        <svg width={width} height={h} role="img" aria-label="2D scatter plot">
           {data.map((d, i) => {
             const isHot =
               hasHighlight && d.label != null && highlightSet.has(d.label);
