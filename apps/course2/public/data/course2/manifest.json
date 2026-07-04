@@ -17,28 +17,28 @@
       "kind": "json",
       "path": "embedding/neighbors.en.json",
       "station": "embedding",
-      "bytes": 3623116
+      "bytes": 3623115
     },
     {
       "id": "embedding-neighbors-zh",
       "kind": "json",
       "path": "embedding/neighbors.zh.json",
       "station": "embedding",
-      "bytes": 3607465
+      "bytes": 3607472
     },
     {
       "id": "embedding-points-en",
       "kind": "json",
       "path": "embedding/points.en.json",
       "station": "embedding",
-      "bytes": 248964
+      "bytes": 248963
     },
     {
       "id": "embedding-points-zh",
       "kind": "json",
       "path": "embedding/points.zh.json",
       "station": "embedding",
-      "bytes": 249624
+      "bytes": 249625
     },
     {
       "id": "next-token-distributions",
