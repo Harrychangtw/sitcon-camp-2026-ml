@@ -20,7 +20,7 @@ from pathlib import Path
 
 import numpy as np
 
-from .embedding import build_embedding
+from .embedding import build_embedding, export_server_state
 from .rnn import rnn_viz
 
 COURSE = "course2"
@@ -40,6 +40,13 @@ def find_repo_root(start: Path) -> Path:
 def default_out_dir() -> Path:
     root = find_repo_root(Path.cwd())
     return root / "apps" / "course2" / "public" / "data" / COURSE
+
+
+def default_artifacts_dir() -> Path:
+    """Where server-side state (npz weights/vocab) lands. Gitignored — these are
+    the live server's inputs, not browser artifacts."""
+    root = find_repo_root(Path.cwd())
+    return root / "precompute" / "artifacts"
 
 
 def make_data(out_dir: Path) -> Path:
@@ -141,11 +148,13 @@ def _top_n_logits(counts: Counter[str], top_n: int) -> list[dict[str, float]]:
     ]
 
 
-def make_next_token(out_dir: Path) -> Path:
-    """Write distributions.json: a bigram next-token table + unigram fallback."""
-    station_dir = out_dir / "next-token"
-    station_dir.mkdir(parents=True, exist_ok=True)
+def build_next_token_tables() -> dict:
+    """The next-token "model": bigram table + unigram fallback, as pure data.
 
+    Deterministic counting over the committed corpus, so the artifact build AND
+    the live server rebuild identical tables by calling this — no file to drift.
+    Returns the artifact payload minus generator/timestamp metadata.
+    """
     sentences = _tokenize(NEXT_TOKEN_CORPUS)
 
     bigram_counts: dict[str, Counter[str]] = defaultdict(Counter)
@@ -162,21 +171,37 @@ def make_next_token(out_dir: Path) -> Path:
         if sum(nexts.values()) > 0
     }
 
+    return {
+        "topN": NEXT_TOKEN_TOP_N,
+        "vocabSize": len(unigram_counts),
+        "suggestions": NEXT_TOKEN_SUGGESTIONS,
+        "fallback": _top_n_logits(unigram_counts, NEXT_TOKEN_TOP_N),
+        "bigram": bigram,
+    }
+
+
+def make_next_token(out_dir: Path) -> Path:
+    """Write distributions.json: a bigram next-token table + unigram fallback."""
+    station_dir = out_dir / "next-token"
+    station_dir.mkdir(parents=True, exist_ok=True)
+
+    tables = build_next_token_tables()
+
     payload = {
         "generator": "camp-precompute next-token",
         "generatedAt": datetime.now(timezone.utc).isoformat(),
         "station": "next-token",
-        "topN": NEXT_TOKEN_TOP_N,
+        "topN": tables["topN"],
         "note": (
             "Word-level bigram next-token table. Keyed on the LAST token of the "
             "prompt; falls back to the unigram distribution for unknown context. "
             "logit = log(prob); the browser applies softmax(logit / temperature) "
             "and top-k."
         ),
-        "vocabSize": len(unigram_counts),
-        "suggestions": NEXT_TOKEN_SUGGESTIONS,
-        "fallback": _top_n_logits(unigram_counts, NEXT_TOKEN_TOP_N),
-        "bigram": bigram,
+        "vocabSize": tables["vocabSize"],
+        "suggestions": tables["suggestions"],
+        "fallback": tables["fallback"],
+        "bigram": tables["bigram"],
     }
 
     path = station_dir / "distributions.json"
@@ -846,34 +871,43 @@ def _head_qkv(tokens: list[str], layer: int, head: int) -> dict:
     }
 
 
+def build_transformer_sentence(sentence_id: str, tokens: list[str]) -> dict:
+    """One sentence's full attention payload: layers × (heads tensor + qkv).
+
+    Pure function of the tokens — the artifact build AND the live server call
+    this, so a typed sentence gets exactly the patterns the shipped ones show.
+    NOTE: the Q/K factorisation is exact only while len(tokens) ≤ qkvDim (8);
+    callers must cap input length.
+    """
+    layers = [
+        {
+            # The RESULT view's tensor — unchanged shape, kept additive.
+            "heads": [
+                _attention_matrix(tokens, layer, head)
+                for head in range(len(TRANSFORMER_HEAD_LABELS))
+            ],
+            # The MECHANISM view's vectors: qkv[h].q/k/v are [token][dim],
+            # factored so softmax(Q·Kᵀ/√d) reproduces heads[h] exactly.
+            "qkv": [
+                _head_qkv(tokens, layer, head)
+                for head in range(len(TRANSFORMER_HEAD_LABELS))
+            ],
+        }
+        for layer in range(TRANSFORMER_N_LAYERS)
+    ]
+    return {
+        "sentenceId": sentence_id,
+        "tokens": tokens,
+        "layers": layers,
+    }
+
+
 def build_transformer() -> dict:
     """Build the attention tensor payload (pure data, no I/O)."""
     sentences = []
     for spec in TRANSFORMER_SENTENCES:
         tokens = re.findall(r"[a-z]+", spec["text"].lower())
-        layers = [
-            {
-                # The RESULT view's tensor — unchanged shape, kept additive.
-                "heads": [
-                    _attention_matrix(tokens, layer, head)
-                    for head in range(len(TRANSFORMER_HEAD_LABELS))
-                ],
-                # The MECHANISM view's vectors: qkv[h].q/k/v are [token][dim],
-                # factored so softmax(Q·Kᵀ/√d) reproduces heads[h] exactly.
-                "qkv": [
-                    _head_qkv(tokens, layer, head)
-                    for head in range(len(TRANSFORMER_HEAD_LABELS))
-                ],
-            }
-            for layer in range(TRANSFORMER_N_LAYERS)
-        ]
-        sentences.append(
-            {
-                "sentenceId": spec["sentenceId"],
-                "tokens": tokens,
-                "layers": layers,
-            }
-        )
+        sentences.append(build_transformer_sentence(spec["sentenceId"], tokens))
     return {
         "generator": "camp-precompute transformer",
         "generatedAt": datetime.now(timezone.utc).isoformat(),
@@ -987,6 +1021,31 @@ def main(argv: list[str] | None = None) -> int:
         help="Output directory (defaults to apps/course2/public/data/course2).",
     )
 
+    p_exp = sub.add_parser(
+        "export-embedding-state",
+        help="Export the live server's embedding state (npz per language) and "
+        "verify it reproduces the shipped points/neighbors JSON.",
+    )
+    p_exp.add_argument(
+        "--out",
+        type=Path,
+        default=None,
+        help="Artifact directory holding the shipped JSON (defaults to "
+        "apps/course2/public/data/course2).",
+    )
+    p_exp.add_argument(
+        "--artifacts",
+        type=Path,
+        default=None,
+        help="Where to write the npz state (defaults to precompute/artifacts).",
+    )
+    p_exp.add_argument(
+        "--write-artifacts",
+        action="store_true",
+        help="Also (re)write points/neighbors JSON from the same model state, "
+        "so npz and JSON provably come from one instance.",
+    )
+
     p_rnn = sub.add_parser(
         "rnn-viz",
         help="Write the RNN Viz station's per-timestep hidden-state activations.",
@@ -1041,6 +1100,40 @@ def main(argv: list[str] | None = None) -> int:
         out_dir = args.out or default_out_dir()
         for path in embedding(out_dir):
             print(f"wrote {path}")
+        return 0
+
+    if args.command == "export-embedding-state":
+        out_dir = args.out or default_out_dir()
+        artifacts_dir = args.artifacts or default_artifacts_dir()
+        ok = export_server_state(
+            out_dir, artifacts_dir, write_artifacts=args.write_artifacts
+        )
+        if args.write_artifacts:
+            # The JSON was rewritten outside embedding(); refresh its manifest
+            # entries so bytes stay accurate.
+            for lang in ("zh", "en"):
+                for kind in ("points", "neighbors"):
+                    rel = f"embedding/{kind}.{lang}.json"
+                    art = out_dir / rel
+                    if art.exists():
+                        upsert_manifest_artifact(
+                            out_dir,
+                            {
+                                "id": f"embedding-{kind}-{lang}",
+                                "kind": "json",
+                                "path": rel,
+                                "station": "embedding",
+                                "bytes": art.stat().st_size,
+                            },
+                        )
+        if not ok:
+            print(
+                "export-embedding-state: VERIFY FAILED — the recomputed state "
+                "does not reproduce the shipped JSON. Re-run with "
+                "--write-artifacts to regenerate JSON + npz from one model "
+                "instance (then commit the JSON)."
+            )
+            return 1
         return 0
 
     if args.command == "rnn-viz":

@@ -22,6 +22,10 @@ __pycache__
 public/data/**/*.onnx
 public/data/**/*.bin
 
+# live-server model state (npz written by `camp-precompute export-embedding-state`;
+# regenerable, ~10 MB/language — never committed)
+precompute/artifacts/
+
 # editor / os
 .DS_Store
 *.log

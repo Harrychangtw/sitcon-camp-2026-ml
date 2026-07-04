@@ -42,6 +42,13 @@ INPUT_SCALE = 0.6  # keep tanh in its interior — modest inputs, legible struct
 
 SEED = 20260702
 
+# Seed namespace for tokens OUTSIDE the preset vocab (live server input). Each
+# unseen token gets a deterministic embedding from a crc32-derived seed, so the
+# same typed word always drives the RNN identically — while the preset vocab
+# keeps the ORIGINAL rng-stream embeddings (so live output for the preset
+# sequences matches the precomputed artifact exactly).
+_LIVE_EMB_NAMESPACE = "camp-rnn-live-emb"
+
 # Short, concrete sentences. Length ~8 so the decay is visible across the row.
 SEQUENCES: list[dict] = [
     {
@@ -91,6 +98,66 @@ def _forward(
     return np.array(states)
 
 
+def build_rnn_state() -> tuple[np.ndarray, np.ndarray, np.ndarray, dict[str, np.ndarray]]:
+    """The model: weights + the preset-vocab embedding table.
+
+    Fully deterministic from SEED, so both the artifact build and the live
+    server rebuild the *same* model by calling this — no weight file to drift.
+    The rng stream order (weights first, then embeddings over the SORTED vocab)
+    is load-bearing: changing it changes every shipped artifact.
+    """
+    rng = np.random.default_rng(SEED)
+    w_h, w_x, b = _build_weights(rng)
+
+    # One fixed random embedding per distinct token across all sequences, so a
+    # repeated word ("the") drives the RNN identically each time it appears.
+    vocab = sorted({t for seq in SEQUENCES for t in seq["tokens"]})
+    emb = {tok: rng.standard_normal(INPUT_SIZE) for tok in vocab}
+    return w_h, w_x, b, emb
+
+
+def token_embedding(token: str, emb: dict[str, np.ndarray]) -> np.ndarray:
+    """Embedding for any token: the preset table when known, otherwise a
+    deterministic crc32-seeded vector (same word → same vector, every request)."""
+    import zlib
+
+    known = emb.get(token)
+    if known is not None:
+        return known
+    seed = zlib.crc32(f"{_LIVE_EMB_NAMESPACE}|{token}".encode("utf-8"))
+    return np.random.default_rng(seed).standard_normal(INPUT_SIZE)
+
+
+def run_sequence(
+    tokens: list[str],
+    w_h: np.ndarray,
+    w_x: np.ndarray,
+    b: np.ndarray,
+    emb: dict[str, np.ndarray],
+) -> tuple[list[list[float]], list[float]]:
+    """Forward a token sequence; return (hidden, influence) rounded like the
+    artifact. `influence` re-runs with the FIRST token's input zeroed and takes
+    the normalized L2 divergence at each step — the fingerprint that decays.
+    """
+    xs = np.array([token_embedding(t, emb) for t in tokens])
+
+    states = _forward(xs, w_h, w_x, b)
+
+    # Ablate the first token (zero its input) and re-run: the divergence
+    # between the two runs at each step is the first token's lingering
+    # fingerprint.
+    xs_ablated = xs.copy()
+    xs_ablated[0] = 0.0
+    states_ablated = _forward(xs_ablated, w_h, w_x, b)
+
+    diff = np.linalg.norm(states - states_ablated, axis=1)
+    base = diff[0] if diff[0] > 1e-9 else 1.0
+    influence = diff / base
+
+    hidden = [[round(float(v), 4) for v in step] for step in states]
+    return hidden, [round(float(v), 4) for v in influence]
+
+
 def build_rnn_viz() -> dict:
     """Build the rnn-viz activations payload (pure data, no I/O).
 
@@ -101,39 +168,19 @@ def build_rnn_viz() -> dict:
     hidden states at each step, normalized so step 0 = 1.0. It decays toward 0 —
     the earliest token's fingerprint fading is exactly the wall the station names.
     """
-    rng = np.random.default_rng(SEED)
-    w_h, w_x, b = _build_weights(rng)
-
-    # One fixed random embedding per distinct token across all sequences, so a
-    # repeated word ("the") drives the RNN identically each time it appears.
-    vocab = sorted({t for seq in SEQUENCES for t in seq["tokens"]})
-    emb = {tok: rng.standard_normal(INPUT_SIZE) for tok in vocab}
+    w_h, w_x, b, emb = build_rnn_state()
 
     out_sequences = []
     for spec in SEQUENCES:
         tokens = spec["tokens"]
-        xs = np.array([emb[t] for t in tokens])
-
-        states = _forward(xs, w_h, w_x, b)
-
-        # Ablate the first token (zero its input) and re-run: the divergence
-        # between the two runs at each step is the first token's lingering
-        # fingerprint.
-        xs_ablated = xs.copy()
-        xs_ablated[0] = 0.0
-        states_ablated = _forward(xs_ablated, w_h, w_x, b)
-
-        diff = np.linalg.norm(states - states_ablated, axis=1)
-        base = diff[0] if diff[0] > 1e-9 else 1.0
-        influence = (diff / base).tolist()
-
+        hidden, influence = run_sequence(tokens, w_h, w_x, b, emb)
         out_sequences.append(
             {
                 "sequenceId": spec["sequenceId"],
                 "label": spec["label"],
                 "tokens": tokens,
-                "hidden": [[round(float(v), 4) for v in step] for step in states],
-                "influence": [round(float(v), 4) for v in influence],
+                "hidden": hidden,
+                "influence": influence,
             }
         )
 

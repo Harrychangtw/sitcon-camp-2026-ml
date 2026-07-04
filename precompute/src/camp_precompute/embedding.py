@@ -87,27 +87,48 @@ def _embed(words: list[str], model_name: str, device: str) -> np.ndarray:
     return np.asarray(vecs, dtype=np.float64)
 
 
-def _pca_3d(vectors: np.ndarray) -> np.ndarray:
-    """Project to the top-3 principal components (2D mode just drops z).
+def _pca_3d_params(vectors: np.ndarray) -> tuple[np.ndarray, np.ndarray, np.ndarray, float]:
+    """Fit the 3D-projection parameters: (mean, components, clip, denom).
 
     Real embeddings have outliers; scaling by the global max collapses the cloud
     into a central blob. We clip each axis at the 98th percentile of |coord|
-    before scaling, so the bulk of the cloud fills the ~[-5, 5] frame.
+    before scaling, so the bulk of the cloud fills the ~[-5, 5] frame. The
+    parameters are returned (not folded away) so the live server can project a
+    NOVEL word into exactly the same frame.
     """
-    centered = vectors - vectors.mean(axis=0, keepdims=True)
+    mean = vectors.mean(axis=0, keepdims=True)
+    centered = vectors - mean
     _, _, vt = np.linalg.svd(centered, full_matrices=False)
-    coords = centered @ vt[:3].T
+    components = vt[:3]
+    coords = centered @ components.T
     clip = np.percentile(np.abs(coords), PCA_CLIP_PCT, axis=0, keepdims=True)
     coords = np.clip(coords, -clip, clip)
-    coords = coords / (np.abs(coords).max() + 1e-9) * 5.0
-    return coords
+    denom = float(np.abs(coords).max() + 1e-9)
+    return mean, components, clip, denom
 
 
-def _cluster(vectors: np.ndarray, words: list[str]) -> tuple[list[str], dict[str, str]]:
+def project_3d(
+    vectors: np.ndarray,
+    mean: np.ndarray,
+    components: np.ndarray,
+    clip: np.ndarray,
+    denom: float,
+) -> np.ndarray:
+    """Apply fitted projection params to any vectors (vocab or a typed word)."""
+    coords = (vectors - mean) @ components.T
+    coords = np.clip(coords, -clip, clip)
+    return coords / denom * 5.0
+
+
+def _cluster(
+    vectors: np.ndarray, words: list[str]
+) -> tuple[list[str], np.ndarray, list[str]]:
     """k-means into N_CLUSTERS groups; label each by its most-central word.
 
-    Returns (per-word category label, {label: central word}). Deterministic via
-    a fixed random_state (mirrors the SEED convention).
+    Returns (per-word category label, cluster centroids, per-cluster name).
+    Deterministic via a fixed random_state (mirrors the SEED convention). The
+    centroids + names are exported so the live server can categorise a novel
+    word by nearest centroid.
     """
     from sklearn.cluster import KMeans
 
@@ -124,8 +145,7 @@ def _cluster(vectors: np.ndarray, words: list[str]) -> tuple[list[str], dict[str
         names[c] = words[best]
 
     cats = [names[int(c)] for c in labels]
-    legend = {names[c]: names[c] for c in range(n_clusters)}
-    return cats, legend
+    return cats, km.cluster_centers_, [names[c] for c in range(n_clusters)]
 
 
 def _neighbors(words: list[str], vectors: np.ndarray) -> dict[str, list[dict]]:
@@ -157,8 +177,13 @@ def _write_compact(path: Path, payload) -> int:
     return path.stat().st_size
 
 
-def _build_lang(lang: str, out_dir: Path, device: str) -> list[dict]:
-    """Build + write points/neighbors for one language; return manifest entries."""
+def compute_lang_state(lang: str, device: str) -> dict:
+    """The full embedding-station "model state" for one language.
+
+    Everything downstream — the shipped JSON artifacts AND the live server's
+    npz export — is derived from this one dict, so the two can never come from
+    different model instances.
+    """
     words = _load_vocab(lang)
     if len(words) > MAX_WORDS:
         print(f"[{lang}] capping vocab {len(words)} → {MAX_WORDS} (size budget)")
@@ -166,20 +191,112 @@ def _build_lang(lang: str, out_dir: Path, device: str) -> list[dict]:
 
     print(f"[{lang}] embedding {len(words)} words with {MODELS[lang]} on {device}…")
     vectors = _embed(words, MODELS[lang], device)
-    coords = _pca_3d(vectors)
-    cats, _ = _cluster(vectors, words)
+    mean, components, clip, denom = _pca_3d_params(vectors)
+    coords = project_3d(vectors, mean, components, clip, denom)
+    cats, centroids, centroid_names = _cluster(vectors, words)
     neighbors = _neighbors(words, vectors)
 
-    points = [
+    return {
+        "lang": lang,
+        "model": MODELS[lang],
+        "words": words,
+        "vectors": vectors,
+        "pca_mean": mean,
+        "pca_components": components,
+        "pca_clip": clip,
+        "pca_denom": denom,
+        "coords": coords,
+        "categories": cats,
+        "centroids": centroids,
+        "centroid_names": centroid_names,
+        "neighbors": neighbors,
+    }
+
+
+def state_points(state: dict) -> list[dict]:
+    """Render a state dict into the points.{lang}.json payload."""
+    coords = state["coords"]
+    return [
         {
             "word": w,
             "x": round(float(coords[i, 0]), 3),
             "y": round(float(coords[i, 1]), 3),
             "z": round(float(coords[i, 2]), 3),
-            "category": cats[i],
+            "category": state["categories"][i],
         }
-        for i, w in enumerate(words)
+        for i, w in enumerate(state["words"])
     ]
+
+
+def save_server_state(state: dict, artifacts_dir: Path) -> Path:
+    """Persist the live server's inputs as one npz per language.
+
+    Vocab vectors are float32 (~11 MB/language — NOT committed; the artifacts
+    dir is gitignored). The projection/cluster params stay float64 so a novel
+    word is placed with the same arithmetic that placed the vocab.
+    """
+    artifacts_dir.mkdir(parents=True, exist_ok=True)
+    path = artifacts_dir / f"embedding_state.{state['lang']}.npz"
+    np.savez_compressed(
+        path,
+        model=np.array(state["model"]),
+        words=np.array(state["words"]),
+        vectors=state["vectors"].astype(np.float32),
+        pca_mean=state["pca_mean"],
+        pca_components=state["pca_components"],
+        pca_clip=state["pca_clip"],
+        pca_denom=np.array(state["pca_denom"]),
+        categories=np.array(state["categories"]),
+        centroids=state["centroids"],
+        centroid_names=np.array(state["centroid_names"]),
+    )
+    print(f"[{state['lang']}] wrote {path} ({path.stat().st_size/1e6:.2f} MB)")
+    return path
+
+
+def verify_state_against_artifacts(state: dict, out_dir: Path) -> bool:
+    """Check the freshly computed state reproduces the SHIPPED artifacts.
+
+    This is the no-drift proof: if it passes, a live lookup lands exactly where
+    the precomputed JSON puts it. Returns True when everything matches.
+    """
+    lang = state["lang"]
+    station_dir = out_dir / "embedding"
+    pts_path = station_dir / f"points.{lang}.json"
+    nbr_path = station_dir / f"neighbors.{lang}.json"
+    if not pts_path.exists() or not nbr_path.exists():
+        print(f"[{lang}] VERIFY SKIP: no shipped artifacts at {station_dir}")
+        return False
+
+    shipped_pts = json.loads(pts_path.read_text(encoding="utf-8"))
+    shipped_nbr = json.loads(nbr_path.read_text(encoding="utf-8"))
+    fresh_pts = state_points(state)
+
+    ok = True
+    if fresh_pts != shipped_pts:
+        bad = sum(1 for a, b in zip(fresh_pts, shipped_pts) if a != b)
+        print(f"[{lang}] VERIFY FAIL: {bad}/{len(fresh_pts)} points differ")
+        ok = False
+    if state["neighbors"] != shipped_nbr:
+        bad = sum(1 for w in state["neighbors"] if state["neighbors"][w] != shipped_nbr.get(w))
+        print(f"[{lang}] VERIFY FAIL: {bad}/{len(state['neighbors'])} neighbor lists differ")
+        ok = False
+    if ok:
+        print(f"[{lang}] VERIFY OK: recomputed state reproduces shipped points + neighbors exactly")
+    return ok
+
+
+def _build_lang(lang: str, out_dir: Path, device: str) -> list[dict]:
+    """Build + write points/neighbors for one language; return manifest entries."""
+    state = compute_lang_state(lang, device)
+    return _write_lang(state, out_dir)
+
+
+def _write_lang(state: dict, out_dir: Path) -> list[dict]:
+    """Write one language's points/neighbors JSON; return manifest entries."""
+    lang = state["lang"]
+    neighbors = state["neighbors"]
+    points = state_points(state)
 
     station_dir = out_dir / "embedding"
     station_dir.mkdir(parents=True, exist_ok=True)
@@ -237,3 +354,28 @@ def build_embedding(out_dir: Path) -> list[dict]:
     for lang in LANGUAGES:
         entries.extend(_build_lang(lang, out_dir, device))
     return entries
+
+
+def export_server_state(
+    out_dir: Path, artifacts_dir: Path, write_artifacts: bool = False
+) -> bool:
+    """Export the live server's per-language state npz files.
+
+    Re-runs the embedding pipeline (same code path as the artifact build) and
+    verifies the result reproduces the SHIPPED points/neighbors JSON — the
+    proof that live output will match the precomputed baseline. With
+    `write_artifacts=True` the JSON artifacts are (re)written from the same
+    state, guaranteeing npz + JSON come from one model instance.
+
+    Returns True when every language verified clean.
+    """
+    device = _select_device()
+    all_ok = True
+    for lang in LANGUAGES:
+        state = compute_lang_state(lang, device)
+        if write_artifacts:
+            _write_lang(state, out_dir)
+        ok = verify_state_against_artifacts(state, out_dir)
+        all_ok = all_ok and ok
+        save_server_state(state, artifacts_dir)
+    return all_ok
