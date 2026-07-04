@@ -46,7 +46,9 @@ lime. Keep them as distinct tokens.
 ## Matplotlib conventions
 
 - **Backend / deps**: `matplotlib.use("Agg")`; run headless via
-  `uv run --with matplotlib --with numpy [--with scipy] python3 <script>.py`.
+  `uv run --with matplotlib --with numpy --with fonttools [--with scipy] python3 <script>.py`
+  (`fonttools` is what lets the labels use the deck typeface — see **Typeface** below;
+  it's optional, the scripts fall back to the default font without it).
 - **Dark canvas**: `plt.figure(facecolor=BG)`, `ax.set_facecolor(BG)`, but **save
   `transparent=True`** so the figure floats on the slide. `dpi=300`.
 - **Exact aspect ratio** (e.g. 5:4): use a full-frame axis and **do not** crop with
@@ -68,9 +70,55 @@ lime. Keep them as distinct tokens.
   the dark slide. `arrowstyle="-|>"`.
 - **Fills under curves**: line in the accent, `fill_between(..., alpha=0.15)` same
   color (see the archived `generate-important-head.py`).
-- **Text**: English is fine for figures (no CJK font needed); zh labels are added
-  later in Affinity. Default font is OK; keep primary text `WHITE`, secondary
-  `GREY`. One `LIME` emphasis max.
+- **Text**: figure labels are English-only (the deck's split is **Artific for
+  English, Roboto/蘭亭黑 for Chinese** — but all zh is added later in Affinity, so a
+  figure never needs a CJK font). Keep primary text `WHITE`, secondary `GREY`. One
+  `LIME` emphasis max.
+
+## Typeface (Artific — match the deck)
+
+The deck sets English in **Artific Variable** (tokens.md §2). Render figure labels in
+it so previews match the slides. Two gotchas the helper below handles:
+
+1. Artific-Variable's *default* axis position is the heaviest instance (Black,
+   `wght=900`), and matplotlib <3.10 can't move a variable axis — so left alone it
+   renders everything Black. The helper **instances** the font at `wght=400` (Regular,
+   the base) **and** `700` (Bold, for real emphasis — no faux-bold), writing the
+   statics to the temp dir (no font binary in the repo).
+2. Artific has no `∥` (U+2225) glyph — use `||`. `→ − ≈` are present.
+
+Drop this in and call it once before drawing (graceful fallback if the font or
+`fonttools` is missing, so the script still runs anywhere):
+
+```python
+import os, tempfile
+from matplotlib import font_manager
+
+def use_deck_font():
+    src = next((p for p in (
+        os.path.expanduser("~/Library/Fonts/Artific-Variable.ttf"),
+        "/Library/Fonts/Artific-Variable.ttf",
+    ) if os.path.exists(p)), None)
+    if src is None:
+        return False
+    try:
+        from fontTools import ttLib
+        from fontTools.varLib.instancer import instantiateVariableFont
+    except ImportError:
+        font_manager.fontManager.addfont(src)
+        plt.rcParams["font.family"] = font_manager.FontProperties(fname=src).get_name()
+        return True
+    family = None
+    for wght in (400, 700):
+        vf = ttLib.TTFont(src)
+        instantiateVariableFont(vf, {"wght": wght}, inplace=True)
+        out = os.path.join(tempfile.gettempdir(), f"Artific-{wght}.ttf")
+        vf.save(out)
+        font_manager.fontManager.addfont(out)
+        family = font_manager.FontProperties(fname=out).get_name()
+    plt.rcParams["font.family"] = family  # Regular base; fontweight="bold" -> the 700 static
+    return True
+```
 
 ## Copy-paste constants block
 

@@ -34,3 +34,4 @@ slides/decks/png
 
 # Affinity source files (large binaries; export PNG/PDF for the repo instead)
 *.af
+*.af~lock~

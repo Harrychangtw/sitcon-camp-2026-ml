@@ -150,10 +150,10 @@ sits inside the 180, after Loop 1's 撞牆 (natural seam before RNN).
 | · one-hot → embedding | 08 | 4 | — |
 | · Embedding 探索站 | 09 | 12 | 10 |
 | · debrief + bias | 10 | 6 | — |
-| · Loop 0 close | 11 | 2 | — |
+| · Loop 0 小結 + close | 11 | 2 | — |
 | **Loop 1** divider + bag-of-emb + 假安全感 | 12–14 | 6 | — |
 | · **順序撞牆站** (本堂核心 beat) | 15 | 16 | 14 |
-| · debrief（不好/好不）+ close → RNN | 16–17 | 8 | — |
+| · debrief（故事/事故）+ close → RNN | 16–17 | 8 | — |
 | **☕ 休息** | — | 10 | — |
 | **Loop 2** divider + next-token hook | 18–19 | 3 | — |
 | · next-token 站 | 20 | 11 | 9 |
@@ -199,9 +199,9 @@ and it's spec-grounded, not invented.
 Footer — L: SITCON 2026 · C: 01 / 35 · R: Cover
 
 TEXT (verbatim — typeset exactly; mark accents, don't restyle)
-- Title L1 (white): 「機器，是怎麼讀懂一句話的？」
-- Title L2 (grey): 「模型架構演進：MLP → RNN → Transformer」
-- Meta — Speaker「講者姓名」 · Course「SITCON Camp 2026 ｜ ML」 · Date「營期日期」
+- Title L1 (white): 「機器，是怎麼讀懂一句話的?」
+- Title L2 (grey): 「從 MLP 到 Transformer 的演進」
+- Meta — Speaker「Harry 張祺煒」 · Venue「SITCON Camp 2026｜ML」 · Date「2026-07-10」
 
 LAYOUT
 - Archetype skeleton: cover
@@ -215,42 +215,45 @@ ASSETS: none
 INTERACTIVE / STATION: none
 
 ### Slide 02 · outline/TOC · 課程地圖
-Footer — L: SITCON 2026 · C: 02 / 35 · R: Outline
+Footer — L: SITCON Camp 2026 · C: 02 · R: ML Course 2｜Outline
 
-TEXT (verbatim)
-- Title L1 (white): 「這堂課，我們要蓋一台語言模型」
-- Title L2 (grey): 「五個關卡，一次補一個零件」
-- Group 01 header (grey numeral + white name): 「01. 文字怎麼變數字」
+TEXT (verbatim — built as GROUP HEADERS ONLY; no L1/L2 slide title)
+- Group 01 header (grey numeral + white question): 「01. 文字怎麼變數字?」
   - item: 「Tokenizer 探索站 ……… P. 05」
-  - item: 「從 one-hot 到 embedding ……… P. 08」
-  - item: 「Embedding 探索站 ……… P. 09」
-  - item: 「語意裡的偏見 ……… P. 10」
-- Group 02 header (grey numeral + white name): 「02. MLP 吃文字」
-  - item: 「bag-of-embeddings ……… P. 13」
-  - item: 「順序撞牆站 ……… P. 15」
-  - item: 「順序丟不得 → RNN ……… P. 17」
-- Group 03 header (grey numeral + white name): 「03. RNN」
-  - item: 「next-token 站 ……… P. 20」
-  - item: 「RNN 視覺化 ……… P. 23」
-  - item: 「RNN 的兩道牆 ……… P. 24」
-- Group 04 header (grey numeral + white name): 「04. Transformer」
-  - item: 「attention：每個字互看 ……… P. 27」
-  - item: 「位置與捷徑（PE／residual）……… P. 29」
-  - item: 「Q／K／V ……… P. 31」
-- Group 05 header (grey numeral + white name): 「05. 架構即樂高」
-  - item: 「三架構一條線 ……… P. 33」
-  - item: 「銜接第三堂 ……… P. 34」
+  - item: 「Embedding 探索站 ……… P. 08」
+  - item: 「語意裡的偏見 ……… P. 09」
+- Group 02 header (grey numeral + white question): 「02. 直接餵給 MLP 會怎樣?」
+  - item: 「bag-of-embeddings ……… P. 12」
+  - item: 「順序撞牆站 ……… P. 14」
+  - item: 「順序丟不得 → RNN ……… P. 16」
+- Group 03 header (grey numeral + white question): 「03. 怎麼把「順序」吃進去?」
+  - item: 「next-token 站 ……… P. 19」
+  - item: 「RNN 視覺化 ……… P. 22」
+  - item: 「RNN 的兩道牆 ……… P. 23」
+- Group 04 header (grey numeral + white question): 「04. 能不能讓每個字直接互看?」
+  - item: 「attention ……… P. 26」
+  - item: 「PE / residual ……… P. 28」
+  - item: 「Q / K / V ……… P. 30」
+- Group 05 header (grey numeral + white question): 「05. 這些零件能拼出什麼?」
+  - item: 「三架構一條線 ……… P. 32」
+  - item: 「銜接第三堂 ……… P. 33」
 
 LAYOUT
 - Archetype skeleton: outline/TOC
-- Block placement: five loop **groups**, each = a grey numeral「0N.」+ white loop
-  name (mirrors the footer-right section label), with 2–3 grey sub-items beneath,
-  right-aligned dotted leaders → `P. n` on the right (the Attention Tracker
-  `……… P. n` pattern). Two-column feel: item label left, page number right.
-- Notes: page numbers are the section divider / key-beat slides — keep them synced
-  if slides get inserted (currently: L0 divider P.03, L1 P.12, L2 P.18, L3 P.25,
-  L4 starts P.33). The group headers double as the section labels students see in
-  the footer, so the agenda maps 1:1 onto the deck's sections.
+- Block placement: five loop **groups**, each = a grey numeral「0N.」+ a white
+  loop **question** (the same question each section divider opens on), with 2–3
+  grey sub-items beneath, right-aligned dotted leaders → `P. n` on the right (the
+  Attention Tracker `……… P. n` pattern). Two-column feel: item label left, page
+  number right. No standalone slide title — the group questions carry the header.
+- Notes: BUILT STATE (from _2.png) — Harry dropped the L1/L2 slide title and
+  reworded the five group headers from the short section labels into the divider
+  **questions** (「文字怎麼變數字?」…「這些零件能拼出什麼?」). So the outline no longer
+  mirrors the footer-right section labels 1:1 — the footer keeps the short labels
+  (文字怎麼變數字 / MLP 吃文字 / RNN / Transformer / 架構即樂高), the outline shows the
+  questions. Group 01 dropped the「從 one-hot 到 embedding」item (now 3 items). Group
+  04 items abbreviated (attention / PE / residual / Q / K / V). Page numbers here
+  are current build values but per Harry are **reference-only and change later** —
+  don't treat them as final.
 
 ASSETS: none
 INTERACTIVE / STATION: none
@@ -264,7 +267,7 @@ woman:? → arXiv 1607.06520）→ 「每個字都是一排數字，可以餵給
 Stations: Tokenizer 探索站, Embedding 探索站.
 
 ### Slide 03 · section-divider · Loop 0 進場
-Footer — L: SITCON 2026 · C: 03 / 35 · R: 文字怎麼變數字
+Footer — L: SITCON Camp 2026 · C: 03 · R: ML Course 2｜文字怎麼變數字
 
 TEXT (verbatim)
 - Kicker (grey): 「Section 01.」
@@ -281,7 +284,7 @@ ASSETS: full-bleed glitch/datamosh background (reuse the deck's divider treatmen
 INTERACTIVE / STATION: none
 
 ### Slide 04 · statement · 上一堂的模型，看不懂字
-Footer — L: SITCON 2026 · C: 04 / 35 · R: 文字怎麼變數字
+Footer — L: SITCON Camp 2026 · C: 04 · R: ML Course 2｜文字怎麼變數字
 
 TEXT (verbatim)
 - Setup line (white): 「上一堂，我們的模型只吃得下數字。」
@@ -299,11 +302,11 @@ ASSETS: none
 INTERACTIVE / STATION: none
 
 ### Slide 05 · statement · Tokenizer 探索站（hand-off）
-Footer — L: SITCON 2026 · C: 05 / 35 · R: 文字怎麼變數字
+Footer — L: SITCON Camp 2026 · C: 05 · R: ML Course 2｜文字怎麼變數字
 
 TEXT (verbatim)
 - Setup line (white): 「先看看：機器是怎麼『讀』一句話的。」
-- Task line (white, one lime run): 「把一段字丟進去，看它被切成哪些 **[lime: token]**。」
+- Task line (white, one lime run): 「把一段字丟進去，看它被切成哪些 **[lime: Token]**」
 - Follow-up (grey): 「輪到你動手 → 換不同的字、不同語言，看看切法怎麼變。」
 
 LAYOUT
@@ -322,7 +325,7 @@ INTERACTIVE / STATION: → hand off to **Tokenizer 探索站**. Knob students tu
 拆成好幾塊、空格與大小寫也算數 → 切法不直覺。
 
 ### Slide 06 · statement + tokenizer screenshot · Tokenizer 收束（debrief）
-Footer — L: SITCON Camp 2026 · C: 06 · R: ML Course 2 ｜ 文字怎麼變數字
+Footer — L: SITCON Camp 2026 · C: 06 · R: ML Course 2｜文字怎麼變數字
 
 TEXT (verbatim — typeset exactly; mark accents, don't restyle)
 - Payoff line (white, top, one lime run): 「所以在模型眼中，只有 **[lime: Token]** 和它的編號。」
@@ -346,14 +349,14 @@ platform.openai.com/tokenizer (built into this slide as two panels).
 INTERACTIVE / STATION: none
 
 ### Slide 07 · capsule-list · 為什麼是這樣切？（subword 的由來）
-Footer — L: SITCON 2026 · C: 07 / 35 · R: 文字怎麼變數字
+Footer — L: SITCON Camp 2026 · C: 07 · R: ML Course 2｜文字怎麼變數字
 
-TEXT (verbatim)
-- Title L1 (white): 「為什麼切成這種怪東西？」
-- Title L2 (grey): 「字太細、詞太多，取中間」
-- Capsule 1: 🔠 · zh「照字母切」 · en「Character-level」 · body「切得最細，但一句話變超長，模型很難讀。e.g., 'hello' → ['h', 'e', 'l', 'l', 'o']」   (variant: §4.1 horizontal + vertical divider, bilingual)
-- Capsule 2: 📚 · zh「照整詞切」 · en「Word-level」 · body「詞表爆炸，還老是遇到沒收錄過的新詞。e.g., 'GPT-4o' → [UNK]（詞表沒有）」   (variant: §4.1 horizontal + vertical divider, bilingual)
-- Capsule 3: ✂️ · zh「照字塊切」 · en「Subword」 · body「常用字整塊、罕見字拆小塊，長度與詞表兩邊都顧到。e.g., 'tokenizer' → ['token', 'izer']」   (variant: §4.1 horizontal + vertical divider, bilingual)
+TEXT (verbatim — built title tiers are INVERTED: grey question on top, white answer below)
+- Title L2 (grey, top line): 「為什麼切成這樣?」
+- Title L1 (white, bold, below): 「細與多的折衷」
+- Capsule 1: ⧉ abcd tile · zh「照字母切」 · en「Character-level」 · body line 1「'hello' → ['h', 'e', 'l', 'l', 'o']」 · body line 2「切得最細，但一句話變超長，模型很難讀。」   (variant: §4.1 horizontal + vertical divider, bilingual; example FIRST, then explanation)
+- Capsule 2: 📚 · zh「照整詞切」 · en「Word-level」 · body line 1「'祺煒' → [UNK]（詞表沒有）」 · body line 2「詞表爆炸，還老是遇到沒收錄過的新詞。」   (variant: §4.1 horizontal + vertical divider, bilingual; example FIRST, then explanation)
+- Capsule 3: ✂️ · zh「照字塊切」 · en「Subword」 · body line 1「'tokenizer' → ['token', 'izer']」 · body line 2「常用字整塊、罕見字拆小塊，長度與詞表兩邊都顧到。」   (variant: §4.1 horizontal + vertical divider, bilingual; example FIRST, then explanation)
 
 LAYOUT
 - Archetype skeleton: capsule-list (big left title + right vertical stack of 3)
@@ -363,13 +366,20 @@ LAYOUT
   history). Keep one heading convention across the stack (all bilingual, en
   subtitle under zh heading; §4.1). No lime — the payoff is the third capsule
   landing on subword as the compromise. Icon far-left, │ divider │, body right.
+- BUILT STATE (from _7.png): title tiers **inverted** vs the original spec — the
+  grey question「為什麼切成這樣?」sits on top and the white/bold answer「細與多的折衷」
+  below it (was white「為什麼切成這種怪東西？」over grey「字太細、詞太多，取中間」). Each
+  capsule body puts the **example first**, explanation on a second line, and drops
+  the「e.g.,」prefix. Capsule 2's OOV example is now「'祺煒'」(a real zh name that's
+  out-of-vocab) instead of「'GPT-4o'」. Capsule 1's icon is an "abcd" tile glyph,
+  not the 🔠 emoji.
 
 ASSETS: optional — a tiny「一句話切三種切法」對照 sketch, or reuse the
 platform.openai.com/tokenizer screenshot to show real subword pieces
 INTERACTIVE / STATION: none
 
 ### Slide 08 · two-panel comparison · 從 one-hot 到 embedding（編號 → 有語意的數字）
-Footer — L: SITCON Camp 2026 · C: 08 · R: ML Course 2 ｜ 文字怎麼變數字
+Footer — L: SITCON Camp 2026 · C: 08 · R: ML Course 2｜文字怎麼變數字
 
 TEXT (verbatim — typeset exactly; mark accents, don't restyle)
 - Top question (white, spanning): 「怎麼把沒有意義的『Token 編號』變成有意義的數字？」
@@ -402,7 +412,7 @@ Regenerate via `slides/figures/generate-encoding-figures.py`.
 INTERACTIVE / STATION: none
 
 ### Slide 09 · statement · Embedding 探索站（hand-off）
-Footer — L: SITCON 2026 · C: 09 / 35 · R: 文字怎麼變數字
+Footer — L: SITCON Camp 2026 · C: 09 · R: ML Course 2｜文字怎麼變數字
 
 TEXT (verbatim)
 - Setup line (white): 「這排『有語意的數字』，就住在一個空間裡。」
@@ -422,7 +432,7 @@ INTERACTIVE / STATION: → hand off to **Embedding 探索站**. Knob students tu
 （貓/狗、國王/皇后），語意是「位置」學出來的。
 
 ### Slide 10 · data-viz · Embedding 收束 + bias（debrief）
-Footer — L: SITCON Camp 2026 · C: 10 · R: ML Course 2 ｜ 文字怎麼變數字
+Footer — L: SITCON Camp 2026 · C: 10 · R: ML Course 2｜文字怎麼變數字
 
 TEXT (verbatim — typeset exactly; mark accents, don't restyle)
 - Title (grey ghost watermark, oversized, bled across top): 「向量嵌入 · 特性」
@@ -434,7 +444,7 @@ TEXT (verbatim — typeset exactly; mark accents, don't restyle)
 - Right-bottom sketch caption (grey): 「king − man + woman ≈ queen」
   - analogy pair B (purple): 「man → king」
   - analogy pair B (purple): 「woman → queen」
-- Payoff line (white, spanning the bottom, one lime run): 「方向是有意義的——embedding 學到了語意，也學到了 **[lime: 偏見]**。」
+- Payoff line (white, spanning the bottom, one lime run): 「方向是有意義的：embedding 學到語意，也學到 **[lime: 偏見]**。」
 - Bias source (grey, 🔗, inline beside the payoff): 「Bolukbasi et al., 2016 · arXiv 1607.06520」
 
 LAYOUT
@@ -461,29 +471,66 @@ LAYOUT
   inline at body size (no standalone reference/citation slide). Two-color-families
   rule (tokens.md §3c): the two analogy pairs use categorical CYAN / PURPLE — NOT
   lime, NOT the viridis ramp.
+- BUILT STATE (from _10.png): only the three figures are placed so far — the zh
+  text (ghost watermark title, the panel labels/captions, the bottom bias payoff
+  「…也學到了 **[lime: 偏見]**。」, and both 🔗 citations) is **not yet typeset**. That
+  is the normal Affinity order (figures first, CJK after), so the TEXT block above
+  is still the source to typeset — it was NOT cut. One open decision for Harry: the
+  built 3D-projection top pair renders yellow/orange, not the cyan the caption
+  colour-codes; either recolour to cyan or update the caption's colour token.
 
-ASSETS:
-- LEFT: Embedding 探索站 screenshot (2D/3D projection + nearest-neighbour panel) —
-  station screenshot TBD; the 2025 reference is projector.tensorflow.org.
-- RIGHT: vector-analogy sketch — `slides/figures/embedding_analogy.png`
-  (two stacked panels: tense + gender/royalty offsets), matplotlib + transparent,
-  palette per `slides/figures/PALETTE.md`. Regenerate via
-  `slides/figures/generate-embedding-analogy.py`.
+ASSETS (BUILT STATE from _10.png — figures placed, zh text not yet typeset):
+- LEFT: projector.tensorflow.org screenshot — placed. The「cat」scatter + a
+  "Nearest points in the original space" list, with the neighbors=10 slider and
+  cosine/euclidean toggle visible.
+- RIGHT: TWO stacked **3D-axis projection screenshots** (not the flat sketch):
+  · top = tense analogy on 3D axes — walking → walked ∥ swimming → swam
+    (rendered yellow/orange, NOT the spec'd cyan).
+  · bottom = gender/royalty on 3D axes — man / woman → king / queen (blue/purple).
+  → These SUPERSEDE the earlier flat `slides/figures/embedding_analogy.png`
+    (cyan/purple 2D sketch) that a prior session generated; Harry swapped in 3D
+    projection captures instead. The generator
+    `slides/figures/generate-embedding-analogy.py` + its PNG are now unused for
+    this slide — keep or delete, they're no longer the source.
 INTERACTIVE / STATION: none — this is the Embedding 探索站 debrief; the exploration
 already happened on slide 09.
 
-### Slide 11 · statement · Loop 0 收束（bridge → Loop 1）
-Footer — L: SITCON 2026 · C: 11 / 35 · R: 文字怎麼變數字
+### Slide 11 · capsule-list · Loop 0 小結（bridge → Loop 1）
+Footer — L: SITCON Camp 2026 · C: 11 · R: ML Course 2｜文字怎麼變數字
 
 TEXT (verbatim)
-- Setup line (white): 「現在，每個字都是一排數字了。」
-- Payoff line (white, one lime run): 「那……**[lime: 就能餵給上一堂的 MLP 了嗎？]**」
+- Title L1 (white): 「文字，就這樣變成了數字」
+- Title L2 (grey): 「Loop 0 小結」
+- Capsule 1: ✂️ · zh「切詞成塊」· body「一句話沒辦法直接丟進模型，得先切成一塊塊 subword，才變成能處理的單位。」 (variant: vertical, §4.3, zh-only)
+- Capsule 2: 🔢 · zh「編號無意」· body「one-hot 只是給每個詞一個編號，詞跟詞之間距離都一樣，看不出任何語意。」 (variant: vertical, §4.3, zh-only)
+- Capsule 3: 🧭 · zh「距離即語意」· body「embedding 把詞放進向量空間，語意相近的詞就自然靠在一起，連方向都有意義。」 (variant: vertical, §4.3, zh-only)
+- Capsule 4: ⚖️ · zh「偏見殘留」· body「這些語意是從語料學來的，所以語料裡的偏見，也會一起被學進向量裡。」 (variant: vertical, §4.3, zh-only)
+- Payoff line (white, one lime run) — BUILT AS ITS OWN SLIDE (_12.png), not on this capsule slide: 「現在，每個字都是一排數字了。 那……**[lime: 就能餵給上一堂的 MLP 了嗎?]**」
 
 LAYOUT
-- Archetype skeleton: statement (lime-payoff; payoff is a question → sets up Loop 1)
-- Block placement: two lines, left-aligned centered measure, big whitespace
-- Notes: deliberately ends on a question so Loop 1 opens by answering it (and then
-  hitting the 順序 wall). Bridges the two loops.
+- Archetype skeleton: capsule-list (big left title + right stack of 4 vertical §4.3
+  capsules), closing on a lime-payoff bridge line
+- Block placement: two-tier title in the left third, 4 zh-only vertical capsules
+  stacked on the right ~60%; the lime bridge line spans the bottom band with big
+  whitespace above it
+- Notes: Loop 0 consolidation before the hand-off to Loop 1. The four capsules map
+  to Loop 0's four beats — 斷詞 (05–07) · one-hot (08) · embedding 距離 (09) · bias
+  (10). Folds the old slide-11 statement (現在每個字都是一排數字了 ＋ the MLP question)
+  into the bottom payoff line so the cliffhanger survives: Loop 0 closes on an open
+  *question*, not a 撞牆, so a recap here consolidates without deflating a wall.
+  zh-only 4-char headings (vertical §4.3 = zh heading top-left, emoji top-right,
+  divider, body below; no en subtitle) — heading「距離即語意」runs 5 chars by design
+  (the insight earns it); the other three are 4. Lime stays reserved for the single
+  payoff run 就能餵給上一堂的 MLP 了嗎？; if per-capsule colour is used it comes from the
+  categorical set (§3c), NOT lime, NOT the viridis ramp.
+- BUILT STATE (from _11/_12.png): (1) the payoff bridge line is built as its OWN
+  slide (_12) after the capsules, not on this one — the deck stages the capsule
+  recap, then the cliffhanger. (2) The built slide title currently reads a
+  placeholder「段落小節」— treat the spec's「文字，就這樣變成了數字」/「Loop 0 小結」
+  two-tier title as the intended copy still to be typeset (Harry to confirm). (3)
+  Capsule bodies are lightly trimmed on the built slide (e.g. cap 1 drops「沒辦法
+  直接丟進模型」, cap 3 drops「把詞放進向量空間」); the fuller spec text above is fine
+  to keep as the source.
 
 ASSETS: none
 INTERACTIVE / STATION: none
@@ -491,12 +538,12 @@ INTERACTIVE / STATION: none
 ## Loop 1 — MLP 吃文字 + 順序撞牆 (~30 min) 〔本堂核心 beat〕
 Beats: 橋接（bag-of-embeddings → 上一堂 MLP，做國會情感分析，**會動、假安全感**
 「那不就 MLP 就好？」）→ **撞牆 demo**（shuffle 開關：MLP(bag) shuffle 前後輸出逐字
-相同 → 順序被丟掉；對照「不好」vs「好不」）→ 收束：MLP 沒有「順序」假設 → 需要
+相同 → 順序被丟掉；對照「故事」vs「事故」）→ 收束：MLP 沒有「順序」假設 → 需要
 **假設順序有意義**的架構 → RNN。**Loop 1 結束後接 10 分鐘休息**（撞牆後的自然斷點）。
 Station: 順序撞牆站.
 
 ### Slide 12 · section-divider · Loop 1 進場
-Footer — L: SITCON 2026 · C: 12 / 35 · R: MLP 吃文字
+Footer — L: SITCON Camp 2026 · C: 12 · R: ML Course 2｜MLP 吃文字
 
 TEXT (verbatim — typeset exactly; mark accents, don't restyle)
 - Kicker (grey): 「Section 02.」
@@ -513,7 +560,7 @@ ASSETS: full-bleed glitch/datamosh background (reuse the deck's divider treatmen
 INTERACTIVE / STATION: none
 
 ### Slide 13 · flow-diagram · bag-of-embeddings → 丟進 MLP（橋接）
-Footer — L: SITCON 2026 · C: 13 / 35 · R: MLP 吃文字
+Footer — L: SITCON Camp 2026 · C: 13 · R: ML Course 2｜MLP 吃文字
 
 TEXT (verbatim)
 - Title (grey ghost watermark, oversized, bled across top): 「bag-of-embeddings」
@@ -525,7 +572,7 @@ TEXT (verbatim)
 - Flow node 3 (pill): 「一個向量（bag-of-embeddings）」
 - Edge label 3 (grey): 「丟進上一堂的 MLP」
 - Flow node 4 (pill): 「情緒：正面 / 負面」
-- Caption line under flow (white, one lime run): 「不用改上一堂的模型——它 **[lime: 居然會動]**。」
+- Caption line (white, one lime run) — BUILT AS ITS OWN OVERLAY SLIDE (_15.png) after the flow (_14): 「不用改上一堂的模型，它 **[lime: 居然會動]**。」
 
 LAYOUT
 - Archetype skeleton: flow-diagram (horizontal, 4 stages)
@@ -536,27 +583,44 @@ LAYOUT
   narrated — it makes the「丟掉順序」wall (slide 15–16) legible in hindsight (a bag
   has no order). Directly answers Loop 0's cliff-hanger (slide 11). Keep 準度 out of
   here — that escalation is slide 14. One lime run only, on 居然會動.
+- Figure split: the generated PNG carries stages 1–3 (句子 → embeddings → 平均向量) —
+  a row of viridis token-embedding columns collapsing via `1/N Σ` into ONE
+  lime-edged vector. The output column is the genuine element-wise mean under the
+  same viridis norm, so「取平均」is honest, not decorative (its washed-out colours
+  quietly foreshadow the 丟掉順序 wall). Harry hand-draws the → MLP → 情緒 tail
+  (nodes 3→4) around it in Affinity.
 
-ASSETS: none (diagram is the hero — hand-drawn in Affinity)
+ASSETS: generated figure in the repo — `slides/figures/bag_of_embeddings.png`
+(dark palette + viridis; sentence → tokens → embedding columns →「mean」→ one
+averaged vector). Regenerate via `slides/figures/generate-bag-of-embeddings.py`.
+The → MLP → 情緒 tail stays hand-drawn in Affinity.
 INTERACTIVE / STATION: none
 
-### Slide 14 · statement · 那不就 MLP 就好？（假安全感）
-Footer — L: SITCON 2026 · C: 14 / 35 · R: MLP 吃文字
+### Slide 14 · statement + cited results-table · 那不就 MLP 就好？（假安全感）
+Footer — L: SITCON Camp 2026 · C: 14 · R: ML Course 2｜MLP 吃文字
 
-TEXT (verbatim)
+TEXT (verbatim — BUILT with a real cited results table, see BUILT STATE note)
+- Source caption (grey, top, 🔗): 「Iyyer et al. (2015), Deep Unordered Composition Rivals Syntactic Methods for Text Classification, ACL」
 - Setup line (white): 「而且準度……還不錯。」
-- Follow-up (grey): 「看起來，文字這一關就這樣解決了。」
-- Payoff line (white, one lime run): 「那 **[lime: 不就 MLP 就好了嗎？]**」
+- Results table (from the paper) — columns「Model · RT · SST fine · SST bin · IMDB · Time (s)」; rows「DAN-ROOT · DAN-RAND · DAN · NBOW-RAND · NBOW」（DAN-ROOT: — / 46.9 / 85.7 / — / 31｜DAN-RAND: 77.3 / 45.4 / 83.2 / 88.8 / 136｜DAN: 80.3 / 47.7 / 86.3 / 89.4 / 136｜NBOW-RAND: 76.2 / 42.3 / 81.4 / 88.9 / 91｜NBOW: 79.0 / 43.6 / 83.6 / 89.0 / 91）
+- Payoff line (white, one lime run): 「那 **[lime: 不就 MLP 就好了嗎?]**」
 
 LAYOUT
-- Archetype skeleton: statement (lime-payoff)
-- Block placement: three lines, left-aligned centered measure, big whitespace
-- Notes: the trap before the wall — the lime run lands on the whole false-security
-  question (whole-question lime is in-system; see slide 11 precedent). Keep 準度
-  qualitative (spec only says 還不錯); do NOT invent an accuracy %. Slide 15
-  immediately pokes the hole.
+- Archetype skeleton: statement (lime-payoff) with an embedded **cited results
+  table** — setup line above the table, the DAN/NBOW accuracy table centered, the
+  lime false-security payoff below; source citation sits at the very top.
+- Block placement: source caption top; 「而且準度……還不錯。」above a centered
+  white-ruled results table; payoff 「那不就 MLP 就好了嗎?」 spans below it.
+- BUILT STATE (from _16.png): Harry seated the **real published Iyyer et al. 2015
+  table** here (DAN/NBOW on RT·SST·IMDB·Time). This intentionally OVERRIDES the
+  earlier spec note「do NOT invent an accuracy %」— it's a real cited figure, not an
+  invented number, so a later pass must NOT strip it back to a pure statement. The
+  grey middle line「看起來，文字這一關就這樣解決了。」was dropped in the build. Lime run
+  lands on the whole false-security question「不就 MLP 就好了嗎?」(whole-question lime
+  is in-system; see slide 11 precedent). Slide 15 immediately pokes the hole.
 
-ASSETS: none
+ASSETS: results table = a screenshot / typeset copy of the Iyyer et al. (2015)
+DAN vs NBOW table (real, cited). No generated figure.
 INTERACTIVE / STATION: none
 
 ### Slide 15 · statement · 順序撞牆站（hand-off）
@@ -584,21 +648,21 @@ Footer — L: SITCON 2026 · C: 16 / 35 · R: MLP 吃文字
 
 TEXT (verbatim)
 - Title (grey watermark, oversized): 「一袋無序的字」
-- Sentence A (centered, coloured dashed underline per char): 「不 好」
-- Sentence B (centered, coloured dashed underline per char): 「好 不」
-- Callout under A (grey): 「👍 偏正面」
-- Callout under B (grey): 「👎 偏負面」
-- Bridge note (grey, centered between): 「同一袋『不』＋『好』 → MLP(bag) 給出一模一樣的輸出」
-- Payoff line (white, one lime run): 「語意明明相反，它卻 **[lime: 分不出來]**。」
+- Sentence A (centered, coloured dashed underline per char): 「故 事」
+- Sentence B (centered, coloured dashed underline per char): 「事 故」
+- Callout under A (grey): 「📖 一則故事」
+- Callout under B (grey): 「💥 出事了」
+- Bridge note (grey, centered between): 「同一袋『故』＋『事』 → MLP(bag) 給出一模一樣的輸出」
+- Payoff line (white, one lime run): 「語意天差地遠，它卻 **[lime: 分不出來]**。」
 
 LAYOUT
 - Archetype skeleton: annotated-sentence (AT slide 15 — coloured dashed underlines
   on spans + emoji callouts; NOT a capsule, no card/body)
 - Block placement: two short phrases stacked centre-stage, each char on a coloured
-  dashed-underline span; the two use the **same two colours** for 不 / 好 so it
+  dashed-underline span; the two use the **same two colours** for 故 / 事 so it
   reads as「同一袋字，只是換順序」; emoji callouts arrow up from below; bridge note
   between the two; lime payoff line at the bottom
-- Notes: converted from a statement so the「不好 vs 好不」contrast is *shown* — this
+- Notes: converted from a statement so the「故事 vs 事故」contrast is *shown* — this
   is legal because it stays an annotated sentence, NOT a standalone
   comparison-columns layout (archetypes.md forbids that). Colour comes from the
   categorical set (§3c), one hue per character, reused across both phrases; lime
@@ -658,7 +722,7 @@ Footer — L: SITCON 2026 · C: 19 / 35 · R: RNN
 TEXT (verbatim)
 - Setup line (white): 「在教架構之前，先玩個遊戲。」
 - Task line (white, one lime run): 「給你目前的字，猜 **[lime: 下一個字]** 是什麼。」
-- Follow-up (grey): 「『今天天氣真___』——你腦中大概已經有答案了。」
+- Follow-up (grey): 「『今天天氣真___』，你腦中大概已經有答案了。」
 
 LAYOUT
 - Archetype skeleton: statement (lime-payoff flavour)
@@ -674,8 +738,8 @@ INTERACTIVE / STATION: none
 Footer — L: SITCON 2026 · C: 20 / 35 · R: RNN
 
 TEXT (verbatim)
-- Setup line (white): 「換模型來猜——給它目前的字，看它押哪個字。」
-- Task line (white, one lime run): 「慢慢放寬它能看的前文，看準度 **[lime: 怎麼變]**。」
+- Setup line (white): 「換模型來猜：給它目前的字，看它押哪個。」
+- Task line (white, one lime run): 「慢慢放寬它能看的前文，看它的把握 **[lime: 怎麼變]**。」
 - Follow-up (grey): 「輪到你動手 → 調 context 視窗大小、決定要不要看更前面的字。」
 
 LAYOUT
@@ -739,7 +803,7 @@ INTERACTIVE / STATION: none
 Footer — L: SITCON 2026 · C: 23 / 35 · R: RNN
 
 TEXT (verbatim)
-- Setup line (white): 「剛剛是靜態圖——現在讓記憶動起來。」
+- Setup line (white): 「剛剛是靜態圖，現在讓記憶動起來。」
 - Task line (white, one lime run): 「看 hidden state 一站一站 **[lime: 沿著句子往後流]**。」
 - Follow-up (grey): 「輪到你動手 → 看記憶怎麼流動，也看訓練時的 loss。」
 
@@ -810,7 +874,7 @@ Footer — L: SITCON 2026 · C: 26 / 35 · R: Transformer
 
 TEXT (verbatim)
 - Setup line (white): 「RNN 的記憶要一站一站往後傳，傳到後面就淡了。」
-- Payoff line (white, one lime run): 「換個想法——讓每個字直接看向序列裡所有字，這就是 **[lime: attention]**。」
+- Payoff line (white, one lime run): 「換個想法：讓每個字直接看向所有字，這就是 **[lime: attention]**。」
 
 LAYOUT
 - Archetype skeleton: statement (lime-payoff)
@@ -843,7 +907,7 @@ INTERACTIVE / STATION: → hand off to **Transformer 站**. Knob students turn: 
 Footer — L: SITCON 2026 · C: 28 / 35 · R: Transformer
 
 TEXT (verbatim)
-- Setup line (white): 「attention 解決了健忘——每個字都看得到所有字。」
+- Setup line (white): 「attention 解決了健忘：每個字都看得到所有字。」
 - Payoff line (white, one lime run): 「但它有個盲點：對 **[lime: 順序]** 無感。」
 - Follow-up (grey): 「把句子打散重排，attention 算出來的結果一模一樣。」
 
@@ -879,7 +943,7 @@ on/off。Notice: 開 PE 時打亂順序輸出會變、關掉時卻不變 → 順
 Footer — L: SITCON 2026 · C: 30 / 35 · R: Transformer
 
 TEXT (verbatim)
-- Setup line (white): 「想更聰明就把層疊更深——但疊深之後，訓練開始不穩，loss 亂跳。」
+- Setup line (white): 「想更聰明就把層疊更深，但疊深之後訓練不穩，loss 亂跳。」
 - Payoff line (white, one lime run): 「補一條 **[lime: residual connection]**，給資訊一條捷徑繞過層。」
 - Follow-up (grey): 「輪到你動手 → 切換 residual on/off，看 loss 穩不穩。」
 
@@ -928,7 +992,7 @@ Footer — L: SITCON 2026 · C: 32 / 35 · R: Transformer
 TEXT (verbatim)
 - Title L1 (white): 「Transformer 就是這幾塊拼起來」
 - Title L2 (grey): 「attention ＋ 三塊補丁」
-- Capsule 1: 👀 · zh「注意力」· en「Attention」· body「每個字直接看向所有字，不必逐站傳記憶。」  (variant: §4.1 horizontal + vertical divider, bilingual)
+- Capsule 1: 👀 · zh「注意機制」· en「Attention」· body「每個字直接看向所有字，不必逐站傳記憶。」  (variant: §4.1 horizontal + vertical divider, bilingual)
 - Capsule 2: 📍 · zh「位置編碼」· en「Positional Embedding」· body「把『第幾個』塞回去，補上順序。」  (variant: §4.1 horizontal + vertical divider, bilingual)
 - Capsule 3: 🔗 · zh「殘差連接」· en「Residual Connection」· body「給資訊一條捷徑繞過層，訓練更穩。」  (variant: §4.1 horizontal + vertical divider, bilingual)
 - Capsule 4: 🔑 · zh「Q／K／V」· en「Query · Key · Value」· body「問題對上鑰匙，決定注意力看誰。」  (variant: §4.1 horizontal + vertical divider, bilingual)
@@ -975,7 +1039,7 @@ INTERACTIVE / STATION: none
 Footer — L: SITCON 2026 · C: 34 / 35 · R: 架構即樂高
 
 TEXT (verbatim)
-- Setup line (white): 「記憶、直接互看、位置、捷徑——」
+- Setup line (white): 「記憶、直接互看、位置、捷徑，」
 - Body line (white): 「這些零件拼起來，就是你正在用的大模型。」
 - Payoff line (white, one lime run): 「下一堂，我們拿它來 **[lime: 玩]**：LoRA、生成、RL。」
 
@@ -1078,7 +1142,7 @@ archetypes** off `statement` per your Image #1 / #3 note.
     Image #1 shape.
   - **08** one-hot → embedding → `flow-diagram` (id → one-hot → embedding).
   - **13** bag-of-embeddings → `flow-diagram` (句子 → embeddings → 平均 → MLP → 情緒).
-  - **16**「不好/好不」→ `annotated-sentence` (AT slide 15; coloured span underlines).
+  - **16**「故事/事故」→ `annotated-sentence` (AT slide 15; coloured span underlines).
   - **31** QKV → `flow-diagram` (Query → Key → Value).
   - Kept from draft: `capsule-list` 24 / 32 / 33, `flow-diagram` 22 (RNN),
     `resources-board` 35, `section-divider` 03/12/18/25.
@@ -1102,7 +1166,7 @@ archetypes** off `statement` per your Image #1 / #3 note.
 - Watch-outs for typesetting:
   - Bias citation (arXiv 1607.06520) is inlined as a 🔗 caption on slide 10 (not a
     standalone `reference/citation` slide); full entry also in slide-35 資源 list.
-  - No standalone comparison-columns anywhere (per archetypes.md): 不好/好不 is an
+  - No standalone comparison-columns anywhere (per archetypes.md): 故事/事故 is an
     `annotated-sentence` (16), the 3-architecture compare is a `capsule-list` (33).
   - `flow-diagram` 22 (RNN) uses subscript tokens (token₁/₂/₃) — check those glyphs
     typeset cleanly, or fall back to token1/2/3. The new flow-diagrams (08/13/31)

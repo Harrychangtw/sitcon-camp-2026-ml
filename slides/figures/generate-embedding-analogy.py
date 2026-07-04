@@ -6,22 +6,61 @@ One figure, two stacked panels — mirrors the 2025 deck's presentation_30
 ("向量嵌入 | 特性") right-hand column: a consistent offset drawn as two parallel
 dashed arrows in a small vector space.
 
-  top panel  — tense analogy:          walking → walked   ∥  swimming → swam   (CYAN)
-  bottom     — gender / royalty:        man → king         ∥  woman → queen     (PURPLE)
+  top panel  — tense analogy:          walking → walked   || swimming → swam   (CYAN)
+  bottom     — gender / royalty:        man → king         || woman → queen     (PURPLE)
 
 The point students should read: the *direction* between a pair is meaningful and
 repeats across pairs → embeddings encode relations (and, on slide 10, also bias).
 
 Run headless:
-  uv run --with matplotlib --with numpy python3 generate-embedding-analogy.py
+  uv run --with matplotlib --with numpy --with fonttools python3 generate-embedding-analogy.py
+  (fonttools is optional — without it the labels fall back to matplotlib's default font)
 
 Palette + conventions: slides/figures/PALETTE.md. Saved transparent to sit on #0A0A0A.
 """
 import os
+import tempfile
 import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
+from matplotlib import font_manager
 from matplotlib.patches import FancyArrowPatch
+
+
+def use_deck_font():
+    """Render the (Latin) figure labels in the deck typeface — Artific for English
+    (tokens.md §2); Chinese is Roboto/蘭亭黑 but that's added later in Affinity, so the
+    figure itself only ever needs Artific.
+
+    Artific-Variable defaults to its heaviest (Black, wght=900) instance, so we pin
+    the REGULAR (400) weight — plus a Bold (700) for real emphasis, not faux-bold —
+    with fonttools and hand matplotlib the static instances (matplotlib <3.10 can't
+    drive a variable axis itself). Statics are written to the temp dir, not the repo.
+    Falls back gracefully (default font, or the raw variable face) so the script still
+    runs anywhere."""
+    src = next((p for p in (
+        os.path.expanduser("~/Library/Fonts/Artific-Variable.ttf"),
+        "/Library/Fonts/Artific-Variable.ttf",
+    ) if os.path.exists(p)), None)
+    if src is None:
+        return False
+    try:
+        from fontTools import ttLib
+        from fontTools.varLib.instancer import instantiateVariableFont
+    except ImportError:
+        font_manager.fontManager.addfont(src)
+        plt.rcParams["font.family"] = font_manager.FontProperties(fname=src).get_name()
+        return True
+    family = None
+    for wght in (400, 700):
+        vf = ttLib.TTFont(src)
+        instantiateVariableFont(vf, {"wght": wght}, inplace=True)
+        out = os.path.join(tempfile.gettempdir(), f"Artific-{wght}.ttf")
+        vf.save(out)
+        font_manager.fontManager.addfont(out)
+        family = font_manager.FontProperties(fname=out).get_name()
+    plt.rcParams["font.family"] = family  # Regular is the base; bold picks the 700 static
+    return True
 
 # --- palette (PALETTE.md) --------------------------------------------------
 BG       = "#0A0A0A"
@@ -72,18 +111,19 @@ def panel(ax, title, pairs, color, note):
 
 
 def build():
+    use_deck_font()
     fig = plt.figure(figsize=(5, 6), facecolor=BG)
     ax_top = fig.add_axes([0.02, 0.52, 0.96, 0.44])
     ax_bot = fig.add_axes([0.02, 0.04, 0.96, 0.44])
 
     # top: tense analogy — same "past-tense" offset for both pairs
-    panel(ax_top, "walking → walked  ∥  swimming → swam",
+    panel(ax_top, "walking → walked  || swimming → swam",
           [((1.6, 1.4, "walking"), (4.2, 3.4, "walked")),
            ((5.0, 1.0, "swimming"), (7.6, 3.0, "swam"))],
           CYAN, "same offset = past-tense direction")
 
     # bottom: gender/royalty — king - man + woman ≈ queen
-    panel(ax_bot, "man → king  ∥  woman → queen",
+    panel(ax_bot, "man → king  || woman → queen",
           [((1.6, 1.2, "man"), (4.2, 3.4, "king")),
            ((5.0, 0.9, "woman"), (7.6, 3.1, "queen"))],
           PURPLE, "king − man + woman ≈ queen")

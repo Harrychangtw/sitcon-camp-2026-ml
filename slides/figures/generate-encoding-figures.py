@@ -10,16 +10,55 @@ Two SEPARATE figures, English tokens, NO title on top (the slide capsule labels 
 
 Each figure reads bottom -> up:  sentence  ->  tokens  ->  ( embedding table )  ->  matrix
 
-Run:  uv run --with matplotlib --with numpy python3 slides/figures/generate-encoding-figures.py
+Run:  uv run --with matplotlib --with numpy --with fonttools python3 slides/figures/generate-encoding-figures.py
+      (fonttools is optional — without it the labels fall back to matplotlib's default font)
 """
 
 import os
+import tempfile
 import numpy as np
 import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
+from matplotlib import font_manager
 from matplotlib.patches import FancyBboxPatch, Rectangle
 from matplotlib.colors import LinearSegmentedColormap, Normalize
+
+
+def use_deck_font():
+    """Render the (Latin) figure labels in the deck typeface — Artific for English
+    (tokens.md §2); Chinese is Roboto/蘭亭黑 but that's added later in Affinity, so the
+    figure itself only ever needs Artific.
+
+    Artific-Variable defaults to its heaviest (Black, wght=900) instance, so we pin
+    the REGULAR (400) weight — plus a Bold (700) for real emphasis, not faux-bold —
+    with fonttools and hand matplotlib the static instances (matplotlib <3.10 can't
+    drive a variable axis itself). Statics are written to the temp dir, not the repo.
+    Falls back gracefully (default font, or the raw variable face) so the script still
+    runs anywhere."""
+    src = next((p for p in (
+        os.path.expanduser("~/Library/Fonts/Artific-Variable.ttf"),
+        "/Library/Fonts/Artific-Variable.ttf",
+    ) if os.path.exists(p)), None)
+    if src is None:
+        return False
+    try:
+        from fontTools import ttLib
+        from fontTools.varLib.instancer import instantiateVariableFont
+    except ImportError:
+        font_manager.fontManager.addfont(src)
+        plt.rcParams["font.family"] = font_manager.FontProperties(fname=src).get_name()
+        return True
+    family = None
+    for wght in (400, 700):
+        vf = ttLib.TTFont(src)
+        instantiateVariableFont(vf, {"wght": wght}, inplace=True)
+        out = os.path.join(tempfile.gettempdir(), f"Artific-{wght}.ttf")
+        vf.save(out)
+        font_manager.fontManager.addfont(out)
+        family = font_manager.FontProperties(fname=out).get_name()
+    plt.rcParams["font.family"] = family  # Regular is the base; bold picks the 700 static
+    return True
 
 # ==========================================
 # Design System palette — see slides/figures/PALETTE.md (canonical, reusable)
@@ -193,6 +232,7 @@ def build_embedding():
 
 
 if __name__ == "__main__":
+    use_deck_font()
     build_onehot()
     build_embedding()
     print("done ->", OUT_DIR)
