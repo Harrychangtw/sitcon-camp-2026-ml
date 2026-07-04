@@ -1,19 +1,24 @@
 /**
  * EMBEDDING STATION — "token 只是 id，語意從哪裡來？"
  *
- * Students browse REAL pretrained word vectors (BGE, zh-TW + English) projected
- * to 2D/3D, search a word, and watch its nearest neighbours light up: 距離 ≈
- * 相似度. The heavy work (embedding thousands of words, PCA, k-means, neighbour
- * search) is done offline by the precompute pipeline; this station only loads two
- * small JSON files per language and plots them. The 語言 control swaps which
- * language's data is loaded (lazily — the files are big, so we fetch on demand).
+ * Students browse REAL pretrained word vectors — zh-TW AND English embedded by
+ * ONE multilingual model into ONE shared space — projected to 2D/3D, search a
+ * word, and watch its nearest neighbours light up: 距離 ≈ 相似度, and it holds
+ * ACROSS languages (貓 sits next to cat). Typing anything works: an in-vocab
+ * word highlights instantly from the shipped artifacts; any other word is
+ * embedded live by the GPU server with the same model and dropped into the
+ * same cloud (LiveStatus shows the honest latency, or the offline fallback).
+ * The heavy work (embedding thousands of words, PCA, k-means, neighbour
+ * search) is done offline by the precompute pipeline; the browser only plots
+ * points and highlights neighbours.
  */
 import { useEffect, useMemo, useState } from "react";
 import {
   LabeledSlider,
+  LiveStatus,
   SegmentedControl,
   StationLayout,
-  Toggle,
+  type LiveState,
 } from "@camp/ui";
 import {
   Scatter2D,
@@ -23,13 +28,15 @@ import {
   useThemeColors,
   type Scatter3DPoint,
 } from "@camp/viz";
-import { liveInfer, liveInferenceEnabled, loadJSON } from "@camp/data";
+import { liveInferTimed, loadJSON } from "@camp/data";
 
 type Dim = "2d" | "3d";
-type Lang = "zh" | "en";
 
 interface EmbeddingPoint {
   word: string;
+  /** Source vocab list ("zh"/"en") for shipped words; null for a live word —
+   * display metadata only, the vectors share one space either way. */
+  lang?: string | null;
   x: number;
   y: number;
   z: number;
@@ -44,47 +51,35 @@ interface Neighbor {
 type NeighborMap = Record<string, Neighbor[]>;
 
 /** Response of the live server's POST /embedding/lookup — the same element
- * shapes as points/neighbors JSON, for a word outside the shipped vocab. */
+ * shapes as points/neighbors JSON, for any typed word. */
 interface LiveLookup {
   word: string;
-  lang: Lang;
   inVocab: boolean;
   point: EmbeddingPoint;
   neighbors: Neighbor[];
   suggestions: string[];
 }
 
-const MAX_K = 30; // must match precompute TOP_K
-
-const PLACEHOLDER: Record<Lang, string> = {
-  zh: "例如 貓、藍色、快樂…",
-  en: "例如 dog、blue、seven…",
-};
+const MAX_K = 15; // must match precompute TOP_K
 
 export function EmbeddingStation() {
   // 1. STATE
-  const [lang, setLang] = useState<Lang>("zh");
   // Default to 3D: the cloud is explorable (drag to orbit, scroll to zoom via
   // Scatter3D's OrbitControls). 2D stays one click away for the flat cluster read.
   const [dim, setDim] = useState<Dim>("3d");
   const [query, setQuery] = useState("");
-  const [colorBy, setColorBy] = useState(true);
   const [k, setK] = useState(8);
 
-  // 2. DATA — the active language's precomputed artifacts. Lazy-loaded per lang
-  // (the files are large, so we never fetch both up front).
+  // 2. DATA — the unified precomputed artifacts (zh+en in one cloud).
   const [points, setPoints] = useState<EmbeddingPoint[]>([]);
   const [neighbors, setNeighbors] = useState<NeighborMap>({});
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     let alive = true;
-    setLoading(true);
-    setPoints([]);
-    setNeighbors({});
     Promise.all([
-      loadJSON<EmbeddingPoint[]>(`/data/course2/embedding/points.${lang}.json`),
-      loadJSON<NeighborMap>(`/data/course2/embedding/neighbors.${lang}.json`),
+      loadJSON<EmbeddingPoint[]>("/data/course2/embedding/points.json"),
+      loadJSON<NeighborMap>("/data/course2/embedding/neighbors.json"),
     ]).then(([pts, nbs]) => {
       if (!alive) return;
       setPoints(pts);
@@ -94,42 +89,55 @@ export function EmbeddingStation() {
     return () => {
       alive = false;
     };
-  }, [lang]);
+  }, []);
 
   // 3. DERIVED STATE — pure functions of the loaded data + controls.
   const wordSet = useMemo(() => new Set(points.map((p) => p.word)), [points]);
+  const langOf = useMemo(
+    () => new Map(points.map((p) => [p.word, p.lang ?? null])),
+    [points],
+  );
 
+  // In-vocab fast path: the word is already a point — highlight it without a
+  // round-trip.
   const focusWord = useMemo(() => {
     const q = query.trim().toLowerCase();
     return q && wordSet.has(q) ? q : null;
   }, [query, wordSet]);
 
-  // LIVE OPT-IN — a typed word OUTSIDE the shipped vocab is embedded by the
-  // live server with the same model (gated on VITE_LIVE_INFERENCE_URL). On any
-  // failure `liveInfer` yields null and the station keeps today's behaviour
-  // (the「不在詞彙表裡」note). Preset/in-vocab words never need the server.
+  // ALWAYS-EMBED — a typed word outside the shipped vocab is the normal case,
+  // not an error: the live server embeds it with the SAME model and it drops
+  // into the same cloud. On any failure `liveInferTimed` yields null and the
+  // shipped cloud simply stays as-is (LiveStatus says so honestly).
   const missingWord = useMemo(() => {
     const q = query.trim().toLowerCase();
     return q && points.length > 0 && !wordSet.has(q) ? q : null;
   }, [query, points, wordSet]);
 
   const [live, setLive] = useState<LiveLookup | null>(null);
+  const [liveMs, setLiveMs] = useState(0);
   const [livePending, setLivePending] = useState(false);
+  const [liveFailed, setLiveFailed] = useState(false);
 
   useEffect(() => {
     setLive(null);
-    if (!missingWord || !liveInferenceEnabled()) return;
+    setLiveFailed(false);
+    if (!missingWord) return;
     let alive = true;
     setLivePending(true);
     // Debounced: only ask the server once typing pauses.
     const timer = setTimeout(() => {
-      liveInfer<LiveLookup>("/embedding/lookup", {
+      liveInferTimed<LiveLookup>("/embedding/lookup", {
         word: missingWord,
-        lang,
       }).then((r) => {
         if (!alive) return;
         setLivePending(false);
-        if (r && r.word === missingWord && r.lang === lang) setLive(r);
+        if (r && r.data.word === missingWord) {
+          setLive(r.data);
+          setLiveMs(r.ms);
+        } else {
+          setLiveFailed(true);
+        }
       });
     }, 350);
     return () => {
@@ -137,10 +145,18 @@ export function EmbeddingStation() {
       clearTimeout(timer);
       setLivePending(false);
     };
-  }, [missingWord, lang]);
+  }, [missingWord]);
 
-  const liveHit =
-    live && live.word === missingWord && live.lang === lang ? live : null;
+  const liveHit = live && live.word === missingWord ? live : null;
+
+  // The one quiet mono line about the GPU round-trip (latency + fallback only).
+  const liveState = useMemo<LiveState>(() => {
+    if (!missingWord) return { kind: "idle" };
+    if (livePending) return { kind: "pending" };
+    if (liveHit) return { kind: "live", ms: liveMs };
+    if (liveFailed) return { kind: "cached" };
+    return { kind: "idle" };
+  }, [missingWord, livePending, liveHit, liveMs, liveFailed]);
 
   // The word the station is focused on: precomputed when in vocab, live result
   // otherwise. Both flow through the SAME derived state below.
@@ -180,8 +196,9 @@ export function EmbeddingStation() {
     [activeWord, nearest],
   );
 
-  // Category legend (colors come straight from the theme palette). Categories are
-  // k-means clusters, each labelled by its most-central word.
+  // Category legend (colors come straight from the theme palette). Categories
+  // are k-means clusters over the COMBINED vocab — one cluster can span both
+  // languages — each labelled by its most-central word.
   const colors = useThemeColors();
   const categories = useMemo(
     () => Array.from(new Set(points.map((p) => p.category))),
@@ -192,13 +209,6 @@ export function EmbeddingStation() {
     [colors, categories],
   );
 
-  const notFound =
-    query.trim().length > 0 &&
-    !focusWord &&
-    !liveHit &&
-    !livePending &&
-    points.length > 0;
-
   return (
     <StationLayout
       title="Embedding"
@@ -206,19 +216,6 @@ export function EmbeddingStation() {
       fullBleed
       controls={
         <>
-          <SegmentedControl<Lang>
-            label="語言 / Language"
-            value={lang}
-            onChange={(v) => {
-              setLang(v);
-              setQuery("");
-            }}
-            options={[
-              { label: "中文", value: "zh" },
-              { label: "English", value: "en" },
-            ]}
-          />
-
           <SegmentedControl<Dim>
             label="投影"
             value={dim}
@@ -236,7 +233,7 @@ export function EmbeddingStation() {
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               list="embedding-words"
-              placeholder={PLACEHOLDER[lang]}
+              placeholder="例如 貓、cat、蘋果…"
               className="rounded-md border border-border bg-panel px-3 py-2 text-sm text-fg placeholder:text-muted focus:border-accent focus:outline-none"
             />
             <datalist id="embedding-words">
@@ -244,19 +241,7 @@ export function EmbeddingStation() {
                 <option key={p.word} value={p.word} />
               ))}
             </datalist>
-            {notFound ? (
-              <span className="font-mono text-xs text-warning">
-                「{query.trim()}」不在詞彙表裡。
-              </span>
-            ) : livePending ? (
-              <span className="font-mono text-xs text-muted">
-                詞彙表裡沒有，正在即時計算 embedding…
-              </span>
-            ) : liveHit ? (
-              <span className="font-mono text-xs text-accent">
-                詞彙表外的詞——伺服器用同一個模型即時算出位置。
-              </span>
-            ) : null}
+            <LiveStatus state={liveState} />
           </label>
 
           <LabeledSlider
@@ -269,15 +254,13 @@ export function EmbeddingStation() {
             format={(v) => `${v}`}
           />
 
-          <Toggle label="依類別上色" checked={colorBy} onChange={setColorBy} />
-
-          {/* Neighbour list — the "距離 ≈ 相似度" beat, made literal. Works
-              identically for precomputed (in-vocab) and live (novel) words. */}
+          {/* Neighbour list — the "距離 ≈ 相似度" beat, made literal, across
+              both languages. Works identically for precomputed (in-vocab) and
+              live (novel) words. */}
           {activeWord ? (
             <div className="flex flex-col gap-2 border-t border-border/30 pt-3">
               <span className="font-mono text-xs text-accent">
                 {activeWord} · 最近的 {nearest.length} 個
-                {liveHit ? " · live" : ""}
               </span>
               <ol className="flex flex-col gap-1">
                 {nearest.map((n, i) => (
@@ -290,13 +273,16 @@ export function EmbeddingStation() {
                         {String(i + 1).padStart(2, "0")}
                       </span>{" "}
                       {n.word}
+                      {langOf.get(n.word) ? (
+                        <span className="text-muted uppercase"> {langOf.get(n.word)}</span>
+                      ) : null}
                     </span>
                     <span className="text-muted">{n.score.toFixed(3)}</span>
                   </li>
                 ))}
               </ol>
             </div>
-          ) : colorBy && categories.length > 0 ? (
+          ) : categories.length > 0 ? (
             <div className="flex flex-col gap-2 border-t border-border/30 pt-3">
               <span className="font-mono text-xs text-muted">類別（k-means 群集）</span>
               <div className="flex flex-wrap gap-x-3 gap-y-1">
@@ -321,15 +307,16 @@ export function EmbeddingStation() {
       }
       takeaway={
         <span>
-          這些是<em>真實</em>的 embedding（用預訓練模型算出的 vector，離線投影到
-          2D／3D）。距離 ≈ 相似度：意思相近的詞會落在彼此附近（打開
-          <em>依類別上色</em>，群集就會浮現）。但語意不是一個乾淨的點。搜尋{" "}
-          <span className="font-mono text-accent">蘋果</span>
-          ：它既是水果，也是那家做手機的公司，所以最近的鄰居混在一起，有
-          <em>水果</em>，也有<em>手機</em>、<em>電腦</em>、<em>微軟</em>。連
-          <em>結果</em>、<em>果然</em>都被拉進來，只因為共用了「果」這個字，
-          形狀也會滲進語意裡。（切到 English，<span className="font-mono">apple</span>{" "}
-          也一樣：鄰居混著 fruit 和 iphone、mac。）
+          中文和英文的詞由<em>同一個</em>多語模型變成 vector，落在
+          <em>同一個</em>空間裡。距離 ≈ 相似度，而且跨語言也成立：搜尋{" "}
+          <span className="font-mono text-accent">貓</span>，旁邊是 貓咪、
+          <span className="font-mono">cat</span>、
+          <span className="font-mono">kitten</span>
+          ——模型從沒看過任何翻譯對照表，只是它們出現的語境相似。語意也不是一個乾淨的點：搜尋{" "}
+          <span className="font-mono text-accent">蘋果</span> 或{" "}
+          <span className="font-mono">apple</span>
+          ，水果和手機公司兩種意思的鄰居混在一起。詞彙雲外的詞也能玩——隨便打一個詞，GPU
+          會用同一個模型即時算出它的位置，掉進同一朵雲。
         </span>
       }
     >
@@ -337,24 +324,24 @@ export function EmbeddingStation() {
         <p className="text-sm text-muted">
           {loading
             ? "載入 embedding 中… "
-            : `${points.length} 個詞投影到 ${dim.toUpperCase()}（離線 PCA）。`}
+            : `${points.length} 個詞（中＋英，同一個空間）投影到 ${dim.toUpperCase()}（離線 PCA）。`}
           {activeWord
             ? "它最近的鄰居會以亮綠色標示。"
-            : "搜尋一個詞，點亮它最近的鄰居。"}
+            : "搜尋任何一個詞，點亮它最近的鄰居。"}
           {dim === "3d" ? " 拖曳可旋轉視角，滾動可縮放。" : ""}
         </p>
         <div className="min-h-0 flex-1">
           {dim === "3d" ? (
             <Scatter3D
               data={scatterData}
-              colorBy={colorBy}
+              colorBy
               highlight={highlight}
               fill
             />
           ) : (
             <Scatter2D
               data={scatterData}
-              colorBy={colorBy}
+              colorBy
               highlight={highlight}
               fill
             />

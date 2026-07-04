@@ -14,6 +14,8 @@ export type { LoadOnnxOptions } from "./loadOnnxSession";
 
 export {
   liveInfer,
+  liveInferTimed,
   liveInferenceEnabled,
   liveInferenceUrl,
 } from "./liveInfer";
+export type { LiveResult } from "./liveInfer";

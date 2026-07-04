@@ -3,11 +3,11 @@
 Never load per request. The models are the SAME ones the precompute pipeline
 uses:
 
-- embedding: the pretrained BGE encoders (via camp_precompute's MODELS map) on
-  the resolved device, plus the exported npz state (vocab vectors, PCA params,
-  k-means centroids) written by `camp-precompute export-embedding-state`, plus
-  the shipped points/neighbors JSON so in-vocab lookups return the artifact
-  values verbatim.
+- embedding: the ONE multilingual encoder (camp_precompute.embedding.MODEL,
+  loaded via its load_encoder helper) on the resolved device, plus the exported
+  npz state (combined zh+en vocab vectors, PCA params, k-means centroids)
+  written by `camp-precompute export-embedding-state`, plus the shipped
+  points/neighbors JSON so in-vocab lookups return the artifact values verbatim.
 - next-token: the bigram/unigram tables, rebuilt deterministically by importing
   camp_precompute.cli.build_next_token_tables (pure counting — no file).
 - rnn: the fixed-seed weights + preset vocab embeddings, rebuilt
@@ -34,19 +34,19 @@ log = logging.getLogger("camp-server")
 
 
 @dataclass
-class LangEmbedding:
-    encoder: object  # SentenceTransformer
+class EmbeddingState:
+    encoder: object  # SentenceTransformer (the shared multilingual model)
     words: list[str]
     word_index: dict[str, int]
-    vectors: np.ndarray  # [N, D] float32, L2-normalised
+    vectors: np.ndarray  # [N, D] float32, L2-normalised, combined zh+en vocab
     pca_mean: np.ndarray
     pca_components: np.ndarray
     pca_clip: np.ndarray
     pca_denom: float
     centroids: np.ndarray
     centroid_names: list[str]
-    points: dict[str, dict]  # word → shipped points.{lang}.json element
-    neighbors: dict[str, list[dict]]  # word → shipped neighbors.{lang}.json list
+    points: dict[str, dict]  # word → shipped points.json element
+    neighbors: dict[str, list[dict]]  # word → shipped neighbors.json list
 
 
 @dataclass
@@ -54,7 +54,7 @@ class ModelStore:
     settings: Settings
     device: str
     gpu: str | None
-    embeddings: dict[str, LangEmbedding]
+    embedding: EmbeddingState
     next_token: dict
     rnn_w_h: np.ndarray
     rnn_w_x: np.ndarray
@@ -64,17 +64,15 @@ class ModelStore:
     @property
     def model_names(self) -> list[str]:
         return [
-            *(f"embedding:{emb_mod.MODELS[lang]}" for lang in sorted(self.embeddings)),
+            f"embedding:{emb_mod.MODEL}",
             "next-token:bigram",
             "rnn:fixed-weights",
             "transformer:synthetic-attention",
         ]
 
 
-def _load_lang(lang: str, device: str, weights_dir: Path, data_dir: Path) -> LangEmbedding:
-    from sentence_transformers import SentenceTransformer
-
-    npz_path = weights_dir / f"embedding_state.{lang}.npz"
+def _load_embedding(device: str, weights_dir: Path, data_dir: Path) -> EmbeddingState:
+    npz_path = weights_dir / emb_mod.STATE_NPZ
     if not npz_path.exists():
         raise SystemExit(
             f"camp-server: missing {npz_path}. Run "
@@ -84,18 +82,24 @@ def _load_lang(lang: str, device: str, weights_dir: Path, data_dir: Path) -> Lan
         )
     state = np.load(npz_path, allow_pickle=False)
 
-    pts_path = data_dir / "embedding" / f"points.{lang}.json"
-    nbr_path = data_dir / "embedding" / f"neighbors.{lang}.json"
+    pts_path = data_dir / "embedding" / "points.json"
+    nbr_path = data_dir / "embedding" / "neighbors.json"
     points_list = json.loads(pts_path.read_text(encoding="utf-8"))
     neighbors = json.loads(nbr_path.read_text(encoding="utf-8"))
 
     model_name = str(state["model"])
-    log.info("[%s] loading %s on %s…", lang, model_name, device)
-    encoder = SentenceTransformer(model_name, device=device)
+    if model_name != emb_mod.MODEL:
+        raise SystemExit(
+            f"camp-server: {npz_path} was exported with {model_name} but "
+            f"camp_precompute expects {emb_mod.MODEL} — re-run "
+            f"`camp-precompute export-embedding-state`."
+        )
+    log.info("loading %s on %s…", model_name, device)
+    encoder = emb_mod.load_encoder(device)
     encoder.eval()
 
     words = [str(w) for w in state["words"]]
-    return LangEmbedding(
+    return EmbeddingState(
         encoder=encoder,
         words=words,
         word_index={w: i for i, w in enumerate(words)},
@@ -128,10 +132,7 @@ def load_models(settings: Settings) -> ModelStore:
         torch.cuda.device_count() if torch.cuda.is_available() else 0,
     )
 
-    embeddings = {
-        lang: _load_lang(lang, device, settings.weights_dir, settings.data_dir)
-        for lang in emb_mod.LANGUAGES
-    }
+    embedding = _load_embedding(device, settings.weights_dir, settings.data_dir)
 
     from camp_precompute.cli import build_next_token_tables
 
@@ -141,7 +142,7 @@ def load_models(settings: Settings) -> ModelStore:
         settings=settings,
         device=device,
         gpu=gpu,
-        embeddings=embeddings,
+        embedding=embedding,
         next_token=build_next_token_tables(),
         rnn_w_h=w_h,
         rnn_w_x=w_x,
@@ -152,19 +153,12 @@ def load_models(settings: Settings) -> ModelStore:
     return store
 
 
-def encode_word(store: ModelStore, lang: str, word: str) -> np.ndarray:
-    """Embed one word exactly the way precompute embedded the vocab: BGE,
-    L2-normalised, NO retrieval instruction prefix. Deterministic (eval mode,
-    no dropout, no sampling)."""
+def encode_word(store: ModelStore, word: str) -> np.ndarray:
+    """Embed one word exactly the way precompute embedded the vocab: the same
+    camp_precompute.embedding.encode_words helper (same pooling, no instruction
+    prefix, L2-normalised). Deterministic (eval mode, no dropout, no sampling)."""
     import torch
 
-    lang_state = store.embeddings[lang]
     with torch.no_grad():
-        vec = lang_state.encoder.encode(
-            [word],
-            batch_size=1,
-            normalize_embeddings=True,
-            show_progress_bar=False,
-            convert_to_numpy=True,
-        )
-    return np.asarray(vec, dtype=np.float64)[0]
+        vecs = emb_mod.encode_words(store.embedding.encoder, [word])
+    return vecs[0]

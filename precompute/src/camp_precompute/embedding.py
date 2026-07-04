@@ -7,15 +7,18 @@ intuition that *distance ≈ similarity*, and seeing where that breaks.
 The golden rule (CLAUDE.md): the browser never trains. All the heavy work —
 embedding thousands of words with a real model, PCA projection, k-means
 clustering, nearest-neighbour search — happens **here**, offline. We export small
-per-language JSON files the browser just plots. "Offline precompute may run on a
-GPU" does not violate the rule: the rule is about the *runtime*. We auto-select
+JSON files the browser just plots. "Offline precompute may run on a GPU" does not
+violate the rule: the rule is about the *runtime*. We auto-select
 `cuda → mps → cpu`; the browser/Vercel side needs no GPU, it only fetches JSON.
 
-Real vectors (not synthetic clusters) so "distance ≈ similarity" is *earned*: we
-embed a large frequency-ranked vocabulary (zh-TW + English, from committed word
-lists — see scripts/gen_vocab.py) with a pretrained BGE model, then PCA to 3D and
-cosine top-K in the ORIGINAL space. Categories come from k-means (hand-labels
-don't scale to thousands of words), capped small so the cyan/purple palette reads.
+ONE multilingual model embeds the zh-TW AND English vocabs into ONE shared
+space: a single PCA projection, a single k-means colouring, and neighbours
+computed across the combined vocab — so 貓 can sit next to `cat`, and that
+cross-lingual mixing *is* the lesson. Real vectors (not synthetic clusters) so
+"distance ≈ similarity" is *earned*: we embed a large frequency-ranked vocabulary
+(from committed word lists — see scripts/gen_vocab.py), then PCA to 3D and cosine
+top-K in the ORIGINAL space. Categories come from k-means (hand-labels don't
+scale to thousands of words), capped small so the cyan/purple palette reads.
 """
 
 from __future__ import annotations
@@ -26,22 +29,25 @@ from pathlib import Path
 import numpy as np
 
 # --- Config ------------------------------------------------------------------
-# Per-language BGE embedder. `base` (~400 MB each) is the speed/quality middle;
-# the lesson doesn't need `large`. Mono models are fine — the two languages ship
-# as independent artifacts, loaded separately in the browser.
-MODELS: dict[str, str] = {
-    "zh": "BAAI/bge-base-zh-v1.5",
-    "en": "BAAI/bge-base-en-v1.5",
-}
-LANGUAGES = ("zh", "en")
+# ONE multilingual embedder for both languages. A single model → a single vector
+# space → zh and en vectors are directly comparable (two mono models would give
+# two incomparable spaces that can never share a plot).
+MODEL = "Qwen/Qwen3-Embedding-0.6B"
+LANGUAGES = ("zh", "en")  # committed vocab lists (vocab.{lang}.txt), zh first
 
-TOP_K = 30          # neighbours stored per word (station's k-slider caps here)
+# TOP_K trimmed 30 → 15 when the two per-language clouds merged into one: the
+# combined vocab is ~2× the words, so 30 neighbours each would double
+# neighbors.json past its ~3.6 MB footprint. 15 keeps the file flat while the
+# station's k-slider stays useful.
+TOP_K = 15          # neighbours stored per word (station's k-slider caps here)
 N_CLUSTERS = 8      # k-means groups for colouring (≤8 so the palette doesn't rainbow)
 MAX_WORDS = 3610    # hard cap per language (keeps shipped JSON within budget)
 PCA_CLIP_PCT = 98.0 # clip projected coords at this percentile before scaling
 SEED = 42
 
 DATA_DIR = Path(__file__).resolve().parent.parent.parent / "data"
+
+STATE_NPZ = "embedding_state.npz"
 
 
 def _load_vocab(lang: str) -> list[str]:
@@ -56,6 +62,29 @@ def _load_vocab(lang: str) -> list[str]:
     return [w for w in words if w]
 
 
+def _load_combined_vocab() -> tuple[list[str], list[str]]:
+    """The union of the per-language word lists, each capped at MAX_WORDS.
+
+    Returns (words, langs) with langs[i] the source list of words[i]. Duplicates
+    across lists keep their first (zh) occurrence — one word, one point.
+    """
+    words: list[str] = []
+    langs: list[str] = []
+    seen: set[str] = set()
+    for lang in LANGUAGES:
+        vocab = _load_vocab(lang)
+        if len(vocab) > MAX_WORDS:
+            print(f"[{lang}] capping vocab {len(vocab)} → {MAX_WORDS} (size budget)")
+            vocab = vocab[:MAX_WORDS]
+        for w in vocab:
+            if w in seen:
+                continue
+            seen.add(w)
+            words.append(w)
+            langs.append(lang)
+    return words, langs
+
+
 def _select_device() -> str:
     """Auto-pick the fastest available torch device: cuda → mps → cpu."""
     import torch
@@ -67,21 +96,28 @@ def _select_device() -> str:
     return "cpu"
 
 
-def _embed(words: list[str], model_name: str, device: str) -> np.ndarray:
-    """Embed `words` with a BGE model. Returns L2-normalised vectors [N, D].
-
-    Symmetric word-similarity: `normalize_embeddings=True` and NO retrieval
-    instruction prefix (the query prefix is for asymmetric query→document
-    retrieval and hurts symmetric similarity).
-    """
+def load_encoder(device: str):
+    """Load the shared multilingual encoder (SentenceTransformer)."""
     from sentence_transformers import SentenceTransformer
 
-    model = SentenceTransformer(model_name, device=device)
-    vecs = model.encode(
+    return SentenceTransformer(MODEL, device=device)
+
+
+def encode_words(encoder, words: list[str]) -> np.ndarray:
+    """Embed `words` with the shared encoder. Returns L2-normalised [N, D].
+
+    THE single pooling/prefix convention, imported by both this pipeline and the
+    live server so a live embed lands exactly where precompute would put it:
+    plain words with NO retrieval-instruction prefix (Qwen3-Embedding's query
+    instruction is for asymmetric query→document retrieval and hurts symmetric
+    word similarity; last-token pooling + EOS come from the model's own
+    sentence-transformers config), `normalize_embeddings=True`.
+    """
+    vecs = encoder.encode(
         words,
-        batch_size=256,
+        batch_size=64,
         normalize_embeddings=True,
-        show_progress_bar=True,
+        show_progress_bar=len(words) > 1,
         convert_to_numpy=True,
     )
     return np.asarray(vecs, dtype=np.float64)
@@ -128,7 +164,8 @@ def _cluster(
     Returns (per-word category label, cluster centroids, per-cluster name).
     Deterministic via a fixed random_state (mirrors the SEED convention). The
     centroids + names are exported so the live server can categorise a novel
-    word by nearest centroid.
+    word by nearest centroid. Over the COMBINED vocab a cluster (and its name)
+    can span both languages — that mixing is the point.
     """
     from sklearn.cluster import KMeans
 
@@ -152,6 +189,8 @@ def _neighbors(words: list[str], vectors: np.ndarray) -> dict[str, list[dict]]:
     """Top-K cosine neighbours per word, in the ORIGINAL embedding space.
 
     Vectors are already L2-normalised, so the Gram matrix is cosine similarity.
+    Computed across the COMBINED vocab, so a zh word can surface en neighbours
+    and vice-versa.
     """
     sims = vectors @ vectors.T
     np.fill_diagonal(sims, -np.inf)  # never a word's own neighbour
@@ -169,7 +208,7 @@ def _neighbors(words: list[str], vectors: np.ndarray) -> dict[str, list[dict]]:
 
 def _write_compact(path: Path, payload) -> int:
     """Write JSON compactly (no indent) — pretty-printing ~triples these big
-    per-language files and is the easiest way to blow the size budget."""
+    files and is the easiest way to blow the size budget."""
     path.write_text(
         json.dumps(payload, ensure_ascii=False, separators=(",", ":")),
         encoding="utf-8",
@@ -177,29 +216,27 @@ def _write_compact(path: Path, payload) -> int:
     return path.stat().st_size
 
 
-def compute_lang_state(lang: str, device: str) -> dict:
-    """The full embedding-station "model state" for one language.
+def compute_state(device: str) -> dict:
+    """The full embedding-station "model state" over the combined vocab.
 
     Everything downstream — the shipped JSON artifacts AND the live server's
     npz export — is derived from this one dict, so the two can never come from
     different model instances.
     """
-    words = _load_vocab(lang)
-    if len(words) > MAX_WORDS:
-        print(f"[{lang}] capping vocab {len(words)} → {MAX_WORDS} (size budget)")
-        words = words[:MAX_WORDS]
+    words, langs = _load_combined_vocab()
 
-    print(f"[{lang}] embedding {len(words)} words with {MODELS[lang]} on {device}…")
-    vectors = _embed(words, MODELS[lang], device)
+    print(f"embedding {len(words)} words (zh+en combined) with {MODEL} on {device}…")
+    encoder = load_encoder(device)
+    vectors = encode_words(encoder, words)
     mean, components, clip, denom = _pca_3d_params(vectors)
     coords = project_3d(vectors, mean, components, clip, denom)
     cats, centroids, centroid_names = _cluster(vectors, words)
     neighbors = _neighbors(words, vectors)
 
     return {
-        "lang": lang,
-        "model": MODELS[lang],
+        "model": MODEL,
         "words": words,
+        "langs": langs,
         "vectors": vectors,
         "pca_mean": mean,
         "pca_components": components,
@@ -214,11 +251,12 @@ def compute_lang_state(lang: str, device: str) -> dict:
 
 
 def state_points(state: dict) -> list[dict]:
-    """Render a state dict into the points.{lang}.json payload."""
+    """Render a state dict into the points.json payload."""
     coords = state["coords"]
     return [
         {
             "word": w,
+            "lang": state["langs"][i],
             "x": round(float(coords[i, 0]), 3),
             "y": round(float(coords[i, 1]), 3),
             "z": round(float(coords[i, 2]), 3),
@@ -229,18 +267,25 @@ def state_points(state: dict) -> list[dict]:
 
 
 def save_server_state(state: dict, artifacts_dir: Path) -> Path:
-    """Persist the live server's inputs as one npz per language.
+    """Persist the live server's inputs as ONE npz.
 
-    Vocab vectors are float32 (~11 MB/language — NOT committed; the artifacts
-    dir is gitignored). The projection/cluster params stay float64 so a novel
-    word is placed with the same arithmetic that placed the vocab.
+    Vocab vectors are float32 (~28 MB — NOT committed; the artifacts dir is
+    gitignored). The projection/cluster params stay float64 so a novel word is
+    placed with the same arithmetic that placed the vocab.
     """
     artifacts_dir.mkdir(parents=True, exist_ok=True)
-    path = artifacts_dir / f"embedding_state.{state['lang']}.npz"
+    # Retire the wave-2 per-language state files — one space, one npz.
+    for stale in ("embedding_state.zh.npz", "embedding_state.en.npz"):
+        p = artifacts_dir / stale
+        if p.exists():
+            p.unlink()
+            print(f"removed stale {p.name}")
+    path = artifacts_dir / STATE_NPZ
     np.savez_compressed(
         path,
         model=np.array(state["model"]),
         words=np.array(state["words"]),
+        langs=np.array(state["langs"]),
         vectors=state["vectors"].astype(np.float32),
         pca_mean=state["pca_mean"],
         pca_components=state["pca_components"],
@@ -250,7 +295,7 @@ def save_server_state(state: dict, artifacts_dir: Path) -> Path:
         centroids=state["centroids"],
         centroid_names=np.array(state["centroid_names"]),
     )
-    print(f"[{state['lang']}] wrote {path} ({path.stat().st_size/1e6:.2f} MB)")
+    print(f"wrote {path} ({path.stat().st_size/1e6:.2f} MB)")
     return path
 
 
@@ -260,12 +305,11 @@ def verify_state_against_artifacts(state: dict, out_dir: Path) -> bool:
     This is the no-drift proof: if it passes, a live lookup lands exactly where
     the precomputed JSON puts it. Returns True when everything matches.
     """
-    lang = state["lang"]
     station_dir = out_dir / "embedding"
-    pts_path = station_dir / f"points.{lang}.json"
-    nbr_path = station_dir / f"neighbors.{lang}.json"
+    pts_path = station_dir / "points.json"
+    nbr_path = station_dir / "neighbors.json"
     if not pts_path.exists() or not nbr_path.exists():
-        print(f"[{lang}] VERIFY SKIP: no shipped artifacts at {station_dir}")
+        print(f"VERIFY SKIP: no shipped artifacts at {station_dir}")
         return False
 
     shipped_pts = json.loads(pts_path.read_text(encoding="utf-8"))
@@ -275,91 +319,86 @@ def verify_state_against_artifacts(state: dict, out_dir: Path) -> bool:
     ok = True
     if fresh_pts != shipped_pts:
         bad = sum(1 for a, b in zip(fresh_pts, shipped_pts) if a != b)
-        print(f"[{lang}] VERIFY FAIL: {bad}/{len(fresh_pts)} points differ")
+        print(f"VERIFY FAIL: {bad}/{len(fresh_pts)} points differ")
         ok = False
     if state["neighbors"] != shipped_nbr:
         bad = sum(1 for w in state["neighbors"] if state["neighbors"][w] != shipped_nbr.get(w))
-        print(f"[{lang}] VERIFY FAIL: {bad}/{len(state['neighbors'])} neighbor lists differ")
+        print(f"VERIFY FAIL: {bad}/{len(state['neighbors'])} neighbor lists differ")
         ok = False
     if ok:
-        print(f"[{lang}] VERIFY OK: recomputed state reproduces shipped points + neighbors exactly")
+        print("VERIFY OK: recomputed state reproduces shipped points + neighbors exactly")
     return ok
 
 
-def _build_lang(lang: str, out_dir: Path, device: str) -> list[dict]:
-    """Build + write points/neighbors for one language; return manifest entries."""
-    state = compute_lang_state(lang, device)
-    return _write_lang(state, out_dir)
-
-
-def _write_lang(state: dict, out_dir: Path) -> list[dict]:
-    """Write one language's points/neighbors JSON; return manifest entries."""
-    lang = state["lang"]
+def _write_state(state: dict, out_dir: Path) -> list[dict]:
+    """Write the unified points/neighbors JSON; return manifest entries."""
     neighbors = state["neighbors"]
     points = state_points(state)
 
     station_dir = out_dir / "embedding"
     station_dir.mkdir(parents=True, exist_ok=True)
 
-    pts_path = station_dir / f"points.{lang}.json"
-    nbr_path = station_dir / f"neighbors.{lang}.json"
+    pts_path = station_dir / "points.json"
+    nbr_path = station_dir / "neighbors.json"
     pts_bytes = _write_compact(pts_path, points)
     nbr_bytes = _write_compact(nbr_path, neighbors)
 
     print(
-        f"[{lang}] wrote points.{lang}.json ({pts_bytes/1e6:.2f} MB), "
-        f"neighbors.{lang}.json ({nbr_bytes/1e6:.2f} MB)"
+        f"wrote points.json ({pts_bytes/1e6:.2f} MB), "
+        f"neighbors.json ({nbr_bytes/1e6:.2f} MB)"
     )
     for name, nbytes in (("points", pts_bytes), ("neighbors", nbr_bytes)):
         if nbytes > 4_000_000:
             print(
-                f"[{lang}] WARNING: {name}.{lang}.json is {nbytes/1e6:.2f} MB "
-                f"(> 4 MB budget) — lower MAX_WORDS"
+                f"WARNING: {name}.json is {nbytes/1e6:.2f} MB (> 4 MB budget) "
+                f"— lower MAX_WORDS or TOP_K"
             )
 
     return [
         {
-            "id": f"embedding-points-{lang}",
+            "id": "embedding-points",
             "kind": "json",
-            "path": f"embedding/points.{lang}.json",
+            "path": "embedding/points.json",
             "station": "embedding",
             "bytes": pts_bytes,
         },
         {
-            "id": f"embedding-neighbors-{lang}",
+            "id": "embedding-neighbors",
             "kind": "json",
-            "path": f"embedding/neighbors.{lang}.json",
+            "path": "embedding/neighbors.json",
             "station": "embedding",
             "bytes": nbr_bytes,
         },
     ]
 
 
-def build_embedding(out_dir: Path) -> list[dict]:
-    """Write per-language points/neighbors under <out_dir>/embedding/.
+def remove_stale_lang_artifacts(out_dir: Path) -> None:
+    """Delete the retired per-language JSON files (wave-2 layout)."""
+    station_dir = out_dir / "embedding"
+    for lang in LANGUAGES:
+        for kind in ("points", "neighbors"):
+            p = station_dir / f"{kind}.{lang}.json"
+            if p.exists():
+                p.unlink()
+                print(f"removed stale {p.name}")
 
-    Returns the manifest `artifacts[]` entries for the caller to register. Also
-    removes the retired single-file (English-only synthetic) artifacts if present.
+
+def build_embedding(out_dir: Path) -> list[dict]:
+    """Write the unified points/neighbors under <out_dir>/embedding/.
+
+    Returns the manifest `artifacts[]` entries for the caller to register.
+    Also removes the retired per-language JSON files if present.
     """
     device = _select_device()
-    station_dir = out_dir / "embedding"
-
-    # Retire the old synthetic single-file artifacts (points.json / neighbors.json).
-    for stale in ("points.json", "neighbors.json"):
-        p = station_dir / stale
-        if p.exists():
-            p.unlink()
-
-    entries: list[dict] = []
-    for lang in LANGUAGES:
-        entries.extend(_build_lang(lang, out_dir, device))
-    return entries
+    remove_stale_lang_artifacts(out_dir)
+    state = compute_state(device)
+    return _write_state(state, out_dir)
 
 
 def export_server_state(
     out_dir: Path, artifacts_dir: Path, write_artifacts: bool = False
 ) -> bool:
-    """Export the live server's per-language state npz files.
+    """Export the live server's state npz.
 
     Re-runs the embedding pipeline (same code path as the artifact build) and
     verifies the result reproduces the SHIPPED points/neighbors JSON — the
@@ -367,15 +406,13 @@ def export_server_state(
     `write_artifacts=True` the JSON artifacts are (re)written from the same
     state, guaranteeing npz + JSON come from one model instance.
 
-    Returns True when every language verified clean.
+    Returns True when the state verified clean.
     """
     device = _select_device()
-    all_ok = True
-    for lang in LANGUAGES:
-        state = compute_lang_state(lang, device)
-        if write_artifacts:
-            _write_lang(state, out_dir)
-        ok = verify_state_against_artifacts(state, out_dir)
-        all_ok = all_ok and ok
-        save_server_state(state, artifacts_dir)
-    return all_ok
+    state = compute_state(device)
+    if write_artifacts:
+        remove_stale_lang_artifacts(out_dir)
+        _write_state(state, out_dir)
+    ok = verify_state_against_artifacts(state, out_dir)
+    save_server_state(state, artifacts_dir)
+    return ok

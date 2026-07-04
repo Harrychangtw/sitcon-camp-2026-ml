@@ -4,7 +4,7 @@ Response shapes are SCHEMA-COMPATIBLE with the precomputed artifacts each
 endpoint substitutes for (the frontend renders live results through the exact
 same viz path as precomputed data):
 
-- /embedding/lookup   → one element of points.{lang}.json + neighbors.{lang}.json
+- /embedding/lookup   → one element of points.json + neighbors.json
 - /next-token/predict → one context's entry list from distributions.json
 - /rnn/forward        → one element of activations.json `sequences[]`
 - /transformer/attention → one element of attention.json `sentences[]`
@@ -24,13 +24,15 @@ from pydantic import BaseModel, Field
 
 class EmbeddingLookupRequest(BaseModel):
     word: str = Field(min_length=1, max_length=64)
-    lang: Literal["zh", "en"]
 
 
 class EmbeddingPoint(BaseModel):
-    """Mirrors one element of points.{lang}.json."""
+    """Mirrors one element of points.json (combined zh+en vocab)."""
 
     word: str
+    # Source vocab list ("zh"/"en") for shipped words; None for a novel word —
+    # the space is shared, so lang is display metadata, not a lookup key.
+    lang: Optional[str] = None
     x: float
     y: float
     z: float
@@ -38,7 +40,7 @@ class EmbeddingPoint(BaseModel):
 
 
 class EmbeddingNeighbor(BaseModel):
-    """Mirrors one element of a neighbors.{lang}.json list."""
+    """Mirrors one element of a neighbors.json list."""
 
     word: str
     score: float
@@ -46,10 +48,10 @@ class EmbeddingNeighbor(BaseModel):
 
 class EmbeddingLookupResponse(BaseModel):
     word: str
-    lang: Literal["zh", "en"]
     # True → point/neighbors are served verbatim from the shipped artifacts
     # (live == precomputed by construction). False → the word was embedded live
-    # with the same BGE model and projected with the same PCA/cluster params.
+    # with the same multilingual model and projected with the same PCA/cluster
+    # params.
     inVocab: bool
     point: EmbeddingPoint
     neighbors: list[EmbeddingNeighbor]

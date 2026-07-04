@@ -696,16 +696,22 @@ def tokenizer(out_dir: Path) -> Path:
 # ---------------------------------------------------------------------------
 # embedding station
 # ---------------------------------------------------------------------------
-# The heavy work (synthesising clustered word vectors, PCA projection, and
-# nearest-neighbour search) lives in embedding.py and runs offline. Here we just
-# invoke it and register its two artifacts in the shared manifest.
+# The heavy work (embedding the combined zh+en vocab with one multilingual
+# model, PCA projection, and nearest-neighbour search) lives in embedding.py and
+# runs offline. Here we just invoke it and register its two artifacts in the
+# shared manifest.
+
+# Wave-2 per-language manifest ids, retired when zh+en merged into one space.
+STALE_EMBEDDING_IDS = tuple(
+    f"embedding-{kind}-{lang}" for kind in ("points", "neighbors") for lang in ("zh", "en")
+)
 
 
 def embedding(out_dir: Path) -> list[Path]:
-    """Build the embedding station's per-language points/neighbors and register."""
+    """Build the embedding station's unified points/neighbors and register."""
     entries = build_embedding(out_dir)
-    # Drop the retired single-file (synthetic, English-only) manifest ids.
-    for stale_id in ("embedding-points", "embedding-neighbors"):
+    # Drop the retired per-language manifest ids (wave-2 layout).
+    for stale_id in STALE_EMBEDDING_IDS:
         remove_manifest_artifact(out_dir, stale_id)
     paths = []
     for entry in entries:
@@ -1023,8 +1029,9 @@ def main(argv: list[str] | None = None) -> int:
 
     p_exp = sub.add_parser(
         "export-embedding-state",
-        help="Export the live server's embedding state (npz per language) and "
-        "verify it reproduces the shipped points/neighbors JSON.",
+        help="Export the live server's embedding state (one npz, combined "
+        "zh+en vocab) and verify it reproduces the shipped points/neighbors "
+        "JSON.",
     )
     p_exp.add_argument(
         "--out",
@@ -1111,21 +1118,22 @@ def main(argv: list[str] | None = None) -> int:
         if args.write_artifacts:
             # The JSON was rewritten outside embedding(); refresh its manifest
             # entries so bytes stay accurate.
-            for lang in ("zh", "en"):
-                for kind in ("points", "neighbors"):
-                    rel = f"embedding/{kind}.{lang}.json"
-                    art = out_dir / rel
-                    if art.exists():
-                        upsert_manifest_artifact(
-                            out_dir,
-                            {
-                                "id": f"embedding-{kind}-{lang}",
-                                "kind": "json",
-                                "path": rel,
-                                "station": "embedding",
-                                "bytes": art.stat().st_size,
-                            },
-                        )
+            for stale_id in STALE_EMBEDDING_IDS:
+                remove_manifest_artifact(out_dir, stale_id)
+            for kind in ("points", "neighbors"):
+                rel = f"embedding/{kind}.json"
+                art = out_dir / rel
+                if art.exists():
+                    upsert_manifest_artifact(
+                        out_dir,
+                        {
+                            "id": f"embedding-{kind}",
+                            "kind": "json",
+                            "path": rel,
+                            "station": "embedding",
+                            "bytes": art.stat().st_size,
+                        },
+                    )
         if not ok:
             print(
                 "export-embedding-state: VERIFY FAILED — the recomputed state "

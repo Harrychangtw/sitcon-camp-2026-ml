@@ -13,32 +13,18 @@
   ],
   "artifacts": [
     {
-      "id": "embedding-neighbors-en",
+      "id": "embedding-neighbors",
       "kind": "json",
-      "path": "embedding/neighbors.en.json",
+      "path": "embedding/neighbors.json",
       "station": "embedding",
-      "bytes": 3623115
+      "bytes": 3616881
     },
     {
-      "id": "embedding-neighbors-zh",
+      "id": "embedding-points",
       "kind": "json",
-      "path": "embedding/neighbors.zh.json",
+      "path": "embedding/points.json",
       "station": "embedding",
-      "bytes": 3607472
-    },
-    {
-      "id": "embedding-points-en",
-      "kind": "json",
-      "path": "embedding/points.en.json",
-      "station": "embedding",
-      "bytes": 248963
-    },
-    {
-      "id": "embedding-points-zh",
-      "kind": "json",
-      "path": "embedding/points.zh.json",
-      "station": "embedding",
-      "bytes": 249625
+      "bytes": 574827
     },
     {
       "id": "next-token-distributions",

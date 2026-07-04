@@ -15,7 +15,7 @@ station falls back to the precomputed artifacts and the class keeps working.
 | Route | Mirrors artifact | Notes |
 | --- | --- | --- |
 | `GET /health` | — | No auth. `{status, device, gpu, models}` |
-| `POST /embedding/lookup` | one word of `points.{lang}.json` + `neighbors.{lang}.json` | `{word, lang}` → `{inVocab, point, neighbors, suggestions}`. In-vocab words return the shipped values verbatim; novel words are embedded live with the same BGE model + PCA/cluster params. |
+| `POST /embedding/lookup` | one word of `points.json` + `neighbors.json` | `{word}` → `{inVocab, point, neighbors, suggestions}`. One shared zh+en space (`Qwen/Qwen3-Embedding-0.6B`). In-vocab words return the shipped values verbatim; novel words are embedded live with the same multilingual model + PCA/cluster params. |
 | `POST /next-token/predict` | one context of `distributions.json` | `{prompt}` → `{context, contextKnown, topN, entries}` (same bigram/unigram tables, rebuilt from the same code). |
 | `POST /rnn/forward` | one element of `activations.json sequences[]` | `{text}` or `{tokens}` → `{sequenceId, label, tokens, hiddenSize, hidden, influence}`. Preset vocab reuses the artifact's exact embeddings; novel tokens get deterministic crc32-seeded ones. Max 24 tokens. |
 | `POST /transformer/attention` | one element of `attention.json sentences[]` | `{text}` → `{sentenceId, tokens, layers, headLabels, qkvDim}`. Max 8 tokens (Q/K factorisation is exact only up to d=8). |
@@ -50,8 +50,8 @@ Two targets, one codebase. **Only `server/.env` differs between machines.**
 | Driver | likely present | **absent** — Sidebar A |
 | Inbound | LAN / router port-forward — Sidebar B | TWCC security group — Sidebar A |
 
-The models are tiny (two ~400 MB BGE encoders; everything else is numpy). One
-process on `cuda:0` uses a sliver of VRAM on either machine; the extra V100s
+The models are small (one ~1.2 GB `Qwen3-Embedding-0.6B` encoder; everything
+else is numpy). One process on `cuda:0` uses a sliver of VRAM on either machine; the extra V100s
 buy nothing at this load and are deliberately not used. `DEVICE=cpu` also fully
 works (laptop dev / last-ditch fallback) — lookups take ~100 ms instead of ~10.
 
@@ -91,11 +91,11 @@ The embedding npz state must exist at `precompute/artifacts/`. Either copy it
 from the machine that generated the shipped JSON:
 
 ```bash
-scp dev-box:sitcon-camp-2026-ml/precompute/artifacts/embedding_state.*.npz precompute/artifacts/
+scp dev-box:sitcon-camp-2026-ml/precompute/artifacts/embedding_state.npz precompute/artifacts/
 ```
 
-or regenerate + verify on this box (downloads the two BGE models, ~800 MB,
-then embeds the vocab — minutes on GPU):
+or regenerate + verify on this box (downloads the `Qwen3-Embedding-0.6B`
+model, ~1.2 GB, then embeds the combined zh+en vocab — minutes on GPU):
 
 ```bash
 cd ../precompute && uv sync
@@ -103,8 +103,8 @@ uv run camp-precompute export-embedding-state   # exits 1 if it can't reproduce 
 cd ../server
 ```
 
-First server start also downloads the BGE models into `~/.cache/huggingface`
-if they aren't there yet.
+First server start also downloads the embedding model into
+`~/.cache/huggingface` if it isn't there yet.
 
 ### 3. Config — the only per-machine step
 
@@ -172,9 +172,9 @@ mirrors:
 ```bash
 TOKEN=<your CAMP_TOKEN>; BASE=http://<host>:<port>
 curl -s -X POST $BASE/embedding/lookup -H "X-Camp-Token: $TOKEN" -H "Content-Type: application/json" \
-  -d '{"word":"the","lang":"en"}'            # inVocab:true, point+neighbors == artifact values
+  -d '{"word":"貓"}'                         # inVocab:true, point+neighbors == artifact values (en words mixed in)
 curl -s -X POST $BASE/embedding/lookup -H "X-Camp-Token: $TOKEN" -H "Content-Type: application/json" \
-  -d '{"word":"blockchain","lang":"en"}'     # inVocab:false, live point + neighbors + suggestions
+  -d '{"word":"blockchain"}'                 # inVocab:false, live point + neighbors + suggestions
 curl -s -X POST $BASE/next-token/predict -H "X-Camp-Token: $TOKEN" -H "Content-Type: application/json" \
   -d '{"prompt":"the cat sat on the"}'       # context:"the", contextKnown:true, entries[]
 curl -s -X POST $BASE/rnn/forward -H "X-Camp-Token: $TOKEN" -H "Content-Type: application/json" \
