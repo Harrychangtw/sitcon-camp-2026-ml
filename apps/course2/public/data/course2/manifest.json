@@ -2,7 +2,7 @@
   "course": "course2",
   "version": 1,
   "generator": "camp-precompute make-data",
-  "generatedAt": "2026-06-23T04:54:53.704373+00:00",
+  "generatedAt": "2026-07-04T06:29:38.707605+00:00",
   "note": "hello from camp-precompute \u2014 replace with real artifacts",
   "sample": [
     0.0,
@@ -17,14 +17,14 @@
       "kind": "json",
       "path": "embedding/neighbors.en.json",
       "station": "embedding",
-      "bytes": 1832063
+      "bytes": 3623116
     },
     {
       "id": "embedding-neighbors-zh",
       "kind": "json",
       "path": "embedding/neighbors.zh.json",
       "station": "embedding",
-      "bytes": 1823153
+      "bytes": 3607465
     },
     {
       "id": "embedding-points-en",
@@ -38,7 +38,7 @@
       "kind": "json",
       "path": "embedding/points.zh.json",
       "station": "embedding",
-      "bytes": 249536
+      "bytes": 249624
     },
     {
       "id": "next-token-distributions",

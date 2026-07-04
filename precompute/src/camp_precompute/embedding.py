@@ -35,9 +35,9 @@ MODELS: dict[str, str] = {
 }
 LANGUAGES = ("zh", "en")
 
-TOP_K = 15          # neighbours stored per word (station's k-slider caps here)
+TOP_K = 30          # neighbours stored per word (station's k-slider caps here)
 N_CLUSTERS = 8      # k-means groups for colouring (≤8 so the palette doesn't rainbow)
-MAX_WORDS = 3600    # hard cap per language (keeps shipped JSON within budget)
+MAX_WORDS = 3610    # hard cap per language (keeps shipped JSON within budget)
 PCA_CLIP_PCT = 98.0 # clip projected coords at this percentile before scaling
 SEED = 42
 

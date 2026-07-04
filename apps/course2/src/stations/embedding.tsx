@@ -43,7 +43,7 @@ interface Neighbor {
 
 type NeighborMap = Record<string, Neighbor[]>;
 
-const MAX_K = 15; // must match precompute TOP_K
+const MAX_K = 30; // must match precompute TOP_K
 
 const PLACEHOLDER: Record<Lang, string> = {
   zh: "例如 貓、藍色、快樂…",

@@ -30,17 +30,26 @@ DATA_DIR = Path(__file__).resolve().parent.parent / "data"
 # the kept list (keeps the shipped JSON within the size budget — see embedding.py).
 ZH_CANDIDATES = 12000
 EN_CANDIDATES = 8000
-MAX_WORDS = 3600
+MAX_WORDS = 3610
 
 _HAN = re.compile(r"^[一-鿿]{2,4}$")  # 2–4 漢字, no latin/digits/punct
 _EN = re.compile(r"^[a-z]{2,}$")  # letters only, drop single letters
 
+# Single-char 漢字 the _HAN filter drops but the station advertises as an example
+# search (see the placeholder in embedding.tsx). Seeded first so they stay
+# searchable across regenerations.
+ALWAYS_ZH = ("貓",)
+
 
 def build_zh() -> list[str]:
-    """Frequency-ranked zh-TW 詞: multi-char Han runs, Simplified → Traditional."""
+    """Frequency-ranked zh-TW 詞: multi-char Han runs, Simplified → Traditional.
+
+    ALWAYS_ZH words (single-char examples the regex would drop) are seeded first
+    so they survive the MAX_WORDS cap.
+    """
     cc = OpenCC("s2twp")
-    seen: set[str] = set()
-    out: list[str] = []
+    seen: set[str] = set(ALWAYS_ZH)
+    out: list[str] = list(ALWAYS_ZH)
     for simp in top_n_list("zh", ZH_CANDIDATES):
         if not _HAN.match(simp):
             continue
