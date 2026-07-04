@@ -23,7 +23,7 @@ import {
   useThemeColors,
   type Scatter3DPoint,
 } from "@camp/viz";
-import { loadJSON } from "@camp/data";
+import { liveInfer, liveInferenceEnabled, loadJSON } from "@camp/data";
 
 type Dim = "2d" | "3d";
 type Lang = "zh" | "en";
@@ -42,6 +42,17 @@ interface Neighbor {
 }
 
 type NeighborMap = Record<string, Neighbor[]>;
+
+/** Response of the live server's POST /embedding/lookup — the same element
+ * shapes as points/neighbors JSON, for a word outside the shipped vocab. */
+interface LiveLookup {
+  word: string;
+  lang: Lang;
+  inVocab: boolean;
+  point: EmbeddingPoint;
+  neighbors: Neighbor[];
+  suggestions: string[];
+}
 
 const MAX_K = 30; // must match precompute TOP_K
 
@@ -88,33 +99,85 @@ export function EmbeddingStation() {
   // 3. DERIVED STATE — pure functions of the loaded data + controls.
   const wordSet = useMemo(() => new Set(points.map((p) => p.word)), [points]);
 
-  // The viz primitives key highlighting off `label`, so carry the word there.
-  const scatterData = useMemo<Scatter3DPoint[]>(
-    () =>
-      points.map((p) => ({
-        x: p.x,
-        y: p.y,
-        z: p.z,
-        category: p.category,
-        label: p.word,
-      })),
-    [points],
-  );
-
   const focusWord = useMemo(() => {
     const q = query.trim().toLowerCase();
     return q && wordSet.has(q) ? q : null;
   }, [query, wordSet]);
 
-  const nearest = useMemo<Neighbor[]>(
-    () => (focusWord ? (neighbors[focusWord] ?? []).slice(0, k) : []),
-    [focusWord, neighbors, k],
-  );
+  // LIVE OPT-IN — a typed word OUTSIDE the shipped vocab is embedded by the
+  // live server with the same model (gated on VITE_LIVE_INFERENCE_URL). On any
+  // failure `liveInfer` yields null and the station keeps today's behaviour
+  // (the「不在詞彙表裡」note). Preset/in-vocab words never need the server.
+  const missingWord = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    return q && points.length > 0 && !wordSet.has(q) ? q : null;
+  }, [query, points, wordSet]);
+
+  const [live, setLive] = useState<LiveLookup | null>(null);
+  const [livePending, setLivePending] = useState(false);
+
+  useEffect(() => {
+    setLive(null);
+    if (!missingWord || !liveInferenceEnabled()) return;
+    let alive = true;
+    setLivePending(true);
+    // Debounced: only ask the server once typing pauses.
+    const timer = setTimeout(() => {
+      liveInfer<LiveLookup>("/embedding/lookup", {
+        word: missingWord,
+        lang,
+      }).then((r) => {
+        if (!alive) return;
+        setLivePending(false);
+        if (r && r.word === missingWord && r.lang === lang) setLive(r);
+      });
+    }, 350);
+    return () => {
+      alive = false;
+      clearTimeout(timer);
+      setLivePending(false);
+    };
+  }, [missingWord, lang]);
+
+  const liveHit =
+    live && live.word === missingWord && live.lang === lang ? live : null;
+
+  // The word the station is focused on: precomputed when in vocab, live result
+  // otherwise. Both flow through the SAME derived state below.
+  const activeWord = focusWord ?? liveHit?.point.word ?? null;
+
+  // The viz primitives key highlighting off `label`, so carry the word there.
+  // A live word becomes one extra point in the same cloud.
+  const scatterData = useMemo<Scatter3DPoint[]>(() => {
+    const base = points.map((p) => ({
+      x: p.x,
+      y: p.y,
+      z: p.z,
+      category: p.category,
+      label: p.word,
+    }));
+    if (liveHit) {
+      base.push({
+        x: liveHit.point.x,
+        y: liveHit.point.y,
+        z: liveHit.point.z,
+        category: liveHit.point.category,
+        label: liveHit.point.word,
+      });
+    }
+    return base;
+  }, [points, liveHit]);
+
+  const nearest = useMemo<Neighbor[]>(() => {
+    if (focusWord) return (neighbors[focusWord] ?? []).slice(0, k);
+    if (liveHit) return liveHit.neighbors.slice(0, k);
+    return [];
+  }, [focusWord, neighbors, liveHit, k]);
 
   // The searched word + its k nearest neighbours are the only "hot" (lime) marks.
   const highlight = useMemo(
-    () => (focusWord ? [focusWord, ...nearest.map((n) => n.word)] : []),
-    [focusWord, nearest],
+    () => (activeWord ? [activeWord, ...nearest.map((n) => n.word)] : []),
+    [activeWord, nearest],
   );
 
   // Category legend (colors come straight from the theme palette). Categories are
@@ -129,7 +192,12 @@ export function EmbeddingStation() {
     [colors, categories],
   );
 
-  const notFound = query.trim().length > 0 && !focusWord && points.length > 0;
+  const notFound =
+    query.trim().length > 0 &&
+    !focusWord &&
+    !liveHit &&
+    !livePending &&
+    points.length > 0;
 
   return (
     <StationLayout
@@ -180,6 +248,14 @@ export function EmbeddingStation() {
               <span className="font-mono text-xs text-warning">
                 「{query.trim()}」不在詞彙表裡。
               </span>
+            ) : livePending ? (
+              <span className="font-mono text-xs text-muted">
+                詞彙表裡沒有，正在即時計算 embedding…
+              </span>
+            ) : liveHit ? (
+              <span className="font-mono text-xs text-accent">
+                詞彙表外的詞——伺服器用同一個模型即時算出位置。
+              </span>
             ) : null}
           </label>
 
@@ -195,11 +271,13 @@ export function EmbeddingStation() {
 
           <Toggle label="依類別上色" checked={colorBy} onChange={setColorBy} />
 
-          {/* Neighbour list — the "距離 ≈ 相似度" beat, made literal. */}
-          {focusWord ? (
+          {/* Neighbour list — the "距離 ≈ 相似度" beat, made literal. Works
+              identically for precomputed (in-vocab) and live (novel) words. */}
+          {activeWord ? (
             <div className="flex flex-col gap-2 border-t border-border/30 pt-3">
               <span className="font-mono text-xs text-accent">
-                {focusWord} · 最近的 {nearest.length} 個
+                {activeWord} · 最近的 {nearest.length} 個
+                {liveHit ? " · live" : ""}
               </span>
               <ol className="flex flex-col gap-1">
                 {nearest.map((n, i) => (
@@ -260,7 +338,7 @@ export function EmbeddingStation() {
           {loading
             ? "載入 embedding 中… "
             : `${points.length} 個詞投影到 ${dim.toUpperCase()}（離線 PCA）。`}
-          {focusWord
+          {activeWord
             ? "它最近的鄰居會以亮綠色標示。"
             : "搜尋一個詞，點亮它最近的鄰居。"}
           {dim === "3d" ? " 拖曳可旋轉視角，滾動可縮放。" : ""}

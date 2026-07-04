@@ -13,12 +13,22 @@
 import { useEffect, useMemo, useState } from "react";
 import { LabeledSlider, SegmentedControl, StationLayout } from "@camp/ui";
 import { Heatmap } from "@camp/viz";
-import { loadJSON } from "@camp/data";
+import { liveInfer, liveInferenceEnabled, loadJSON } from "@camp/data";
 
 interface TokenLogit {
   token: string;
   /** log(prob) from the precomputed table; softmax(logit/T) recovers probs. */
   logit: number;
+}
+
+/** Response of the live server's POST /next-token/predict — the same entry
+ * shape as one context's list in distributions.json. */
+interface LivePredict {
+  prompt: string;
+  context: string;
+  contextKnown: boolean;
+  topN: number;
+  entries: TokenLogit[];
 }
 
 interface Distributions {
@@ -81,8 +91,36 @@ export function NextTokenStation() {
     };
   }, []);
 
-  // 3. DERIVED CANVAS DATA — a pure function of state + loaded data.
+  // LIVE OPT-IN — when VITE_LIVE_INFERENCE_URL is set, every prompt is routed
+  // through the live server (same bigram model, rebuilt from the same code).
+  // On any failure `liveInfer` yields null and the local precomputed table
+  // below answers exactly as before.
+  const [livePred, setLivePred] = useState<LivePredict | null>(null);
+
+  useEffect(() => {
+    if (!liveInferenceEnabled()) return;
+    let alive = true;
+    const timer = setTimeout(() => {
+      liveInfer<LivePredict>("/next-token/predict", { prompt }).then((r) => {
+        if (alive && r && r.prompt === prompt) setLivePred(r);
+      });
+    }, 300);
+    return () => {
+      alive = false;
+      clearTimeout(timer);
+    };
+  }, [prompt]);
+
+  // 3. DERIVED CANVAS DATA — a pure function of state + loaded data. The live
+  // result (when fresh) and the precomputed table produce the same shape.
   const { base, contextKnown, context } = useMemo(() => {
+    if (livePred && livePred.prompt === prompt) {
+      return {
+        context: livePred.context,
+        contextKnown: livePred.contextKnown,
+        base: livePred.entries,
+      };
+    }
     const ctx = lastToken(prompt);
     const table = dist?.bigram[ctx];
     return {
@@ -90,7 +128,7 @@ export function NextTokenStation() {
       contextKnown: Boolean(table),
       base: table ?? dist?.fallback ?? [],
     };
-  }, [dist, prompt]);
+  }, [dist, prompt, livePred]);
 
   const probs = useMemo<Prob[]>(() => {
     if (base.length === 0) return [];

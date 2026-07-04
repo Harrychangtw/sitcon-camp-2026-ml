@@ -15,7 +15,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { LabeledSlider, RunButton, SegmentedControl, StationLayout } from "@camp/ui";
 import { Heatmap } from "@camp/viz";
-import { loadJSON } from "@camp/data";
+import { liveInfer, liveInferenceEnabled, loadJSON } from "@camp/data";
 
 interface RnnSequence {
   sequenceId: string;
@@ -58,9 +58,38 @@ export function RnnVizStation() {
     };
   }, []);
 
+  // LIVE OPT-IN — a custom sentence is forwarded through the SAME fixed-weight
+  // RNN on the live server (gated on VITE_LIVE_INFERENCE_URL) and rendered as
+  // one more sequence through the identical viz path. Presets stay precomputed
+  // and keep working with zero server dependency.
+  const [customText, setCustomText] = useState("");
+  const [customSeq, setCustomSeq] = useState<RnnSequence | null>(null);
+  const [liveBusy, setLiveBusy] = useState(false);
+  const [liveError, setLiveError] = useState<string | null>(null);
+
+  const sequences = useMemo<RnnSequence[]>(() => {
+    const base = data?.sequences ?? [];
+    return customSeq ? [...base, customSeq] : base;
+  }, [data, customSeq]);
+
+  const submitCustom = async () => {
+    const text = customText.trim();
+    if (!text || liveBusy) return;
+    setLiveBusy(true);
+    setLiveError(null);
+    const r = await liveInfer<RnnSequence>("/rnn/forward", { text });
+    setLiveBusy(false);
+    if (!r) {
+      setLiveError("即時伺服器沒有回應（句子太長？最多 24 個 token）。預設序列不受影響。");
+      return;
+    }
+    setCustomSeq(r);
+    setSequenceId(r.sequenceId);
+  };
+
   const seq = useMemo(
-    () => data?.sequences.find((s) => s.sequenceId === sequenceId) ?? null,
-    [data, sequenceId],
+    () => sequences.find((s) => s.sequenceId === sequenceId) ?? null,
+    [sequences, sequenceId],
   );
   const steps = seq?.tokens.length ?? 0;
   const lastStep = Math.max(steps - 1, 0);
@@ -116,11 +145,42 @@ export function RnnVizStation() {
               label="選擇序列"
               value={seq.sequenceId}
               onChange={setSequenceId}
-              options={(data?.sequences ?? []).map((s) => ({
-                label: s.sequenceId.replace(/-/g, " "),
+              options={sequences.map((s) => ({
+                label: s.sequenceId.startsWith("live-")
+                  ? "自訂句子"
+                  : s.sequenceId.replace(/-/g, " "),
                 value: s.sequenceId,
               }))}
             />
+          ) : null}
+
+          {liveInferenceEnabled() ? (
+            <label className="flex flex-col gap-1.5">
+              <span className="font-mono text-xs text-muted">
+                自己打一句（即時跑同一個 RNN）
+              </span>
+              <input
+                type="text"
+                value={customText}
+                onChange={(e) => setCustomText(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") void submitCustom();
+                }}
+                placeholder="例如 the robot forgot the first word"
+                className="rounded-md border border-border bg-panel px-3 py-2 text-sm text-fg placeholder:text-muted focus:border-accent focus:outline-none"
+              />
+              <button
+                type="button"
+                onClick={() => void submitCustom()}
+                disabled={liveBusy || !customText.trim()}
+                className="rounded-md border border-border bg-panel px-3 py-1.5 text-sm text-fg transition-colors hover:border-accent disabled:opacity-40"
+              >
+                {liveBusy ? "計算中…" : "餵給 RNN"}
+              </button>
+              {liveError ? (
+                <span className="font-mono text-xs text-warning">{liveError}</span>
+              ) : null}
+            </label>
           ) : null}
 
           <div>

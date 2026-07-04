@@ -20,7 +20,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { RunButton, SegmentedControl, StationLayout } from "@camp/ui";
 import { AttentionLines, VectorStrip } from "@camp/viz";
-import { loadJSON } from "@camp/data";
+import { liveInfer, liveInferenceEnabled, loadJSON } from "@camp/data";
 
 interface HeadQKV {
   /** q/k/v are [token][dim] vectors for one (layer, head). */
@@ -29,18 +29,22 @@ interface HeadQKV {
   v: number[][];
 }
 
+/** One sentence's attention payload — the element shape of both the shipped
+ * `sentences[]` and the live server's POST /transformer/attention response. */
+interface AttentionSentence {
+  sentenceId: string;
+  tokens: string[];
+  /** layers[l].heads[h] is a [query][key] matrix; qkv[h] its Q/K/V vectors. */
+  layers: { heads: number[][][]; qkv?: HeadQKV[] }[];
+}
+
 interface AttentionData {
   layers: number;
   heads: number;
   headLabels: string[];
   /** Dimension of the exported Q/K/V vectors (√d is the softmax scale). */
   qkvDim: number;
-  sentences: {
-    sentenceId: string;
-    tokens: string[];
-    /** layers[l].heads[h] is a [query][key] matrix; qkv[h] its Q/K/V vectors. */
-    layers: { heads: number[][][]; qkv?: HeadQKV[] }[];
-  }[];
+  sentences: AttentionSentence[];
 }
 
 const DATA_URL = "/data/course2/transformer/attention.json";
@@ -110,9 +114,39 @@ export function TransformerStation() {
     };
   }, []);
 
+  // LIVE OPT-IN — a custom sentence gets its attention tensor from the live
+  // server (the SAME synthesis code precompute runs, gated on
+  // VITE_LIVE_INFERENCE_URL) and walks through the identical step-through.
+  // Preset sentences stay precomputed with zero server dependency.
+  const [customText, setCustomText] = useState("");
+  const [customSentence, setCustomSentence] = useState<AttentionSentence | null>(null);
+  const [liveBusy, setLiveBusy] = useState(false);
+  const [liveError, setLiveError] = useState<string | null>(null);
+
+  const sentences = useMemo<AttentionSentence[]>(() => {
+    const base = data?.sentences ?? [];
+    return customSentence ? [...base, customSentence] : base;
+  }, [data, customSentence]);
+
+  const submitCustom = async () => {
+    const text = customText.trim();
+    if (!text || liveBusy) return;
+    setLiveBusy(true);
+    setLiveError(null);
+    const r = await liveInfer<AttentionSentence>("/transformer/attention", { text });
+    setLiveBusy(false);
+    if (!r) {
+      setLiveError("即時伺服器沒有回應（句子最多 8 個 token）。預設句子不受影響。");
+      return;
+    }
+    setCustomSentence(r);
+    setSentenceId(r.sentenceId);
+    setFocus(null);
+  };
+
   const sentence = useMemo(
-    () => data?.sentences.find((s) => s.sentenceId === sentenceId) ?? null,
-    [data, sentenceId],
+    () => sentences.find((s) => s.sentenceId === sentenceId) ?? null,
+    [sentences, sentenceId],
   );
 
   // A new sentence has different tokens — restart the walkthrough on it.
@@ -219,16 +253,46 @@ export function TransformerStation() {
                 setSentenceId(v);
                 setFocus(null);
               }}
-              options={data.sentences.map((s) => ({
+              options={sentences.map((s) => ({
                 // Short label (first…last word) so three buttons don't overflow
                 // the sidebar; the full sentence is visible on the canvas.
-                label:
-                  s.tokens.length > 2
+                label: s.sentenceId.startsWith("live-")
+                  ? "自訂句子"
+                  : s.tokens.length > 2
                     ? `${s.tokens[0]}…${s.tokens[s.tokens.length - 1]}`
                     : s.tokens.join(" "),
                 value: s.sentenceId,
               }))}
             />
+          ) : null}
+
+          {liveInferenceEnabled() && data ? (
+            <label className="flex flex-col gap-1.5">
+              <span className="font-mono text-xs text-muted">
+                自己打一句（最多 8 個 token，即時算 attention）
+              </span>
+              <input
+                type="text"
+                value={customText}
+                onChange={(e) => setCustomText(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") void submitCustom();
+                }}
+                placeholder="例如 the dog chased the red ball"
+                className="rounded-md border border-border bg-panel px-3 py-2 text-sm text-fg placeholder:text-muted focus:border-accent focus:outline-none"
+              />
+              <button
+                type="button"
+                onClick={() => void submitCustom()}
+                disabled={liveBusy || !customText.trim()}
+                className="rounded-md border border-border bg-panel px-3 py-1.5 text-sm text-fg transition-colors hover:border-accent disabled:opacity-40"
+              >
+                {liveBusy ? "計算中…" : "算 attention"}
+              </button>
+              {liveError ? (
+                <span className="font-mono text-xs text-warning">{liveError}</span>
+              ) : null}
+            </label>
           ) : null}
 
           {data ? (
