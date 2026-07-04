@@ -30,3 +30,16 @@ Session handoffs, newest at the bottom.
 
 ### Suggested next
 - Once next-token WIP is committed, run `pnpm typecheck && pnpm build` on the combined tree and consider a `camp-precompute make-data` convenience that runs all station builders.
+
+## Handoff — R1: unified embedding space + live GPU status infra
+
+### Done this session
+- Full R1 refactor (`3161493`): single `Qwen3-Embedding-0.6B` space over combined zh+en vocab (precompute + server + station), always-embed typed words, and the shared wave-3 infra R2 needs (`@camp/data` `liveInferTimed`, `@camp/ui` `LiveStatus`). Export verify-guard passes; typecheck/lint/build green; browser-verified live (`GPU · 443 ms`) and offline-fallback paths on the 3090.
+- Fixed a latent bug: `liveEnv()`'s `import.meta` aliasing disabled live inference in dev AND prod builds — `liveInfer` had never actually fired anywhere.
+
+### Loose ends
+- Server-side 422s (spaces, >64 chars) render as the 離線 line — honest enough, but R2 could add a distinct "rejected input" state.
+- The uvicorn server on :8300 was restarted with the new unified state; `dist/` rebuilt, so the :5173 preview now really calls the tailscale URL (mixed-content/CORS applies for remote clients).
+
+### Suggested next
+- Run `prompts/R2-real-models-live-gpu.md` (reuses `liveInferTimed`/`LiveStatus` verbatim); sanity-check the other three stations' live paths now that the env fix makes them actually fire.
