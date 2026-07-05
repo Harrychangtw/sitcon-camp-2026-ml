@@ -101,7 +101,7 @@ def rounded_cell(ax, cx, y0, y1, w, text, *, fill=CARD, edge=BORDER,
     x0 = cx - w / 2
     ax.add_patch(FancyBboxPatch(
         (x0, y0), w, y1 - y0,
-        boxstyle="round,pad=0,rounding_size=0.012",
+        boxstyle="square,pad=0",
         linewidth=1.2, edgecolor=edge, facecolor=fill, mutation_aspect=1.0,
     ))
     if text is not None:
