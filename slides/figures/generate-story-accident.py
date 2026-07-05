@@ -69,32 +69,32 @@ def use_deck_fonts():
         plt.rcParams["font.family"] = families
 
 
-TILE_W, TILE_H = 0.075, 0.13
+TILE_W, TILE_H = 0.095, 0.165  # generous padding around the CJK glyph
 BAG_CX = 0.40
 BAR_X0, BAR_X1 = 0.55, 0.93
 BAR_H = 0.075
-P_POS = 0.58   # illustrative 正面 probability, identical for both rows
+P_POS = 0.50   # illustrative 正面 probability (1:1 split), identical for both rows
 
 
 def char_tile(ax, cx, cy, ch, color):
     ax.add_patch(FancyBboxPatch(
         (cx - TILE_W / 2, cy - TILE_H / 2), TILE_W, TILE_H,
-        boxstyle="round,pad=0,rounding_size=0.02",
+        boxstyle="square,pad=0",
         linewidth=3.0, edgecolor=color, facecolor=CARD, zorder=2))
-    ax.text(cx, cy, ch, ha="center", va="center", color=WHITE, fontsize=34)
+    ax.text(cx, cy, ch, ha="center", va="center", color=WHITE, fontsize=32)
 
 
 def prob_bar(ax, cy):
     # outer frame
     ax.add_patch(FancyBboxPatch(
         (BAR_X0, cy - BAR_H / 2), BAR_X1 - BAR_X0, BAR_H,
-        boxstyle="round,pad=0,rounding_size=0.02",
+        boxstyle="square,pad=0",
         linewidth=1.6, edgecolor=GREY_MID, facecolor=CARD, zorder=1))
     # 正面 fill (white), 負面 remainder stays CARD
     split = BAR_X0 + (BAR_X1 - BAR_X0) * P_POS
     ax.add_patch(FancyBboxPatch(
         (BAR_X0, cy - BAR_H / 2), split - BAR_X0, BAR_H,
-        boxstyle="round,pad=0,rounding_size=0.02",
+        boxstyle="square,pad=0",
         linewidth=0, facecolor=WHITE, zorder=2))
     ax.text((BAR_X0 + split) / 2, cy, "正面", ha="center", va="center",
             color=BG, fontsize=15, zorder=3)
@@ -104,20 +104,20 @@ def prob_bar(ax, cy):
 
 def row(ax, cy, first, second):
     (c1, col1), (c2, col2) = first, second
-    char_tile(ax, 0.055, cy, c1, col1)
-    char_tile(ax, 0.145, cy, c2, col2)
+    char_tile(ax, 0.062, cy, c1, col1)
+    char_tile(ax, 0.172, cy, c2, col2)
     # tiles -> bag
     ax.add_patch(FancyArrowPatch(
-        (0.145 + TILE_W / 2 + 0.008, cy), (BAG_CX - 0.075, cy),
+        (0.172 + TILE_W / 2 + 0.008, cy), (BAG_CX - 0.075, cy),
         arrowstyle="-|>", mutation_scale=18, lw=2.0, color=GREY, zorder=2))
-    # bag / average node
+    # bag / average node — same height as the char tiles on its left
     ax.add_patch(FancyBboxPatch(
-        (BAG_CX - 0.065, cy - 0.075), 0.13, 0.15,
-        boxstyle="round,pad=0,rounding_size=0.02",
+        (BAG_CX - 0.065, cy - TILE_H / 2), 0.13, TILE_H,
+        boxstyle="square,pad=0",
         linewidth=1.6, edgecolor=GREY_MID, facecolor=CARD, zorder=1))
-    ax.text(BAG_CX, cy + 0.028, r"$\frac{1}{N}\sum$", ha="center", va="center",
+    ax.text(BAG_CX, cy + 0.030, r"$\frac{1}{N}\sum$", ha="center", va="center",
             color=WHITE, fontsize=19, zorder=2)
-    ax.text(BAG_CX, cy - 0.05, "bag", ha="center", va="center",
+    ax.text(BAG_CX, cy - 0.052, "bag", ha="center", va="center",
             color=GREY, fontsize=12, zorder=2)
     # bag -> bar
     ax.add_patch(FancyArrowPatch(

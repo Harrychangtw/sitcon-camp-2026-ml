@@ -79,7 +79,7 @@ WEIGHTS = [0.62, 0.14, 0.10, 0.14]  # 貓 is the best match for query 牠
 def box(ax, cx, cy, w, h, text, *, edge=GREY_MID, tcolor=WHITE, fs=28, sub=None,
         subcolor=GREY):
     ax.add_patch(FancyBboxPatch((cx - w / 2, cy - h / 2), w, h,
-                                boxstyle="round,pad=0,rounding_size=0.018",
+                                boxstyle="square,pad=0",
                                 facecolor=CARD, edgecolor=edge, lw=2.0,
                                 mutation_aspect=0.6))
     if sub:

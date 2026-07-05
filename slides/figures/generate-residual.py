@@ -99,7 +99,7 @@ def build():
 
     for i, y in enumerate(ys):
         ax.add_patch(FancyBboxPatch((cx - bw / 2, y), bw, bh,
-                                    boxstyle="round,pad=0,rounding_size=0.02",
+                                    boxstyle="square,pad=0",
                                     facecolor=CARD, edgecolor=GREY_MID, lw=2.0))
         ax.text(cx, y + bh / 2, "一層", ha="center", va="center", color=WHITE,
                 fontsize=26)

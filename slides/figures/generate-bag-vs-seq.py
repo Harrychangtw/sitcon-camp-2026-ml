@@ -87,7 +87,7 @@ def build():
     # --- left panel: bag (無序) — jumbled inside a rounded bag frame ---
     ax.add_patch(FancyBboxPatch(
         (0.03, 0.16), 0.40, 0.60,
-        boxstyle="round,pad=0,rounding_size=0.04",
+        boxstyle="square,pad=0",
         linewidth=1.6, edgecolor=GREY_MID, facecolor="none", zorder=0))
     node(ax, 0.11, 0.58, TOKENS[2])
     node(ax, 0.235, 0.34, TOKENS[0])

@@ -80,10 +80,11 @@ def use_deck_fonts():
 TOKENS = ["今", "天", "天", "氣", "真"]
 
 
-def rbox(ax, cx, cy, w, h, *, fill=CARD, edge=GREY_MID, lw=2.0, rad=0.02):
+def rbox(ax, cx, cy, w, h, *, fill=CARD, edge=GREY_MID, lw=2.0):
+    # hard corners (deck-wide figure rule: no rounded corners)
     ax.add_patch(FancyBboxPatch(
         (cx - w / 2, cy - h / 2), w, h,
-        boxstyle=f"round,pad=0,rounding_size={rad}",
+        boxstyle="square,pad=0",
         facecolor=fill, edgecolor=edge, linewidth=lw, zorder=3))
 
 
@@ -98,8 +99,10 @@ def build():
 
     n = len(TOKENS)
     xs = np.linspace(0.12, 0.88, n)
-    tok_cy, tok_h, tok_w = 0.30, 0.14, 0.11
-    hid_cy, hid_h, hid_w = 0.62, 0.20, 0.12
+    # generous tile padding around the CJK glyphs (they felt squeezed at
+    # 0.11 x 0.14 with fontsize 30)
+    tok_cy, tok_h, tok_w = 0.29, 0.19, 0.135
+    hid_cy, hid_h, hid_w = 0.63, 0.20, 0.13
 
     # residual "記憶" strength of the FIRST token, fading along the hops
     remain = np.linspace(1.0, 0.18, n)
@@ -120,7 +123,7 @@ def build():
     # nodes + tokens
     for i, (x, tok) in enumerate(zip(xs, TOKENS)):
         # token pill
-        rbox(ax, x, tok_cy, tok_w, tok_h, fill=CARD, edge=GREY_MID, rad=0.03)
+        rbox(ax, x, tok_cy, tok_w, tok_h, fill=CARD, edge=GREY_MID)
         ax.text(x, tok_cy, tok, color=WHITE, fontsize=30, ha="center",
                 va="center", zorder=4)
         # up arrow token -> hidden node
@@ -130,7 +133,7 @@ def build():
                                     mutation_scale=16), zorder=2)
         # hidden node — cyan fill = how much of the FIRST token still remains
         fill = to_rgba(CYAN, alpha=float(remain[i]) * 0.85 + 0.05)
-        rbox(ax, x, hid_cy, hid_w, hid_h, fill=fill, edge=CYAN, lw=2.2, rad=0.02)
+        rbox(ax, x, hid_cy, hid_w, hid_h, fill=fill, edge=CYAN, lw=2.2)
         ax.text(x, hid_cy, f"h{i + 1}", color=WHITE, fontsize=17,
                 ha="center", va="center", zorder=4)
 
@@ -142,7 +145,7 @@ def build():
               extent=(gx0, gx1, gy0, gy1), aspect="auto", zorder=1)
     ax.add_patch(FancyBboxPatch(
         (gx0, gy0), gx1 - gx0, gy1 - gy0,
-        boxstyle="round,pad=0,rounding_size=0.006",
+        boxstyle="square,pad=0",
         facecolor="none", edgecolor=GREY_MID, linewidth=1.4, zorder=2))
     ax.text(0.5, gy0 - 0.035, "第一個字的資訊，一路被沖淡", color=GREY,
             fontsize=14, ha="center", va="top")

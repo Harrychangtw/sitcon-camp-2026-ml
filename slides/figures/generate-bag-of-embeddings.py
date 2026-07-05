@@ -127,7 +127,7 @@ def rounded_cell(ax, cx, y0, y1, w, text, *, fill=CARD, edge=BORDER,
     x0 = cx - w / 2
     ax.add_patch(FancyBboxPatch(
         (x0, y0), w, y1 - y0,
-        boxstyle="round,pad=0,rounding_size=0.012",
+        boxstyle="square,pad=0",
         linewidth=1.2, edgecolor=edge, facecolor=fill, mutation_aspect=1.0,
     ))
     if text is not None:
@@ -217,7 +217,7 @@ def build():
     h_arrow(ax, OUT_X1 + 0.012, MLP_X0 - 0.012, MID_Y)
     ax.add_patch(FancyBboxPatch(
         (MLP_X0, MLP_Y0), MLP_X1 - MLP_X0, MLP_Y1 - MLP_Y0,
-        boxstyle="round,pad=0,rounding_size=0.02",
+        boxstyle="square,pad=0",
         linewidth=1.6, edgecolor=GREY, facecolor=CARD, zorder=1))
     mlp_cx = (MLP_X0 + MLP_X1) / 2
     ax.text(mlp_cx, MID_Y + 0.045, "MLP", ha="center", va="center",
@@ -231,7 +231,7 @@ def build():
         pcy = MID_Y + (PILL_H * 0.62) * (1 if i == 0 else -1)
         ax.add_patch(FancyBboxPatch(
             (PILL_X0, pcy - PILL_H / 2), PILL_X1 - PILL_X0, PILL_H,
-            boxstyle="round,pad=0,rounding_size=0.03",
+            boxstyle="square,pad=0",
             linewidth=1.4, edgecolor=GREY_MID, facecolor=CARD, zorder=1))
         ax.text((PILL_X0 + PILL_X1) / 2, pcy, lab, ha="center", va="center",
                 color=WHITE, fontsize=17)

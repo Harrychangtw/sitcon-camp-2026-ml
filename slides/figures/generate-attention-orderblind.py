@@ -82,7 +82,7 @@ def pill(ax, cx, tok):
         FancyBboxPatch(
             (cx - PILL_W / 2, PILL_Y - PILL_H / 2),
             PILL_W, PILL_H,
-            boxstyle="round,pad=0,rounding_size=0.02",
+            boxstyle="square,pad=0",
             facecolor=CARD, edgecolor=GREY_MID, linewidth=2.0,
             mutation_aspect=0.55,
         )

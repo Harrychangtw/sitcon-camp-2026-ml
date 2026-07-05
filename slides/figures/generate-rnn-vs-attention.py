@@ -89,7 +89,7 @@ def pill(ax, cx, cy, text, *, alpha=1.0, edge=GREY_MID, tcolor=WHITE):
             (cx - PILL_W / 2, cy - PILL_H / 2),
             PILL_W,
             PILL_H,
-            boxstyle="round,pad=0,rounding_size=0.02",
+            boxstyle="square,pad=0",
             facecolor=CARD,
             edgecolor=edge,
             linewidth=2.0,
@@ -111,22 +111,24 @@ def build():
     ax.set_ylim(0, 1)
     ax.axis("off")
 
-    # panel x-centers for 5 pills
-    lx = [0.055 + i * 0.088 for i in range(5)]   # left panel
-    rx = [0.545 + i * 0.088 for i in range(5)]   # right panel
+    # panel x-centers for 5 pills — each panel horizontally centered in its
+    # virtual half-column (0.25 / 0.75), tighter step so the middle gap widens
+    STEP = 0.084
+    lx = [0.25 + (i - 2) * STEP for i in range(5)]   # left panel
+    rx = [0.75 + (i - 2) * STEP for i in range(5)]   # right panel
 
     # thin divider between panels
     ax.plot([0.5, 0.5], [0.08, 0.86], color=GREY_MID, lw=1.4, alpha=0.6)
 
-    # ---------------- panel titles ----------------
-    ax.text(0.055, 0.90, "RNN", ha="left", va="center", color=WHITE,
+    # ---------------- panel titles (left-aligned to each panel) ----------------
+    ax.text(lx[0] - PILL_W / 2, 0.90, "RNN", ha="left", va="center", color=WHITE,
             fontsize=30, fontweight="bold")
-    ax.text(0.135, 0.90, "一站一站傳", ha="left", va="center", color=GREY,
-            fontsize=26)
-    ax.text(0.545, 0.90, "Attention", ha="left", va="center", color=WHITE,
-            fontsize=30, fontweight="bold")
-    ax.text(0.735, 0.90, "每個字直接看所有字", ha="left", va="center",
+    ax.text(lx[0] - PILL_W / 2 + 0.08, 0.90, "一站一站傳", ha="left", va="center",
             color=GREY, fontsize=26)
+    ax.text(rx[0] - PILL_W / 2, 0.90, "Attention", ha="left", va="center",
+            color=WHITE, fontsize=30, fontweight="bold")
+    ax.text(rx[0] - PILL_W / 2 + 0.19, 0.90, "每個字直接看所有字", ha="left",
+            va="center", color=GREY, fontsize=26)
 
     # ================= LEFT: RNN chain =================
     # earlier pills fade -> 記憶越傳越淡
@@ -147,7 +149,7 @@ def build():
         mx = (lx[i] + lx[i + 1]) / 2
         ax.text(mx, ROW_Y + 0.135, "記憶", ha="center", va="center",
                 color=GREY, fontsize=16, alpha=0.35 + 0.16 * i)
-    ax.text(0.245, 0.115, "傳到後面就淡了", ha="center", va="center",
+    ax.text(0.25, 0.115, "傳到後面就淡了", ha="center", va="center",
             color=GREY, fontsize=22)
 
     # ================= RIGHT: attention all-to-all =================
@@ -184,7 +186,7 @@ def build():
             pill(ax, cx, ROW_Y, tok, edge=CYAN)
         else:
             pill(ax, cx, ROW_Y, tok)
-    ax.text(0.735, 0.115, "選一個字，直接連到所有字", ha="center", va="center",
+    ax.text(0.75, 0.115, "選一個字，直接連到所有字", ha="center", va="center",
             color=GREY, fontsize=22)
 
     out = os.path.join(HERE, "rnn_vs_attention.png")

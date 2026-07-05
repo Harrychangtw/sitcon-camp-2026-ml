@@ -98,63 +98,66 @@ def use_deck_fonts():
 
 
 # ---------------------------------------------------------------- geometry --
-# Each glyph lives in a horizontal band; three panel centers across the strip.
-PANEL_CX = [0.165, 0.5, 0.835]
-GLYPH_CY = 0.66          # vertical center of the glyph art
-LABEL_ZH_Y = 0.24        # zh label row (一袋字 / 記憶接力 / 直接互看)
-LABEL_EN_Y = 0.09        # small EN caption row
+# EQUAL-ASPECT data coordinates: x in [0, AR], y in [0, 1] with AR = figw/figh,
+# so circles are true circles and the glyphs are not squished by the wide strip.
+FIG_W, FIG_H = 13.0, 4.6
+AR = FIG_W / FIG_H
+PANEL_CX = [0.16 * AR, 0.50 * AR, 0.84 * AR]
+GLYPH_CY = 0.63          # vertical center of the glyph art
+LABEL_ZH_Y = 0.185       # zh label row (一袋字 / 記憶接力 / 直接互看)
+LABEL_EN_Y = 0.045       # EN caption row (MLP · bag / RNN · memory / ...)
 
 
 def node(ax, x, y, r, edge):
-    ax.add_patch(Circle((x, y), r, facecolor=CARD, edgecolor=edge, lw=3.0, zorder=3))
+    ax.add_patch(Circle((x, y), r, facecolor=CARD, edgecolor=edge, lw=3.5, zorder=3))
 
 
 def draw_bag(ax, cx, cy, accent):
     """Pouch outline with token chips jumbled inside (order-blind)."""
-    w, h = 0.20, 0.235
+    w, h = 0.62, 0.50
     x0, y0 = cx - w / 2, cy - h / 2 - 0.01
-    # pouch body
+    # pouch body — hard corners (deck-wide figure rule)
     ax.add_patch(
         FancyBboxPatch(
             (x0, y0),
             w,
             h,
-            boxstyle="round,pad=0,rounding_size=0.045",
+            boxstyle="square,pad=0",
             facecolor="none",
             edgecolor=accent,
-            lw=3.2,
+            lw=3.5,
             zorder=2,
         )
     )
     # cinched neck: two short flaps at the top
     neck_y = y0 + h
-    ax.plot([x0 + 0.02, cx - 0.018], [neck_y, neck_y + 0.028], color=accent, lw=3.0, zorder=2)
-    ax.plot([x0 + w - 0.02, cx + 0.018], [neck_y, neck_y + 0.028], color=accent, lw=3.0, zorder=2)
+    ax.plot([x0 + 0.05, cx - 0.05], [neck_y, neck_y + 0.06], color=accent, lw=3.5, zorder=2)
+    ax.plot([x0 + w - 0.05, cx + 0.05], [neck_y, neck_y + 0.06], color=accent, lw=3.5, zorder=2)
     # jumbled token chips inside — fixed scatter, no left->right reading order
     pts = [
-        (cx - 0.045, cy + 0.015),
-        (cx + 0.040, cy + 0.040),
-        (cx + 0.020, cy - 0.045),
-        (cx - 0.038, cy - 0.038),
-        (cx + 0.058, cy - 0.010),
+        (cx - 0.13, cy + 0.05),
+        (cx + 0.10, cy + 0.11),
+        (cx + 0.05, cy - 0.12),
+        (cx - 0.10, cy - 0.11),
+        (cx + 0.17, cy - 0.02),
     ]
     for (px, py) in pts:
-        node(ax, px, py, 0.020, accent)
+        node(ax, px, py, 0.052, accent)
 
 
 def draw_chain(ax, cx, cy, accent):
     """A row of token nodes linked by forward arrows (order / memory)."""
     n = 4
-    xs = np.linspace(cx - 0.115, cx + 0.115, n)
-    r = 0.026
+    xs = np.linspace(cx - 0.30, cx + 0.30, n)
+    r = 0.062
     for i in range(n - 1):
         ax.add_patch(
             FancyArrowPatch(
                 (xs[i] + r, cy),
                 (xs[i + 1] - r, cy),
                 arrowstyle="-|>",
-                mutation_scale=22,
-                lw=3.0,
+                mutation_scale=30,
+                lw=3.5,
                 color=accent,
                 zorder=2,
             )
@@ -166,8 +169,8 @@ def draw_chain(ax, cx, cy, accent):
 def draw_all_to_all(ax, cx, cy, accent):
     """Token nodes on a small ring, every pair connected (global attention)."""
     n = 5
-    r_ring = 0.115
-    r_node = 0.024
+    r_ring = 0.26
+    r_node = 0.055
     ang = np.linspace(np.pi / 2, np.pi / 2 + 2 * np.pi, n, endpoint=False)
     pts = [(cx + r_ring * np.cos(a), cy + r_ring * np.sin(a)) for a in ang]
     for i in range(n):
@@ -176,7 +179,7 @@ def draw_all_to_all(ax, cx, cy, accent):
                 [pts[i][0], pts[j][0]],
                 [pts[i][1], pts[j][1]],
                 color=accent,
-                lw=1.8,
+                lw=2.2,
                 alpha=0.55,
                 zorder=1,
             )
@@ -190,8 +193,8 @@ def connector(ax, x0, x1, y):
             (x0, y),
             (x1, y),
             arrowstyle="-|>",
-            mutation_scale=26,
-            lw=3.0,
+            mutation_scale=34,
+            lw=3.5,
             color=GREY,
             zorder=4,
         )
@@ -200,10 +203,10 @@ def connector(ax, x0, x1, y):
 
 def build():
     noto_fp = use_deck_fonts()
-    fig = plt.figure(figsize=(14, 3.7), facecolor=BG)
+    fig = plt.figure(figsize=(FIG_W, FIG_H), facecolor=BG)
     ax = fig.add_axes([0, 0, 1, 1])
     ax.set_facecolor(BG)
-    ax.set_xlim(0, 1)
+    ax.set_xlim(0, AR)
     ax.set_ylim(0, 1)
     ax.axis("off")
 
@@ -212,16 +215,16 @@ def build():
     draw_all_to_all(ax, PANEL_CX[2], GLYPH_CY, MAGENTA)
 
     # grey connectors between the panels (the 一條線 progression)
-    connector(ax, 0.305, 0.360, GLYPH_CY)
-    connector(ax, 0.640, 0.695, GLYPH_CY)
+    connector(ax, PANEL_CX[0] + 0.40, PANEL_CX[1] - 0.46, GLYPH_CY)
+    connector(ax, PANEL_CX[1] + 0.46, PANEL_CX[2] - 0.42, GLYPH_CY)
 
     zh = ["一袋字", "記憶接力", "直接互看"]
     en = ["MLP · bag", "RNN · memory", "Transformer · all-to-all"]
     accents = [CYAN, PURPLE, MAGENTA]
     for cx, zt, et, ac in zip(PANEL_CX, zh, en, accents):
         ax.text(cx, LABEL_ZH_Y, zt, ha="center", va="center", color=WHITE,
-                fontsize=30, fontproperties=noto_fp)
-        ax.text(cx, LABEL_EN_Y, et, ha="center", va="center", color=GREY, fontsize=15)
+                fontsize=44, fontproperties=noto_fp)
+        ax.text(cx, LABEL_EN_Y, et, ha="center", va="center", color=GREY, fontsize=24)
 
     out = os.path.join(HERE, "three_arch_glyphs.png")
     fig.savefig(out, dpi=300, transparent=True)
