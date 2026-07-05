@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from "react";
+import { useLayoutEffect, useRef, useState, type ReactNode } from "react";
 
 export interface SuggestPreset {
   /** What the chip shows. */
@@ -22,8 +22,20 @@ export interface SuggestInputProps {
   presetLabel?: string;
   /** Optional status line rendered under the field (e.g. a `<LiveStatus />`). */
   status?: ReactNode;
+  /**
+   * Optional action buttons rendered in the submit-arrow position (the box's
+   * bottom-right). When set, they replace the arrow — for stations that are
+   * live-on-type but still carry a couple of small actions (e.g. 打亂/還原).
+   */
+  actions?: ReactNode;
   /** Accessible label for the raw input. */
   ariaLabel?: string;
+  /**
+   * Grow vertically with long text (default). Set false for fields whose value
+   * is conceptually one line (e.g. a next-token prompt) — the box keeps its
+   * height and the text scrolls horizontally instead.
+   */
+  multiline?: boolean;
   /** Width utility for the field; defaults to a comfortable dock width. */
   className?: string;
 }
@@ -31,8 +43,9 @@ export interface SuggestInputProps {
 /**
  * A text field whose prebuilt examples surface as selectable chips the moment it
  * gains focus while empty, then get out of the way once the student types. Built
- * for the bottom dock, so the chip tray opens UPWARD. Layout-only + local focus
- * state; the value itself is owned by the station.
+ * for the bottom dock, so the chip tray opens UPWARD. The field grows vertically
+ * with long text (capped, then scrolls). Layout-only + local focus state; the
+ * value itself is owned by the station.
  */
 export function SuggestInput({
   value,
@@ -42,11 +55,23 @@ export function SuggestInput({
   presets = [],
   presetLabel = "試試看",
   status,
+  actions,
   ariaLabel,
+  multiline = true,
   className,
 }: SuggestInputProps) {
   const [focused, setFocused] = useState(false);
   const showPresets = focused && value.trim() === "" && presets.length > 0;
+
+  // Auto-grow: size the textarea to its content (the className's max-h caps
+  // it, after which it scrolls).
+  const fieldRef = useRef<HTMLTextAreaElement | null>(null);
+  useLayoutEffect(() => {
+    const el = fieldRef.current;
+    if (!el) return;
+    el.style.height = "0px";
+    el.style.height = `${el.scrollHeight}px`;
+  }, [value]);
 
   return (
     // Fills the dock's height (respecting its padding); the box IS the field,
@@ -55,28 +80,61 @@ export function SuggestInput({
       {/* The box fills the dock height. The input sits at the TOP (text starts
           top-left); the arrow + status are pinned to the bottom band. */}
       <div className="relative flex h-full min-h-[3.5rem] flex-col rounded-md bg-bg focus-within:ring-2 focus-within:ring-accent/50">
-        <input
-          type="text"
-          value={value}
-          aria-label={ariaLabel}
-          onChange={(e) => onChange(e.target.value)}
-          onFocus={() => setFocused(true)}
-          // Delay so a chip's mousedown/click still registers before we hide it.
-          onBlur={() => window.setTimeout(() => setFocused(false), 120)}
-          onKeyDown={(e) => {
-            if (e.key === "Enter") onSubmit?.(value);
-          }}
-          placeholder={placeholder}
-          className="w-full flex-none bg-transparent px-3.5 pt-3 text-sm text-fg placeholder:text-muted focus:outline-none"
-        />
+        {multiline ? (
+          <textarea
+            ref={fieldRef}
+            rows={1}
+            value={value}
+            aria-label={ariaLabel}
+            spellCheck={false}
+            onChange={(e) => onChange(e.target.value)}
+            onFocus={() => setFocused(true)}
+            // Delay so a chip's mousedown/click still registers before we hide it.
+            onBlur={() => window.setTimeout(() => setFocused(false), 120)}
+            onKeyDown={(e) => {
+              // Enter submits when there's a submit handler; Shift+Enter keeps
+              // the newline. Without a handler, Enter types a newline as usual.
+              if (e.key === "Enter" && onSubmit && !e.shiftKey) {
+                e.preventDefault();
+                onSubmit(value);
+              }
+            }}
+            placeholder={placeholder}
+            className="max-h-36 w-full flex-none resize-none overflow-y-auto bg-transparent px-3.5 pb-8 pt-3 text-sm text-fg placeholder:text-muted focus:outline-none"
+          />
+        ) : (
+          <input
+            type="text"
+            value={value}
+            aria-label={ariaLabel}
+            spellCheck={false}
+            onChange={(e) => onChange(e.target.value)}
+            onFocus={() => setFocused(true)}
+            // Delay so a chip's mousedown/click still registers before we hide it.
+            onBlur={() => window.setTimeout(() => setFocused(false), 120)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") onSubmit?.(value);
+            }}
+            placeholder={placeholder}
+            className="w-full flex-none bg-transparent px-3.5 pb-8 pt-3 text-sm text-fg placeholder:text-muted focus:outline-none"
+          />
+        )}
 
         {status ? (
-          <div className="pointer-events-none absolute bottom-2.5 left-3.5 right-14 truncate">
+          <div
+            className={`pointer-events-none absolute bottom-2.5 left-3.5 truncate ${
+              actions ? "right-28" : "right-14"
+            }`}
+          >
             {status}
           </div>
         ) : null}
 
-        {onSubmit ? (
+        {actions ? (
+          <div className="absolute bottom-2 right-2 flex items-center gap-1">
+            {actions}
+          </div>
+        ) : onSubmit ? (
           <button
             type="button"
             aria-label="送出"
@@ -123,7 +181,7 @@ export function SuggestInput({
                   onSubmit?.(p.value);
                   setFocused(false);
                 }}
-                className="w-full truncate rounded-sm border border-border bg-bg px-2.5 py-1.5 text-left font-mono text-xs text-muted transition-colors hover:border-accent hover:text-accent"
+                className="w-full truncate rounded-sm bg-bg px-2.5 py-1.5 text-left font-mono text-xs text-muted transition-colors hover:text-accent"
               >
                 {p.label}
               </button>

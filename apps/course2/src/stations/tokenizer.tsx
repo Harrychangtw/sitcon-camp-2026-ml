@@ -25,9 +25,11 @@
  */
 import { useEffect, useMemo, useState } from "react";
 import {
+  BlockToggle,
+  DockControls,
   LiveStatus,
-  SegmentedControl,
   StationLayout,
+  SuggestInput,
   type LiveState,
 } from "@camp/ui";
 import { liveInferTimed, liveInferenceEnabled, loadJSON } from "@camp/data";
@@ -429,6 +431,15 @@ const SCHEME_OPTS = [
 // scheme without a toggle, and tokenizes cleanly (no byte-fallback � chips).
 const DEFAULT_TEXT = "機器學習的 tokenization 是一種切分方式";
 
+// Prebuilt examples surfaced in the input when it's focused and empty — the
+// mixed seed plus a pure-en and pure-zh line (unk chips are a teachable
+// moment, not an error).
+const PRESETS = [
+  { label: DEFAULT_TEXT, value: DEFAULT_TEXT },
+  { label: "the cat sat on the mat", value: "the cat sat on the mat" },
+  { label: "我今天很開心", value: "我今天很開心" },
+] as const;
+
 export function TokenizerStation() {
   // 1. STATE — scheme, the text, and the vocab (loaded, not hard-coded). No
   //    language toggle: the tokenizer reads whatever you type, 中英文 mixed.
@@ -530,39 +541,38 @@ export function TokenizerStation() {
     <StationLayout
       title="Tokenizer"
       subtitle="原始文字要怎麼變成模型讀得懂的東西？"
+      input={
+        <SuggestInput
+          value={text}
+          onChange={setText}
+          ariaLabel="輸入文字"
+          placeholder={vocab ? sample : "載入詞彙表中…"}
+          presets={PRESETS}
+          status={<LiveStatus state={liveState} />}
+        />
+      }
       controls={
-        <>
-          <SegmentedControl<Scheme>
+        <DockControls>
+          <BlockToggle<Scheme>
             label="切分方式"
             value={scheme}
             onChange={setScheme}
             options={SCHEME_OPTS}
           />
-
-          <div>
-            <div className="mb-1 font-mono text-xs text-muted">輸入文字</div>
-            <textarea
-              value={text}
-              onChange={(e) => setText(e.target.value)}
-              rows={5}
-              spellCheck={false}
-              placeholder={vocab ? sample : "載入詞彙表中…"}
-              className="w-full resize-y rounded-md border border-border bg-panel p-3 text-sm text-fg placeholder:text-muted focus:border-accent focus:outline-none"
-            />
-            {scheme === "bpe" && liveState.kind !== "idle" ? (
-              <div className="mt-1">
-                <LiveStatus state={liveState} />
-              </div>
-            ) : null}
-            <p className="mt-2 text-xs text-muted">
-              直接輸入中英夾雜也可以。BPE 下英文的罕見字（像{" "}
-              <span className="font-mono text-fg">tokenization</span>
-              ）沒有完整 token，會被拆成子詞；中文沒有空格，常見的字則相反，會被
-              合併成一個子詞。
-            </p>
-          </div>
-
-          <dl className="grid grid-cols-2 gap-2 border-t border-border/30 pt-4 font-mono text-xs text-muted">
+        </DockControls>
+      }
+      takeaway={
+        <span>
+          模型從來看不到你的字母或詞，只看到這些{" "}
+          <span className="font-mono text-accent">id</span>。換一種切分方式，
+          同一個句子就變成一串不同的數字。
+        </span>
+      }
+    >
+      <div className="relative flex h-full flex-col gap-4">
+        {/* Readout thrown outside the dock: the token counts, floating top-right. */}
+        <div className="absolute right-0 top-0 z-20 w-44 rounded-md border border-border bg-panel/90 p-3 shadow-md backdrop-blur">
+          <dl className="grid grid-cols-2 gap-2 font-mono text-xs text-muted">
             <dt>token 數</dt>
             <dd className="text-right text-fg">{tokens.length}</dd>
             <dt>分段數</dt>
@@ -576,18 +586,9 @@ export function TokenizerStation() {
               </>
             ) : null}
           </dl>
-        </>
-      }
-      takeaway={
-        <span>
-          模型從來看不到你的字母或詞，只看到這些{" "}
-          <span className="font-mono text-accent">id</span>。換一種切分方式，
-          同一個句子就變成一串不同的數字。
-        </span>
-      }
-    >
-      <div className="flex h-full flex-col gap-4">
-        <p className="text-sm text-muted">
+        </div>
+
+        <p className="max-w-3xl text-sm text-muted">
           每張卡片都是模型讀到的一個 token。{" "}
           <span>
             英文用{" "}
@@ -603,7 +604,7 @@ export function TokenizerStation() {
         {!vocab ? (
           <p className="font-mono text-xs text-muted">載入詞彙表中…</p>
         ) : tokens.length === 0 ? (
-          <p className="font-mono text-xs text-muted">在上面輸入一些文字。</p>
+          <p className="font-mono text-xs text-muted">在下方輸入一些文字。</p>
         ) : (
           <div className="flex flex-wrap items-start gap-x-4 gap-y-3">
             {groups.map((group, gi) => (

@@ -31,6 +31,9 @@ export type { BlockToggleProps, BlockToggleOption } from "./BlockToggle";
 export { BlockSlider } from "./BlockSlider";
 export type { BlockSliderProps } from "./BlockSlider";
 
+export { BlockButtons } from "./BlockButtons";
+export type { BlockButtonsProps, BlockButtonsItem } from "./BlockButtons";
+
 export { RunButton } from "./RunButton";
 export type { RunButtonProps } from "./RunButton";
 

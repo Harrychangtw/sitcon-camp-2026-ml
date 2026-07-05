@@ -146,7 +146,9 @@ export function StationLayout({
               <div className="w-px shrink-0 self-stretch bg-border" />
             ) : null}
             {controls ? (
-              <div className="flex items-center gap-x-5 gap-y-2">{controls}</div>
+              // Top-aligned so a grown (multi-line) input doesn't drag the
+              // controls down the dock.
+              <div className="flex items-start gap-x-5 gap-y-2">{controls}</div>
             ) : null}
           </div>
         </div>

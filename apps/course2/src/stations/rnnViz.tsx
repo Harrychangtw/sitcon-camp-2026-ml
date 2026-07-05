@@ -16,11 +16,11 @@
  */
 import { useEffect, useMemo, useState } from "react";
 import {
-  LabeledSlider,
+  BlockSlider,
+  DockControls,
   LiveStatus,
-  RunButton,
-  SegmentedControl,
   StationLayout,
+  SuggestInput,
   type LiveState,
 } from "@camp/ui";
 import { Heatmap } from "@camp/viz";
@@ -42,7 +42,6 @@ interface Activations {
 }
 
 const DATA_URL = "/data/course2/rnn-viz/activations.json";
-const AUTO_STEP_MS = 650;
 
 export function RnnVizStation() {
   // 1. STATE
@@ -50,7 +49,6 @@ export function RnnVizStation() {
   const [error, setError] = useState<string | null>(null);
   const [sequenceId, setSequenceId] = useState<string | null>(null);
   const [step, setStep] = useState(0);
-  const [playing, setPlaying] = useState(false);
 
   // 2. LOAD PRECOMPUTED DATA — via @camp/data inside an effect.
   useEffect(() => {
@@ -70,7 +68,10 @@ export function RnnVizStation() {
   // TYPED INPUT — the primary interaction: any sentence is forwarded through
   // the SAME trained GRU weights on the live GPU server and rendered as one
   // more sequence through the identical viz path. Presets stay precomputed
-  // (recorded outputs of the same weights) and keep working offline.
+  // (recorded outputs of the same weights) and keep working offline. Live on
+  // type: the effect below is debounced, so keystrokes coalesce into one
+  // forward pass; typing a preset's exact text (the chips do this) selects the
+  // recorded sequence locally instead.
   const [customText, setCustomText] = useState("");
   const [customSeq, setCustomSeq] = useState<RnnSequence | null>(null);
   const [liveMs, setLiveMs] = useState(0);
@@ -83,22 +84,47 @@ export function RnnVizStation() {
     return customSeq ? [...base, customSeq] : base;
   }, [data, customSeq]);
 
-  const submitCustom = async () => {
-    const text = customText.trim();
-    if (!text || livePending) return;
-    setLivePending(true);
+  const presetIdByText = useMemo(() => {
+    const m = new Map<string, string>();
+    for (const s of data?.sequences ?? []) m.set(s.tokens.join(" "), s.sequenceId);
+    return m;
+  }, [data]);
+
+  const trimmedText = customText.trim();
+
+  useEffect(() => {
     setLiveFailed(false);
-    const r = await liveInferTimed<RnnSequence>("/rnn/forward", { text });
-    setLivePending(false);
-    if (!r) {
-      setLiveFailed(true);
+    if (!trimmedText) return;
+    const presetId = presetIdByText.get(trimmedText);
+    if (presetId) {
+      setSequenceId(presetId);
       return;
     }
-    setCustomSeq(r.data);
-    setLiveMs(r.ms);
-    setLiveShown(true);
-    setSequenceId(r.data.sequenceId);
-  };
+    let alive = true;
+    setLivePending(true);
+    // Debounced: only forward once typing pauses.
+    const timer = setTimeout(() => {
+      liveInferTimed<RnnSequence>("/rnn/forward", { text: trimmedText }).then(
+        (r) => {
+          if (!alive) return;
+          setLivePending(false);
+          if (r) {
+            setCustomSeq(r.data);
+            setLiveMs(r.ms);
+            setLiveShown(true);
+            setSequenceId(r.data.sequenceId);
+          } else {
+            setLiveFailed(true);
+          }
+        },
+      );
+    }, 400);
+    return () => {
+      alive = false;
+      clearTimeout(timer);
+      setLivePending(false);
+    };
+  }, [trimmedText, presetIdByText]);
 
   const seq = useMemo(
     () => sequences.find((s) => s.sequenceId === sequenceId) ?? null,
@@ -119,20 +145,7 @@ export function RnnVizStation() {
   // past the shorter one).
   useEffect(() => {
     setStep(0);
-    setPlaying(false);
   }, [sequenceId]);
-
-  // Auto-advance: RunButton only fires a one-shot beat, so we drive the timer
-  // ourselves. Stop at the last step; clean up on unmount / dependency change.
-  useEffect(() => {
-    if (!playing || steps === 0) return;
-    if (step >= lastStep) {
-      setPlaying(false);
-      return;
-    }
-    const id = setTimeout(() => setStep((s) => Math.min(s + 1, lastStep)), AUTO_STEP_MS);
-    return () => clearTimeout(id);
-  }, [playing, step, lastStep, steps]);
 
   // 3. DERIVED CANVAS DATA — a pure function of (seq, step).
   // Rows = hidden dims, columns = timesteps; column labels are the tokens
@@ -159,99 +172,34 @@ export function RnnVizStation() {
     <StationLayout
       title="RNN 視覺化"
       subtitle="處理順序的一種想法：沿著序列傳遞一個隱藏狀態（hidden state）。"
+      input={
+        <SuggestInput
+          value={customText}
+          onChange={setCustomText}
+          ariaLabel="輸入句子"
+          placeholder="自己打一句…GPU 跑訓練好的 RNN"
+          presets={(data?.sequences ?? []).map((s) => {
+            const text = s.tokens.join(" ");
+            return { label: s.label || text, value: text };
+          })}
+          status={<LiveStatus state={liveState} />}
+        />
+      }
       controls={
-        <>
-          <label className="flex flex-col gap-1.5">
-            <span className="font-mono text-xs text-muted">
-              自己打一句（GPU 即時跑訓練好的 RNN，最多 24 個 token）
-            </span>
-            <input
-              type="text"
-              value={customText}
-              onChange={(e) => setCustomText(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter") void submitCustom();
-              }}
-              placeholder="例如 the cat forgot the first word"
-              className="rounded-md border border-border bg-panel px-3 py-2 text-sm text-fg placeholder:text-muted focus:border-accent focus:outline-none"
-            />
-            <button
-              type="button"
-              onClick={() => void submitCustom()}
-              disabled={livePending || !customText.trim()}
-              className="rounded-md border border-border bg-panel px-3 py-1.5 text-sm text-fg transition-colors hover:border-accent disabled:opacity-40"
-            >
-              {livePending ? "計算中…" : "餵給 RNN"}
-            </button>
-            <LiveStatus state={liveState} />
-          </label>
-
-          {seq ? (
-            <SegmentedControl<string>
-              label="或選一個預設序列"
-              value={seq.sequenceId}
-              onChange={setSequenceId}
-              options={sequences.map((s) => ({
-                label: s.sequenceId.startsWith("live-")
-                  ? "自訂句子"
-                  : s.sequenceId.replace(/-/g, " "),
-                value: s.sequenceId,
-              }))}
-            />
-          ) : null}
-
-          <div>
-            <div className="mb-1 font-mono text-xs text-muted">步驟</div>
-            <div className="flex items-center gap-2">
-              <button
-                type="button"
-                onClick={() => {
-                  setPlaying(false);
-                  setStep((s) => Math.max(s - 1, 0));
-                }}
-                disabled={!seq || step <= 0}
-                className="rounded-md border border-border bg-panel px-3 py-1.5 text-sm text-fg transition-colors hover:border-accent disabled:opacity-40"
-              >
-                ← 上一步
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setPlaying(false);
-                  setStep((s) => Math.min(s + 1, lastStep));
-                }}
-                disabled={!seq || step >= lastStep}
-                className="rounded-md border border-border bg-panel px-3 py-1.5 text-sm text-fg transition-colors hover:border-accent disabled:opacity-40"
-              >
-                下一個 token →
-              </button>
-            </div>
-          </div>
-
-          <RunButton
-            label="跑整段序列"
-            runningLabel="餵入 token 中…"
-            durationMs={300}
-            disabled={!seq}
-            onRun={() => {
-              if (step >= lastStep) setStep(0);
-              setPlaying(true);
-            }}
-          />
-
-          <LabeledSlider
+        <DockControls>
+          <BlockSlider
             label="拖曳"
             min={0}
             max={lastStep}
             step={1}
-            value={step}
-            onChange={(v) => {
-              setPlaying(false);
-              setStep(v);
-            }}
-            format={(v) => `${String(v + 1).padStart(2, "0")} / ${String(steps).padStart(2, "0")}`}
+            value={Math.min(step, lastStep)}
+            onChange={setStep}
+            disabled={!seq}
+            format={(v) =>
+              `${String(v + 1).padStart(2, "0")} / ${String(steps).padStart(2, "0")}`
+            }
           />
-        </>
+        </DockControls>
       }
       takeaway={
         <span>

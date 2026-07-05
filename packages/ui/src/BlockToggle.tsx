@@ -31,7 +31,7 @@ export function BlockToggle<T extends string>({
             key={opt.value}
             type="button"
             onClick={() => onChange(opt.value)}
-            className={`flex-1 rounded-sm px-3 py-1 text-sm transition-colors ${
+            className={`flex-1 whitespace-nowrap rounded-sm px-2 py-1 text-sm transition-colors ${
               opt.value === value
                 ? "bg-accent text-accent-fg"
                 : "text-muted hover:text-fg"

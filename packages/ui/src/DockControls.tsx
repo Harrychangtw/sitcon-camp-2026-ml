@@ -12,7 +12,7 @@ export interface DockControlsProps {
  */
 export function DockControls({ children }: DockControlsProps) {
   return (
-    <div className="grid grid-cols-[auto_8rem] items-center gap-x-5 gap-y-3.5">
+    <div className="grid grid-cols-[auto_minmax(8rem,auto)] items-center gap-x-5 gap-y-3.5">
       {children}
     </div>
   );

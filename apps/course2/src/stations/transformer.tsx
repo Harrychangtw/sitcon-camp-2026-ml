@@ -22,11 +22,13 @@
  */
 import { useEffect, useMemo, useState } from "react";
 import {
-  LabeledSlider,
+  BlockButtons,
+  BlockSlider,
+  BlockToggle,
+  DockControls,
   LiveStatus,
-  RunButton,
-  SegmentedControl,
   StationLayout,
+  SuggestInput,
   type LiveState,
 } from "@camp/ui";
 import { AttentionLines, VectorStrip } from "@camp/viz";
@@ -82,13 +84,6 @@ type Mode = "real" | "schematic";
 /** Make a subword piece visible: leading space → ␣ (it IS part of the token). */
 function displayToken(token: string): string {
   return token.replace(/^ /, "␣").replace(/\n/g, "⏎");
-}
-
-/** Short picker label for a sentence: its reconstructed text, elided. */
-function sentenceLabel(s: AttentionSentence): string {
-  if (s.sentenceId.startsWith("live-")) return "自訂句子";
-  const text = s.tokens.join("").trim();
-  return text.length > 14 ? `${text.slice(0, 12)}…` : text;
 }
 
 /** prefers-reduced-motion, read in an effect (SSR-safe, live-updating). */
@@ -166,8 +161,7 @@ export function TransformerStation() {
     return customSentence ? [...base, customSentence] : base;
   }, [data, customSentence]);
 
-  const submitCustom = async () => {
-    const text = customText.trim();
+  const submitCustom = async (text: string) => {
     if (!text || livePending) return;
     setLivePending(true);
     setLiveFailed(false);
@@ -182,6 +176,29 @@ export function TransformerStation() {
     setLiveShown(true);
     setSentenceId(r.data.sentenceId);
     setFocus(null);
+  };
+
+  // The recorded sentences surface as the input's presets. A submitted text
+  // that matches one selects it locally (no round-trip); anything else goes to
+  // the live GPU. Submit-based on purpose — the response is a full
+  // 28-layer × 16-head tensor, too heavy to fire per keystroke.
+  const presetByText = useMemo(() => {
+    const m = new Map<string, string>();
+    for (const s of data?.sentences ?? []) {
+      m.set(s.tokens.join("").trim(), s.sentenceId);
+    }
+    return m;
+  }, [data]);
+
+  const submitText = (text: string) => {
+    const t = text.trim();
+    if (!t) return;
+    const presetId = presetByText.get(t);
+    if (presetId) {
+      setSentenceId(presetId);
+      return;
+    }
+    void submitCustom(t);
   };
 
   const sentence = useMemo(
@@ -292,9 +309,26 @@ export function TransformerStation() {
     <StationLayout
       title="Transformer"
       subtitle="如果每個 token 都能直接看到所有其他 token 呢？看真實模型的 attention 分工。"
+      input={
+        mode === "real" ? (
+          <SuggestInput
+            value={customText}
+            onChange={setCustomText}
+            onSubmit={submitText}
+            multiline={false}
+            ariaLabel="輸入句子"
+            placeholder="自己打一句…GPU 算 attention"
+            presets={(data?.sentences ?? []).map((s) => {
+              const text = s.tokens.join("").trim();
+              return { label: text, value: text };
+            })}
+            status={<LiveStatus state={liveState} />}
+          />
+        ) : undefined
+      }
       controls={
-        <>
-          <SegmentedControl<Mode>
+        <DockControls>
+          <BlockToggle<Mode>
             label="模式"
             value={mode}
             onChange={setMode}
@@ -304,44 +338,9 @@ export function TransformerStation() {
             ]}
           />
 
-          {mode === "real" && data ? (
+          {mode === "real" ? (
             <>
-              <SegmentedControl
-                label="句子"
-                value={sentenceId ?? ""}
-                onChange={(v) => setSentenceId(v)}
-                options={sentences.map((s) => ({
-                  label: sentenceLabel(s),
-                  value: s.sentenceId,
-                }))}
-              />
-
-              <label className="flex flex-col gap-1.5">
-                <span className="font-mono text-xs text-muted">
-                  自己打一句（GPU 即時算 attention，最多約 24 個 token）
-                </span>
-                <input
-                  type="text"
-                  value={customText}
-                  onChange={(e) => setCustomText(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter") void submitCustom();
-                  }}
-                  placeholder="例如 小貓在廚房偷吃魚"
-                  className="rounded-md border border-border bg-panel px-3 py-2 text-sm text-fg placeholder:text-muted focus:border-accent focus:outline-none"
-                />
-                <button
-                  type="button"
-                  onClick={() => void submitCustom()}
-                  disabled={livePending || !customText.trim()}
-                  className="rounded-md border border-border bg-panel px-3 py-1.5 text-sm text-fg transition-colors hover:border-accent disabled:opacity-40"
-                >
-                  {livePending ? "計算中…" : "算 attention"}
-                </button>
-                <LiveStatus state={liveState} />
-              </label>
-
-              <LabeledSlider
+              <BlockSlider
                 label="Layer"
                 min={0}
                 max={nLayers - 1}
@@ -350,7 +349,7 @@ export function TransformerStation() {
                 onChange={setLayer}
                 format={(v) => `L${v} / L${nLayers - 1}`}
               />
-              <LabeledSlider
+              <BlockSlider
                 label="Head"
                 min={0}
                 max={nHeads - 1}
@@ -359,77 +358,38 @@ export function TransformerStation() {
                 onChange={setHead}
                 format={(v) => `H${v} / H${nHeads - 1}`}
               />
-
-              <div className="rounded-md border border-border/60 bg-panel p-3 text-xs text-muted">
-                hover 任一個 token，亮起
-                <span className="text-accent">它注意的對象</span>。拖動{" "}
-                <span className="font-mono uppercase tracking-wide">layer</span> 和{" "}
-                <span className="font-mono uppercase tracking-wide">head</span>
-                ，同一句話會長出完全不同的注意力模式——這些全是真實權重，
-                不是示意圖。
-              </div>
             </>
-          ) : null}
-
-          {mode === "schematic" && schematic ? (
+          ) : (
             <>
-              <div>
-                <SegmentedControl
-                  label="步驟"
-                  value={String(step)}
-                  onChange={(v) => {
-                    setPlaying(false);
-                    setStep(Number(v));
-                  }}
-                  options={STEPS.map((s, i) => ({ label: s.label, value: String(i) }))}
-                />
-                <div className="mt-2 flex gap-2">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setPlaying(false);
-                      setStep((s) => Math.max(0, s - 1));
-                    }}
-                    disabled={step === 0}
-                    className="rounded-md border border-border bg-panel px-3 py-1 text-sm text-muted transition-colors hover:text-fg disabled:opacity-40"
-                  >
-                    ← 上一步
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setPlaying(false);
-                      setStep((s) => Math.min(LAST_STEP, s + 1));
-                    }}
-                    disabled={step === LAST_STEP}
-                    className="rounded-md border border-border bg-panel px-3 py-1 text-sm text-muted transition-colors hover:text-fg disabled:opacity-40"
-                  >
-                    下一步 →
-                  </button>
-                </div>
-              </div>
-
-              <RunButton
-                label={playing ? "播放中…" : "從頭播放"}
-                runningLabel="準備中…"
-                durationMs={300}
-                disabled={playing}
-                onRun={() => {
-                  setStep(0);
-                  setPlaying(true);
+              <BlockSlider
+                label="步驟"
+                min={0}
+                max={LAST_STEP}
+                step={1}
+                value={Math.min(step, LAST_STEP)}
+                onChange={(v) => {
+                  setPlaying(false);
+                  setStep(v);
                 }}
+                format={(v) => STEPS[v]?.name ?? String(v)}
               />
-
-              <div className="rounded-md border border-border/60 bg-panel p-3 text-xs text-muted">
-                這是<span className="text-accent">手工設計的小例子</span>（d ={" "}
-                {schematic.dim}），不是左邊的真實模型——Qwen 的向量有 1024 維，
-                畫不進螢幕。但機制一模一樣：點一個 token 當{" "}
-                <span className="text-accent">query</span>
-                ，再逐步前進，看 Q·K 內積 → ÷√d → softmax → 加權 V。
-              </div>
+              <BlockButtons
+                label="播放"
+                buttons={[
+                  {
+                    label: playing ? "播放中…" : "從頭播放",
+                    onClick: () => {
+                      setStep(0);
+                      setPlaying(true);
+                    },
+                    disabled: playing,
+                    primary: true,
+                  },
+                ]}
+              />
             </>
-          ) : null}
-        </>
+          )}
+        </DockControls>
       }
       takeaway={
         <span>
