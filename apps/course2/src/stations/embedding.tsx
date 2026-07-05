@@ -237,7 +237,6 @@ export function EmbeddingStation() {
         <SuggestInput
           value={query}
           onChange={setQuery}
-          multiline={false}
           ariaLabel="搜尋詞"
           placeholder="搜尋一個詞…貓、cat、蘋果"
           presets={PRESETS}

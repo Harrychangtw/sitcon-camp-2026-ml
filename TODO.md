@@ -57,3 +57,19 @@ Session handoffs, newest at the bottom.
 
 ### Suggested next
 - Run `prompts/DOCK-migrate-remaining-stations.md` to move transformer / order-shuffle / rnn-viz / tokenizer onto the dock (transformer's sentence presets → `SuggestInput`).
+
+## Handoff — Migrate remaining stations onto the bottom-center dock
+
+### Done this session
+- Migrated **transformer / order-shuffle / rnn-viz / tokenizer** onto the dock (`e694182`): primary text → `SuggestInput` with the recorded presets folded in as focus-empty chips (a submitted/typed text that exactly matches a preset selects the recorded artifact locally, no round-trip); toggles/sliders → `BlockToggle`/`BlockSlider` in `DockControls`; instructional helper labels deleted per user; tokenizer's stats `dl` floats top-right on the canvas.
+- Per user direction mid-session: **no submit arrow** on live-on-type stations (embedding, next-token, tokenizer, order-shuffle, rnn-viz all run debounced live-on-type now; only transformer keeps Enter/arrow submit — its response is a full 28×16 attention tensor). rnn-viz lost 餵給RNN / 上一步 / 下一個token / 跑整段序列 (the 拖曳 slider is the only step control; `playing` auto-advance removed). order-shuffle lost 拆成詞塊 and its right column — 打亂 (lime) / 還原 (borderless) sit inside the input box via a new `SuggestInput` `actions` slot.
+- `@camp/ui` additions/tweaks: `BlockButtons` (dock action row, used by transformer 播放); `SuggestInput` is now an auto-growing textarea (`max-h-36` then scrolls) with borderless preset chips, the `actions` slot, and a `multiline={false}` opt-out (kept single-line on embedding / next-token / transformer per user); order-shuffle's box is taller by default (`min-h-20 w-96`); `DockControls` column is `minmax(8rem,auto)`; `BlockToggle`/`BlockButtons` segments `whitespace-nowrap px-2`; `StationLayout` controls column top-aligned so a grown input doesn't drag it down.
+- `@camp/ui` + `@app/course2` typecheck and lint green.
+
+### Loose ends
+- Not browser-verified (user is eyeballing themselves). Worth checking: textarea auto-grow at the `max-h-36` cap, the order-shuffle in-box action buttons vs long status text (`right-28` truncation), transformer schematic step names in the slider bubble.
+- Live-on-type on order-shuffle re-splits chips per keystroke (order resets to natural while typing); /score (300ms) and /bag (now 350ms) are debounced, rnn-viz /rnn/forward at 400ms.
+- The SuggestInput preset-chip popover container still has a border; only the chips themselves were de-bordered (user asked about the items).
+
+### Suggested next
+- Fix whatever the in-browser eyeball turns up (dock sizing at narrow viewports is the likeliest); then delete `prompts/DOCK-migrate-remaining-stations.md` — it's done.

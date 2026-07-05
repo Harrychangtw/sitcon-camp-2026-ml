@@ -204,7 +204,6 @@ export function NextTokenStation() {
         <SuggestInput
           value={prompt}
           onChange={setPrompt}
-          multiline={false}
           ariaLabel="輸入文字"
           placeholder="輸入一段文字…GPU 即時算"
           presets={(dist?.suggestions ?? []).map((s) => ({ label: s, value: s }))}

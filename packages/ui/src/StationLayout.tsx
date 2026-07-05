@@ -125,9 +125,14 @@ export function StationLayout({
         </div>
       ) : null}
 
-      {/* Canvas. `pb-28` keeps scrollable content clear of the bottom dock;
-          full-bleed canvases size to `h-full` and the dock floats over them. */}
-      <main className="relative min-h-0 flex-1 overflow-auto p-5 pb-28">
+      {/* Canvas. Full-bleed canvases span edge to edge and the dock floats
+          over them; otherwise `pb-28` keeps scrollable content clear of the
+          bottom dock. */}
+      <main
+        className={`relative min-h-0 flex-1 overflow-auto ${
+          fullBleed ? "" : "p-5 pb-28"
+        }`}
+      >
         <div
           className={fullBleed ? "h-full w-full" : "mx-auto h-full max-w-5xl"}
         >

@@ -315,7 +315,6 @@ export function TransformerStation() {
             value={customText}
             onChange={setCustomText}
             onSubmit={submitText}
-            multiline={false}
             ariaLabel="輸入句子"
             placeholder="自己打一句…GPU 算 attention"
             presets={(data?.sentences ?? []).map((s) => {

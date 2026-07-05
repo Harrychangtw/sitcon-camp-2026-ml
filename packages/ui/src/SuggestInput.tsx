@@ -100,7 +100,8 @@ export function SuggestInput({
               }
             }}
             placeholder={placeholder}
-            className="max-h-36 w-full flex-none resize-none overflow-y-auto bg-transparent px-3.5 pb-8 pt-3 text-sm text-fg placeholder:text-muted focus:outline-none"
+            // max-h = 2 lines of text-sm (2×1.25rem) + pt-3 + pb-8, then scrolls.
+            className="max-h-[5.25rem] w-full flex-none resize-none overflow-y-auto bg-transparent px-3.5 pb-8 pt-3 text-sm text-fg placeholder:text-muted focus:outline-none"
           />
         ) : (
           <input
@@ -142,7 +143,8 @@ export function SuggestInput({
             // mousedown fires before the input's blur, so the click still lands.
             onMouseDown={(e) => e.preventDefault()}
             onClick={() => onSubmit(value)}
-            className="absolute bottom-2 right-2 flex h-7 w-10 items-center justify-center rounded border border-border bg-panel text-muted transition-all hover:border-accent hover:text-accent hover:shadow-[0_0_10px] hover:shadow-accent/50 disabled:opacity-40 disabled:hover:border-border disabled:hover:text-muted disabled:hover:shadow-none"
+            // Borderless: fills accent (lime) as soon as there's input.
+            className="absolute bottom-2 right-2 flex h-7 w-10 items-center justify-center rounded bg-accent text-accent-fg transition-all hover:shadow-[0_0_10px] hover:shadow-accent/50 disabled:bg-panel disabled:text-muted disabled:opacity-40 disabled:hover:shadow-none"
           >
             <svg
               viewBox="0 0 24 24"
@@ -163,7 +165,7 @@ export function SuggestInput({
 
       {showPresets ? (
         // Opens upward (bottom-full): the field lives in a bottom-anchored dock.
-        <div className="absolute bottom-full left-0 z-20 mb-2 w-max min-w-full max-w-[min(24rem,80vw)] rounded-sm border border-border bg-panel p-2 shadow-lg">
+        <div className="absolute bottom-full left-0 z-20 mb-2 w-max min-w-full max-w-[min(24rem,80vw)] rounded-sm bg-panel p-2 shadow-lg">
           <div className="mb-1.5 font-mono text-[10px] uppercase tracking-wide text-muted">
             {presetLabel}
           </div>
