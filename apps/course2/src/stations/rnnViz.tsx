@@ -2,20 +2,29 @@
  * RNN VIZ — station 05 of Course 2.
  *
  * The first real answer to "how do we handle order": carry a HIDDEN STATE along
- * the sequence. Students step through a sequence token by token and watch the
- * hidden-state vector evolve on a heatmap — then feel the wall: the earliest
- * token's fingerprint washes out of one fixed-size vector (the `influence` trace
- * decays), which motivates attention next.
+ * the sequence. Students type a sentence, step through it token by token and
+ * watch the hidden-state vector evolve on a heatmap — then feel the wall: the
+ * earliest token's fingerprint washes out of one fixed-size vector (the
+ * `influence` trace decays), which motivates attention next.
  *
- * The browser NEVER runs the RNN. A precomputed forward pass
- * (public/data/course2/rnn-viz/activations.json, written by
- * `camp-precompute rnn-viz`) is loaded via @camp/data; the displayed state is a
- * pure function of (sequenceId, step, data).
+ * Wave 3: the RNN is REAL — a small GRU language model trained by
+ * `camp-precompute train-rnn` on Alice in Wonderland (Qwen is a transformer;
+ * reusing it here would defeat the lesson). Presets are recorded outputs of
+ * those trained weights; typed sentences are forwarded through the same
+ * weights on the live GPU server. The browser NEVER runs the RNN — it replays
+ * JSON; the displayed state is a pure function of (sequence, step).
  */
 import { useEffect, useMemo, useState } from "react";
-import { LabeledSlider, RunButton, SegmentedControl, StationLayout } from "@camp/ui";
+import {
+  LabeledSlider,
+  LiveStatus,
+  RunButton,
+  SegmentedControl,
+  StationLayout,
+  type LiveState,
+} from "@camp/ui";
 import { Heatmap } from "@camp/viz";
-import { liveInfer, liveInferenceEnabled, loadJSON } from "@camp/data";
+import { liveInferTimed, loadJSON } from "@camp/data";
 
 interface RnnSequence {
   sequenceId: string;
@@ -58,14 +67,16 @@ export function RnnVizStation() {
     };
   }, []);
 
-  // LIVE OPT-IN — a custom sentence is forwarded through the SAME fixed-weight
-  // RNN on the live server (gated on VITE_LIVE_INFERENCE_URL) and rendered as
-  // one more sequence through the identical viz path. Presets stay precomputed
-  // and keep working with zero server dependency.
+  // TYPED INPUT — the primary interaction: any sentence is forwarded through
+  // the SAME trained GRU weights on the live GPU server and rendered as one
+  // more sequence through the identical viz path. Presets stay precomputed
+  // (recorded outputs of the same weights) and keep working offline.
   const [customText, setCustomText] = useState("");
   const [customSeq, setCustomSeq] = useState<RnnSequence | null>(null);
-  const [liveBusy, setLiveBusy] = useState(false);
-  const [liveError, setLiveError] = useState<string | null>(null);
+  const [liveMs, setLiveMs] = useState(0);
+  const [livePending, setLivePending] = useState(false);
+  const [liveFailed, setLiveFailed] = useState(false);
+  const [liveShown, setLiveShown] = useState(false);
 
   const sequences = useMemo<RnnSequence[]>(() => {
     const base = data?.sequences ?? [];
@@ -74,23 +85,33 @@ export function RnnVizStation() {
 
   const submitCustom = async () => {
     const text = customText.trim();
-    if (!text || liveBusy) return;
-    setLiveBusy(true);
-    setLiveError(null);
-    const r = await liveInfer<RnnSequence>("/rnn/forward", { text });
-    setLiveBusy(false);
+    if (!text || livePending) return;
+    setLivePending(true);
+    setLiveFailed(false);
+    const r = await liveInferTimed<RnnSequence>("/rnn/forward", { text });
+    setLivePending(false);
     if (!r) {
-      setLiveError("即時伺服器沒有回應（句子太長？最多 24 個 token）。預設序列不受影響。");
+      setLiveFailed(true);
       return;
     }
-    setCustomSeq(r);
-    setSequenceId(r.sequenceId);
+    setCustomSeq(r.data);
+    setLiveMs(r.ms);
+    setLiveShown(true);
+    setSequenceId(r.data.sequenceId);
   };
 
   const seq = useMemo(
     () => sequences.find((s) => s.sequenceId === sequenceId) ?? null,
     [sequences, sequenceId],
   );
+  const showingLive = Boolean(seq?.sequenceId.startsWith("live-"));
+
+  const liveState = useMemo<LiveState>(() => {
+    if (livePending) return { kind: "pending" };
+    if (liveFailed) return { kind: "cached" };
+    if (liveShown && showingLive) return { kind: "live", ms: liveMs };
+    return { kind: "idle" };
+  }, [livePending, liveFailed, liveShown, showingLive, liveMs]);
   const steps = seq?.tokens.length ?? 0;
   const lastStep = Math.max(steps - 1, 0);
 
@@ -140,9 +161,34 @@ export function RnnVizStation() {
       subtitle="處理順序的一種想法：沿著序列傳遞一個隱藏狀態（hidden state）。"
       controls={
         <>
+          <label className="flex flex-col gap-1.5">
+            <span className="font-mono text-xs text-muted">
+              自己打一句（GPU 即時跑訓練好的 RNN，最多 24 個 token）
+            </span>
+            <input
+              type="text"
+              value={customText}
+              onChange={(e) => setCustomText(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") void submitCustom();
+              }}
+              placeholder="例如 the cat forgot the first word"
+              className="rounded-md border border-border bg-panel px-3 py-2 text-sm text-fg placeholder:text-muted focus:border-accent focus:outline-none"
+            />
+            <button
+              type="button"
+              onClick={() => void submitCustom()}
+              disabled={livePending || !customText.trim()}
+              className="rounded-md border border-border bg-panel px-3 py-1.5 text-sm text-fg transition-colors hover:border-accent disabled:opacity-40"
+            >
+              {livePending ? "計算中…" : "餵給 RNN"}
+            </button>
+            <LiveStatus state={liveState} />
+          </label>
+
           {seq ? (
             <SegmentedControl<string>
-              label="選擇序列"
+              label="或選一個預設序列"
               value={seq.sequenceId}
               onChange={setSequenceId}
               options={sequences.map((s) => ({
@@ -152,35 +198,6 @@ export function RnnVizStation() {
                 value: s.sequenceId,
               }))}
             />
-          ) : null}
-
-          {liveInferenceEnabled() ? (
-            <label className="flex flex-col gap-1.5">
-              <span className="font-mono text-xs text-muted">
-                自己打一句（即時跑同一個 RNN）
-              </span>
-              <input
-                type="text"
-                value={customText}
-                onChange={(e) => setCustomText(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") void submitCustom();
-                }}
-                placeholder="例如 the robot forgot the first word"
-                className="rounded-md border border-border bg-panel px-3 py-2 text-sm text-fg placeholder:text-muted focus:border-accent focus:outline-none"
-              />
-              <button
-                type="button"
-                onClick={() => void submitCustom()}
-                disabled={liveBusy || !customText.trim()}
-                className="rounded-md border border-border bg-panel px-3 py-1.5 text-sm text-fg transition-colors hover:border-accent disabled:opacity-40"
-              >
-                {liveBusy ? "計算中…" : "餵給 RNN"}
-              </button>
-              {liveError ? (
-                <span className="font-mono text-xs text-warning">{liveError}</span>
-              ) : null}
-            </label>
           ) : null}
 
           <div>
@@ -317,7 +334,9 @@ export function RnnVizStation() {
               </div>
               <p className="mt-2 text-sm text-muted">
                 隨著餵入越多 token，第一個 token 在隱藏狀態上的痕跡會被沖淡，
-                這正是 RNN 在長距離依賴上撞到的牆。
+                這正是 RNN 在長距離依賴上撞到的牆。這是一個真的在《愛麗絲夢遊仙境》
+                上訓練過的小 GRU（hidden = {data.hiddenSize}）——不在它字彙表裡的詞會
+                變成 <span className="font-mono">&lt;unk&gt;</span>，但一樣會推動狀態。
               </p>
             </div>
           </>

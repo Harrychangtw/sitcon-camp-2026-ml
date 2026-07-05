@@ -1,56 +1,73 @@
 /**
  * TRANSFORMER — station 06 of Course 2, the payoff.
  *
- * Wave-2 (06a): a bbycroft-style GUIDED STEP-THROUGH of self-attention. The
- * student picks a query token, then scrubs five phases — Q·K dot products →
- * ÷√d scaling → softmax → weighted sum of V → the token's output — watching
- * every intermediate light up. The old hover-a-matrix view survives as the
- * 「注意力總覽」 view, so the RESULT reading is still one toggle away.
+ * Wave 3: two clearly-separated modes.
  *
- * Design (not code) modeled on bbycroft.net/llm (github.com/bbycroft/llm-viz):
- * the phase list + commentary-tied-to-highlights interaction. Clean-room
- * implementation — no llm-viz code is used (llm-viz ships no license).
+ * 真實模型 (default) — REAL attention from Qwen3-0.6B. Type any sentence
+ * (≤ ~24 tokens), pick a layer (28) and head (16), hover a token → see its
+ * real attention to every other token. Presets are RECORDED Qwen outputs
+ * (attention.json); typed sentences come from the live GPU server running the
+ * same model. No synthetic head labels — real heads don't carry clean roles,
+ * so the UI shows honest L{n}·H{m} indices. Attention is causal (a decoder
+ * only looks left) — visible and teachable.
  *
- * The browser NEVER runs a transformer. `camp-precompute transformer` exports
- * the attention tensor PLUS tiny per-token Q/K/V vectors (dim 8), factored so
- * softmax(Q·Kᵀ/√d) reproduces the shipped matrices. The station loads them via
- * @camp/data and does only light arithmetic (8-dim dot products, a softmax over
- * ≤6 scores) — playback, not a forward pass.
+ * 機制示意 — the five-step Q·K → ÷√d → softmax → ΣwV walkthrough survives as a
+ * FIXED schematic on one hand-picked dim-6 example (clearly marked 示意 — not
+ * the live model; real 1024-dim vectors can't render on screen). The Q/K pair
+ * is factored so softmax(Q·Kᵀ/√d) reproduces the schematic matrix exactly, so
+ * the browser's light arithmetic is genuine.
+ *
+ * The browser NEVER runs a transformer — it replays recorded/live JSON and
+ * does only tiny dot-product/softmax arithmetic in the schematic.
  */
 import { useEffect, useMemo, useState } from "react";
-import { RunButton, SegmentedControl, StationLayout } from "@camp/ui";
+import {
+  LabeledSlider,
+  LiveStatus,
+  RunButton,
+  SegmentedControl,
+  StationLayout,
+  type LiveState,
+} from "@camp/ui";
 import { AttentionLines, VectorStrip } from "@camp/viz";
-import { liveInfer, liveInferenceEnabled, loadJSON } from "@camp/data";
+import { liveInferTimed, loadJSON } from "@camp/data";
 
-interface HeadQKV {
-  /** q/k/v are [token][dim] vectors for one (layer, head). */
+/** One sentence's REAL attention — the element shape of both the shipped
+ * `sentences[]` and the live server's POST /transformer/attention response. */
+interface AttentionSentence {
+  sentenceId: string;
+  /** Real subword pieces (a leading space is part of the token). */
+  tokens: string[];
+  /** layers[l].heads[h] is a [query][key] matrix (causal). */
+  layers: { heads: number[][][] }[];
+}
+
+/** The fixed 機制示意 example: tiny hand-designed Q/K/V (NOT the live model). */
+interface Schematic {
+  tokens: string[];
+  dim: number;
   q: number[][];
   k: number[][];
   v: number[][];
 }
 
-/** One sentence's attention payload — the element shape of both the shipped
- * `sentences[]` and the live server's POST /transformer/attention response. */
-interface AttentionSentence {
-  sentenceId: string;
-  tokens: string[];
-  /** layers[l].heads[h] is a [query][key] matrix; qkv[h] its Q/K/V vectors. */
-  layers: { heads: number[][][]; qkv?: HeadQKV[] }[];
+interface AttentionData {
+  model: string;
+  nLayers: number;
+  nHeads: number;
+  sentences: AttentionSentence[];
+  schematic: Schematic;
 }
 
-interface AttentionData {
-  layers: number;
-  heads: number;
-  headLabels: string[];
-  /** Dimension of the exported Q/K/V vectors (√d is the softmax scale). */
-  qkvDim: number;
-  sentences: AttentionSentence[];
+interface LiveAttention extends AttentionSentence {
+  nLayers: number;
+  nHeads: number;
 }
 
 const DATA_URL = "/data/course2/transformer/attention.json";
 const AUTO_STEP_MS = 2400;
 
-/** The five walkthrough phases, in mechanism order. */
+/** The five walkthrough phases, in mechanism order (機制示意 only). */
 const STEPS = [
   { key: "qk", label: "01", name: "Q·K 內積" },
   { key: "scale", label: "02", name: "÷ √d 縮放" },
@@ -60,7 +77,19 @@ const STEPS = [
 ] as const;
 const LAST_STEP = STEPS.length - 1;
 
-type View = "walk" | "lines";
+type Mode = "real" | "schematic";
+
+/** Make a subword piece visible: leading space → ␣ (it IS part of the token). */
+function displayToken(token: string): string {
+  return token.replace(/^ /, "␣").replace(/\n/g, "⏎");
+}
+
+/** Short picker label for a sentence: its reconstructed text, elided. */
+function sentenceLabel(s: AttentionSentence): string {
+  if (s.sentenceId.startsWith("live-")) return "自訂句子";
+  const text = s.tokens.join("").trim();
+  return text.length > 14 ? `${text.slice(0, 12)}…` : text;
+}
 
 /** prefers-reduced-motion, read in an effect (SSR-safe, live-updating). */
 function usePrefersReducedMotion(): boolean {
@@ -81,25 +110,32 @@ function dot(a: number[], b: number[]): number {
   return s;
 }
 
+function softmax(scores: number[]): number[] {
+  const max = Math.max(...scores);
+  const exps = scores.map((s) => Math.exp(s - max));
+  const sum = exps.reduce((a, b) => a + b, 0) || 1;
+  return exps.map((e) => e / sum);
+}
+
 export function TransformerStation() {
-  // 1. STATE — everything the canvas shows is a pure function of this.
+  // 1. STATE
   const [data, setData] = useState<AttentionData | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [mode, setMode] = useState<Mode>("real");
+
+  // 真實模型 state
   const [sentenceId, setSentenceId] = useState<string | null>(null);
   const [layer, setLayer] = useState(0);
   const [head, setHead] = useState(0);
-  const [view, setView] = useState<View>("walk");
-  /** The picked query token (walkthrough view). */
+  const [focus, setFocus] = useState<number | null>(null);
+
+  // 機制示意 state
   const [query, setQuery] = useState(0);
-  /** Current walkthrough phase (index into STEPS). */
   const [step, setStep] = useState(0);
   const [playing, setPlaying] = useState(false);
-  /** The hovered query token in the 總覽 (lines) view. */
-  const [focus, setFocus] = useState<number | null>(null);
   const reducedMotion = usePrefersReducedMotion();
 
-  // 2. LOAD PRECOMPUTED DATA — via @camp/data inside an effect. No model runs
-  //    in the browser; this is the exported attention tensor + Q/K/V vectors.
+  // 2. LOAD PRECOMPUTED DATA — recorded real Qwen attention + the schematic.
   useEffect(() => {
     let alive = true;
     loadJSON<AttentionData>(DATA_URL)
@@ -114,14 +150,16 @@ export function TransformerStation() {
     };
   }, []);
 
-  // LIVE OPT-IN — a custom sentence gets its attention tensor from the live
-  // server (the SAME synthesis code precompute runs, gated on
-  // VITE_LIVE_INFERENCE_URL) and walks through the identical step-through.
-  // Preset sentences stay precomputed with zero server dependency.
+  // TYPED INPUT — the primary interaction: any sentence gets its REAL
+  // attention tensor from the live GPU server (same model that recorded the
+  // presets). Enter (or the button) submits; the response is a full
+  // 28-layer × 16-head tensor, so this is not fired per keystroke.
   const [customText, setCustomText] = useState("");
   const [customSentence, setCustomSentence] = useState<AttentionSentence | null>(null);
-  const [liveBusy, setLiveBusy] = useState(false);
-  const [liveError, setLiveError] = useState<string | null>(null);
+  const [liveMs, setLiveMs] = useState(0);
+  const [livePending, setLivePending] = useState(false);
+  const [liveFailed, setLiveFailed] = useState(false);
+  const [liveShown, setLiveShown] = useState(false);
 
   const sentences = useMemo<AttentionSentence[]>(() => {
     const base = data?.sentences ?? [];
@@ -130,17 +168,19 @@ export function TransformerStation() {
 
   const submitCustom = async () => {
     const text = customText.trim();
-    if (!text || liveBusy) return;
-    setLiveBusy(true);
-    setLiveError(null);
-    const r = await liveInfer<AttentionSentence>("/transformer/attention", { text });
-    setLiveBusy(false);
+    if (!text || livePending) return;
+    setLivePending(true);
+    setLiveFailed(false);
+    const r = await liveInferTimed<LiveAttention>("/transformer/attention", { text });
+    setLivePending(false);
     if (!r) {
-      setLiveError("即時伺服器沒有回應（句子最多 8 個 token）。預設句子不受影響。");
+      setLiveFailed(true);
       return;
     }
-    setCustomSentence(r);
-    setSentenceId(r.sentenceId);
+    setCustomSentence(r.data);
+    setLiveMs(r.ms);
+    setLiveShown(true);
+    setSentenceId(r.data.sentenceId);
     setFocus(null);
   };
 
@@ -148,14 +188,49 @@ export function TransformerStation() {
     () => sentences.find((s) => s.sentenceId === sentenceId) ?? null,
     [sentences, sentenceId],
   );
+  const showingLive = Boolean(sentence?.sentenceId.startsWith("live-"));
 
-  // A new sentence has different tokens — restart the walkthrough on it.
+  const liveState = useMemo<LiveState>(() => {
+    if (livePending) return { kind: "pending" };
+    if (liveFailed) return { kind: "cached" };
+    if (liveShown && showingLive) return { kind: "live", ms: liveMs };
+    return { kind: "idle" };
+  }, [livePending, liveFailed, liveShown, showingLive, liveMs]);
+
+  // A new sentence has different tokens — reset the hover.
   useEffect(() => {
+    setFocus(null);
+  }, [sentenceId]);
+
+  // 3. DERIVED — 真實模型: the picked (layer, head) matrix, indices clamped so
+  //    a stale slider position is safe.
+  const nLayers = data?.nLayers ?? 1;
+  const nHeads = data?.nHeads ?? 1;
+
+  const weights = useMemo<number[][]>(() => {
+    if (!sentence) return [];
+    const l = Math.min(layer, sentence.layers.length - 1);
+    const heads = sentence.layers[l]?.heads ?? [];
+    const h = Math.min(head, heads.length - 1);
+    return heads[h] ?? [];
+  }, [sentence, layer, head]);
+
+  const displayTokens = useMemo(
+    () => (sentence ? sentence.tokens.map(displayToken) : []),
+    [sentence],
+  );
+
+  // 3b. DERIVED — 機制示意: light arithmetic on the tiny hand-designed
+  //     vectors (dim-6 dot products + a softmax over ≤6 scores). Playback of a
+  //     schematic, not a model forward pass.
+  const schematic = data?.schematic ?? null;
+
+  useEffect(() => {
+    // entering/leaving schematic mode restarts the walkthrough
     setQuery(0);
     setStep(0);
     setPlaying(false);
-    setFocus(null);
-  }, [sentenceId]);
+  }, [mode]);
 
   // Auto-play: advance one phase per beat, stop on the last one.
   useEffect(() => {
@@ -168,57 +243,41 @@ export function TransformerStation() {
     return () => clearTimeout(id);
   }, [playing, step]);
 
-  // 3. DERIVED CANVAS DATA — pure functions of (data, sentence, layer, head,
-  //    query, step). Clamp indices so a stale layer/head/query is safe.
-  const weights = useMemo<number[][]>(() => {
-    if (!sentence) return [];
-    const l = Math.min(layer, sentence.layers.length - 1);
-    const heads = sentence.layers[l]?.heads ?? [];
-    const h = Math.min(head, heads.length - 1);
-    return heads[h] ?? [];
-  }, [sentence, layer, head]);
-
-  // The mechanism math: light in-browser arithmetic on the precomputed vectors
-  // (8-dim dot products + a softmax over ≤6 scores) — allowed playback, and it
-  // rebuilds the SAME weights as the shipped matrix (the factorisation
-  // guarantees it), so mechanism and result provably agree.
   const mech = useMemo(() => {
-    if (!sentence || !data) return null;
-    const l = Math.min(layer, sentence.layers.length - 1);
-    const qkvHeads = sentence.layers[l]?.qkv;
-    if (!qkvHeads) return null; // stale artifact without qkv
-    const h = Math.min(head, qkvHeads.length - 1);
-    const qkv = qkvHeads[h];
-    if (!qkv) return null;
-    const qi = Math.min(query, sentence.tokens.length - 1);
-    const dim = data.qkvDim || qkv.q[0]?.length || 8;
+    if (!schematic) return null;
+    const qi = Math.min(query, schematic.tokens.length - 1);
+    const dim = schematic.dim;
 
-    const qRow = qkv.q[qi] ?? [];
-    const dots = qkv.k.map((kRow) => dot(qRow, kRow));
+    const qRow = schematic.q[qi] ?? [];
+    const dots = schematic.k.map((kRow) => dot(qRow, kRow));
     const scale = Math.sqrt(dim);
     const scores = dots.map((d) => d / scale);
-    const maxScore = Math.max(...scores);
-    const exps = scores.map((s) => Math.exp(s - maxScore));
-    const expSum = exps.reduce((a, b) => a + b, 0) || 1;
-    const w = exps.map((e) => e / expSum);
+    const w = softmax(scores);
     const argmax = w.indexOf(Math.max(...w));
     const output = Array.from({ length: dim }, (_, d) =>
-      w.reduce((acc, wj, j) => acc + wj * (qkv.v[j]?.[d] ?? 0), 0),
+      w.reduce((acc, wj, j) => acc + wj * (schematic.v[j]?.[d] ?? 0), 0),
+    );
+
+    // The full schematic attention matrix (all queries) for the payoff view.
+    const matrix = schematic.q.map((qr) =>
+      softmax(schematic.k.map((kr) => dot(qr, kr) / scale)),
     );
 
     // Shared color domains so strips read on one scale per family.
     const qkMax = Math.max(
       ...qRow.map(Math.abs),
-      ...qkv.k.flat().map(Math.abs),
+      ...schematic.k.flat().map(Math.abs),
       1e-9,
     );
-    const vMax = Math.max(...qkv.v.flat().map(Math.abs), ...output.map(Math.abs), 1e-9);
-    const dotMax = Math.max(...dots.map(Math.abs), 1e-9);
+    const vMax = Math.max(
+      ...schematic.v.flat().map(Math.abs),
+      ...output.map(Math.abs),
+      1e-9,
+    );
 
-    return { qi, dim, scale, qRow, k: qkv.k, v: qkv.v, dots, scores, w, argmax, output, qkMax, vMax, dotMax };
-  }, [sentence, data, layer, head, query]);
+    return { qi, dim, scale, qRow, k: schematic.k, v: schematic.v, dots, scores, w, argmax, output, qkMax, vMax, matrix };
+  }, [schematic, query]);
 
-  const headLabel = data?.headLabels[head] ?? "";
   const activeStep = STEPS[Math.min(step, LAST_STEP)]!;
   const fadeCls = reducedMotion ? "" : "transition-opacity duration-500";
 
@@ -232,94 +291,87 @@ export function TransformerStation() {
   return (
     <StationLayout
       title="Transformer"
-      subtitle="如果每個 token 都能直接看到所有其他 token 呢?一步一步拆開 self-attention 的機制。"
+      subtitle="如果每個 token 都能直接看到所有其他 token 呢？看真實模型的 attention 分工。"
       controls={
         <>
-          <SegmentedControl<View>
-            label="檢視"
-            value={view}
-            onChange={setView}
+          <SegmentedControl<Mode>
+            label="模式"
+            value={mode}
+            onChange={setMode}
             options={[
-              { label: "逐步機制", value: "walk" },
-              { label: "注意力總覽", value: "lines" },
+              { label: "真實模型", value: "real" },
+              { label: "機制示意", value: "schematic" },
             ]}
           />
 
-          {data ? (
-            <SegmentedControl
-              label="句子"
-              value={sentenceId ?? ""}
-              onChange={(v) => {
-                setSentenceId(v);
-                setFocus(null);
-              }}
-              options={sentences.map((s) => ({
-                // Short label (first…last word) so three buttons don't overflow
-                // the sidebar; the full sentence is visible on the canvas.
-                label: s.sentenceId.startsWith("live-")
-                  ? "自訂句子"
-                  : s.tokens.length > 2
-                    ? `${s.tokens[0]}…${s.tokens[s.tokens.length - 1]}`
-                    : s.tokens.join(" "),
-                value: s.sentenceId,
-              }))}
-            />
-          ) : null}
-
-          {liveInferenceEnabled() && data ? (
-            <label className="flex flex-col gap-1.5">
-              <span className="font-mono text-xs text-muted">
-                自己打一句（最多 8 個 token，即時算 attention）
-              </span>
-              <input
-                type="text"
-                value={customText}
-                onChange={(e) => setCustomText(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") void submitCustom();
-                }}
-                placeholder="例如 the dog chased the red ball"
-                className="rounded-md border border-border bg-panel px-3 py-2 text-sm text-fg placeholder:text-muted focus:border-accent focus:outline-none"
+          {mode === "real" && data ? (
+            <>
+              <SegmentedControl
+                label="句子"
+                value={sentenceId ?? ""}
+                onChange={(v) => setSentenceId(v)}
+                options={sentences.map((s) => ({
+                  label: sentenceLabel(s),
+                  value: s.sentenceId,
+                }))}
               />
-              <button
-                type="button"
-                onClick={() => void submitCustom()}
-                disabled={liveBusy || !customText.trim()}
-                className="rounded-md border border-border bg-panel px-3 py-1.5 text-sm text-fg transition-colors hover:border-accent disabled:opacity-40"
-              >
-                {liveBusy ? "計算中…" : "算 attention"}
-              </button>
-              {liveError ? (
-                <span className="font-mono text-xs text-warning">{liveError}</span>
-              ) : null}
-            </label>
+
+              <label className="flex flex-col gap-1.5">
+                <span className="font-mono text-xs text-muted">
+                  自己打一句（GPU 即時算 attention，最多約 24 個 token）
+                </span>
+                <input
+                  type="text"
+                  value={customText}
+                  onChange={(e) => setCustomText(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") void submitCustom();
+                  }}
+                  placeholder="例如 小貓在廚房偷吃魚"
+                  className="rounded-md border border-border bg-panel px-3 py-2 text-sm text-fg placeholder:text-muted focus:border-accent focus:outline-none"
+                />
+                <button
+                  type="button"
+                  onClick={() => void submitCustom()}
+                  disabled={livePending || !customText.trim()}
+                  className="rounded-md border border-border bg-panel px-3 py-1.5 text-sm text-fg transition-colors hover:border-accent disabled:opacity-40"
+                >
+                  {livePending ? "計算中…" : "算 attention"}
+                </button>
+                <LiveStatus state={liveState} />
+              </label>
+
+              <LabeledSlider
+                label="Layer"
+                min={0}
+                max={nLayers - 1}
+                step={1}
+                value={Math.min(layer, nLayers - 1)}
+                onChange={setLayer}
+                format={(v) => `L${v} / L${nLayers - 1}`}
+              />
+              <LabeledSlider
+                label="Head"
+                min={0}
+                max={nHeads - 1}
+                step={1}
+                value={Math.min(head, nHeads - 1)}
+                onChange={setHead}
+                format={(v) => `H${v} / H${nHeads - 1}`}
+              />
+
+              <div className="rounded-md border border-border/60 bg-panel p-3 text-xs text-muted">
+                hover 任一個 token，亮起
+                <span className="text-accent">它注意的對象</span>。拖動{" "}
+                <span className="font-mono uppercase tracking-wide">layer</span> 和{" "}
+                <span className="font-mono uppercase tracking-wide">head</span>
+                ，同一句話會長出完全不同的注意力模式——這些全是真實權重，
+                不是示意圖。
+              </div>
+            </>
           ) : null}
 
-          {data ? (
-            <SegmentedControl
-              label="Layer"
-              value={String(layer)}
-              onChange={(v) => setLayer(Number(v))}
-              options={Array.from({ length: data.layers }, (_, i) => ({
-                label: `L${i}`,
-                value: String(i),
-              }))}
-            />
-          ) : null}
-
-          {data ? (
-            <SegmentedControl
-              label="Head"
-              value={String(head)}
-              onChange={(v) => setHead(Number(v))}
-              options={data.headLabels.map((label, i) => ({
-                label: `${i} · ${label}`,
-                value: String(i),
-              }))}
-            />
-          ) : null}
-
-          {view === "walk" && data ? (
+          {mode === "schematic" && schematic ? (
             <>
               <div>
                 <SegmentedControl
@@ -369,102 +421,93 @@ export function TransformerStation() {
               />
 
               <div className="rounded-md border border-border/60 bg-panel p-3 text-xs text-muted">
-                點一個 token 當 <span className="text-accent">query</span>
-                ,再逐步前進:看它的 Q 怎麼和每個 K 內積、softmax 成
-                weights、最後加權 V。切換{" "}
-                <span className="font-mono uppercase tracking-wide">layer</span> 和{" "}
-                <span className="font-mono uppercase tracking-wide">head</span>
-                ,同一套機制會長出不同的注意力模式。
+                這是<span className="text-accent">手工設計的小例子</span>（d ={" "}
+                {schematic.dim}），不是左邊的真實模型——Qwen 的向量有 1024 維，
+                畫不進螢幕。但機制一模一樣：點一個 token 當{" "}
+                <span className="text-accent">query</span>
+                ，再逐步前進，看 Q·K 內積 → ÷√d → softmax → 加權 V。
               </div>
             </>
-          ) : null}
-
-          {view === "lines" ? (
-            <div className="rounded-md border border-border/60 bg-panel p-3 text-xs text-muted">
-              hover 任一個 token,亮起
-              <span className="text-accent">它注意的對象</span>。切換{" "}
-              <span className="font-mono uppercase tracking-wide">layer</span> 和{" "}
-              <span className="font-mono uppercase tracking-wide">head</span>
-              ,看 attention 如何分工，每個 head 學到不同的工作。
-            </div>
           ) : null}
         </>
       }
       takeaway={
         <span>
-          attention 不是魔法:Q·K 內積 → ÷√d → softmax → 加權求和 V,四步而已。
+          attention 不是魔法：Q·K 內積 → ÷√d → softmax → 加權求和 V，四步而已。
           每個 token 一跳就能看到整個句子，這就是 Transformer 拆掉 RNN 那道牆的方式。
+          真實模型裡沒有乾淨的「這個 head 做什麼」標籤——28 層 × 16 個 head
+          的分工是訓練自己長出來的，自己去翻。
         </span>
       }
     >
       <div className="flex h-full flex-col gap-5">
         {error ? (
           <p className="text-sm text-warning">
-            載入 attention 資料失敗({error})。請執行{" "}
+            載入 attention 資料失敗（{error}）。請執行{" "}
             <code className="font-mono">uv run camp-precompute transformer</code>。
           </p>
-        ) : !data || !sentence ? (
+        ) : !data ? (
           <p className="text-sm text-muted">attention 資料載入中…</p>
-        ) : view === "lines" ? (
-          /* ---------- 注意力總覽 — the original RESULT view, kept intact. ---------- */
-          <>
-            <div>
-              <div className="mb-1 font-mono text-xs uppercase tracking-wide text-muted">
-                self-attention · layer {layer} · head {head}
-                {headLabel ? (
-                  <span className="text-accent"> · {headLabel}</span>
-                ) : null}
+        ) : mode === "real" ? (
+          /* ---------- 真實模型 — real Qwen attention, hover to read. ---------- */
+          !sentence ? (
+            <p className="text-sm text-muted">attention 資料載入中…</p>
+          ) : (
+            <>
+              <div>
+                <div className="mb-1 font-mono text-xs uppercase tracking-wide text-muted">
+                  {data.model} · self-attention ·{" "}
+                  <span className="text-accent">
+                    L{Math.min(layer, nLayers - 1)} · H{Math.min(head, nHeads - 1)}
+                  </span>
+                </div>
+                <p className="text-sm text-muted">
+                  {focus != null && sentence.tokens[focus] ? (
+                    <>
+                      <span className="font-mono text-accent">
+                        {displayToken(sentence.tokens[focus]!)}
+                      </span>{" "}
+                      最強烈注意的，就是連線最亮的那些 token。
+                    </>
+                  ) : (
+                    <>
+                      hover 下方任一個 token，追蹤它的 attention。連線的透明度與粗細
+                      和 attention weight 成正比。
+                    </>
+                  )}
+                </p>
               </div>
-              <p className="text-sm text-muted">
-                {focus != null && sentence.tokens[focus] ? (
-                  <>
-                    <span className="font-mono text-accent">
-                      {sentence.tokens[focus]}
-                    </span>{" "}
-                    最強烈注意的,就是連線最亮的那些 token。
-                  </>
-                ) : (
-                  <>
-                    hover 下方任一個 token,追蹤它的
-                    attention。每條連線的透明度與粗細都和 attention weight 成正比。
-                  </>
-                )}
+
+              <div className="min-h-0 flex-1 rounded-md border border-border/30 bg-bg">
+                <AttentionLines
+                  tokens={displayTokens}
+                  weights={weights}
+                  focusToken={focus}
+                  onFocusToken={setFocus}
+                  height={280}
+                />
+              </div>
+
+              <p className="text-xs text-muted">
+                這些 token 是模型真實的 subword（「␣」表示 token
+                自帶空格）。注意力只指向<span className="font-mono">左邊</span>
+                ——生成模型讀到第 n 個 token 時，右邊的還不存在（causal
+                attention）。很多 head 會把大量權重堆在第一個 token 上（attention
+                sink），也是真實模型的常態。
               </p>
-            </div>
-
-            <div className="min-h-0 flex-1 rounded-md border border-border/30 bg-bg">
-              <AttentionLines
-                tokens={sentence.tokens}
-                weights={weights}
-                focusToken={focus}
-                onFocusToken={setFocus}
-                height={280}
-              />
-            </div>
-
-            <p className="text-xs text-muted">
-              layer <span className="font-mono">L0</span> 銳利而局部;越深的 layer
-              注意力越發散。head <span className="font-mono">0</span> 貼著鄰近的
-              token、head <span className="font-mono">1</span> 追內容詞、head{" "}
-              <span className="font-mono">2</span> 錨定第一個 token，同一種機制,
-              學出不同的分工。
-            </p>
-          </>
-        ) : !mech ? (
+            </>
+          )
+        ) : !mech || !schematic ? (
           <p className="text-sm text-warning">
-            這份 attention 資料還沒有 Q/K/V 向量。請重新執行{" "}
+            這份 attention 資料還沒有 schematic。請重新執行{" "}
             <code className="font-mono">uv run camp-precompute transformer</code>。
           </p>
         ) : (
-          /* ---------- 逐步機制 — the bbycroft-style walkthrough. ---------- */
+          /* ---------- 機制示意 — the five-step walkthrough (canned). ---------- */
           <>
             <div>
               <div className="mb-1 font-mono text-xs uppercase tracking-wide text-muted">
-                self-attention · layer {layer} · head {head}
-                {headLabel ? (
-                  <span className="text-accent"> · {headLabel}</span>
-                ) : null}
-                {" · d = "}
+                機制示意 · <span className="text-warning">非真實模型</span> · d ={" "}
                 {mech.dim}
               </div>
               {/* Query-token picker — click a token to make it the query. */}
@@ -472,7 +515,7 @@ export function TransformerStation() {
                 <span className="font-mono text-xs uppercase tracking-wide text-muted">
                   query
                 </span>
-                {sentence.tokens.map((tok, i) => (
+                {schematic.tokens.map((tok, i) => (
                   <button
                     key={`pick-${i}`}
                     type="button"
@@ -528,7 +571,7 @@ export function TransformerStation() {
 
                 {/* Q row: the query token's Q vector sits atop the K column. */}
                 <div className="text-right font-mono text-sm text-accent">
-                  {sentence.tokens[mech.qi]}
+                  {schematic.tokens[mech.qi]}
                   <span className="ml-1.5 text-[9px] uppercase tracking-wide opacity-70">
                     Q
                   </span>
@@ -539,7 +582,7 @@ export function TransformerStation() {
                     maxAbs={mech.qkMax}
                     cellSize={14}
                     highlight={step === 0}
-                    ariaLabel={`Q vector of ${sentence.tokens[mech.qi]}`}
+                    ariaLabel={`Q vector of ${schematic.tokens[mech.qi]}`}
                   />
                 </div>
                 <div className="col-span-4 font-mono text-[10px] text-muted">
@@ -550,7 +593,7 @@ export function TransformerStation() {
                 <div className="col-span-6 my-1 border-t border-border/30" />
 
                 {/* One row per key token. */}
-                {sentence.tokens.map((tok, j) => {
+                {schematic.tokens.map((tok, j) => {
                   const isQuery = j === mech.qi;
                   const isArgmax = j === mech.argmax;
                   const wj = mech.w[j] ?? 0;
@@ -591,8 +634,7 @@ export function TransformerStation() {
                         </span>
                       </div>
 
-                      {/* ÷√d scaled score, with a magnitude bar on the SAME
-                          scale as the raw dots so the shrink is visible. */}
+                      {/* ÷√d scaled score */}
                       <div className={`${fadeCls} ${colState(1).cls}`}>
                         <span
                           className={`font-mono text-xs ${
@@ -657,7 +699,7 @@ export function TransformerStation() {
                     maxAbs={mech.vMax}
                     cellSize={14}
                     highlight={step === LAST_STEP}
-                    ariaLabel={`Output vector of ${sentence.tokens[mech.qi]}`}
+                    ariaLabel={`Output vector of ${schematic.tokens[mech.qi]}`}
                   />
                 </div>
               </div>
@@ -673,55 +715,55 @@ export function TransformerStation() {
                 {step === 0 ? (
                   <>
                     <span className="font-mono text-accent">
-                      {sentence.tokens[mech.qi]}
+                      {schematic.tokens[mech.qi]}
                     </span>{" "}
-                    想知道句子裡哪些 token 跟它有關。它拿自己的 Q(query)向量,
-                    和每個 token 的 K(key)向量做內積:對應的格子相乘、加總,
-                    得到一個分數，方向越對齊,分數越大。
+                    想知道句子裡哪些 token 跟它有關。它拿自己的 Q（query）向量，
+                    和每個 token 的 K（key）向量做內積：對應的格子相乘、加總，
+                    得到一個分數，方向越對齊，分數越大。
                   </>
                 ) : step === 1 ? (
                   <>
-                    向量維度 d 越大,內積天生就越大。把每個分數除以 √d(這裡 d ={" "}
-                    {mech.dim},√d ≈ {mech.scale.toFixed(2)})壓回穩定的範圍,
+                    向量維度 d 越大，內積天生就越大。把每個分數除以 √d（這裡 d ={" "}
+                    {mech.dim}，√d ≈ {mech.scale.toFixed(2)}）壓回穩定的範圍，
                     等一下 softmax 才不會一面倒。
                   </>
                 ) : step === 2 ? (
                   <>
-                    對分數做 softmax:取指數、再除以總和,變成一組加起來等於 1 的
+                    對分數做 softmax：取指數、再除以總和，變成一組加起來等於 1 的
                     attention weights，一個真正的機率分布。最大的分數被放大
-                    (softmax 是「柔軟版」的 argmax),但其他 token 仍分到一點權重。
+                    （softmax 是「柔軟版」的 argmax），但其他 token 仍分到一點權重。
                     最亮的那條就是{" "}
                     <span className="font-mono text-accent">
-                      {sentence.tokens[mech.qi]}
+                      {schematic.tokens[mech.qi]}
                     </span>{" "}
                     最關注的 token。
                   </>
                 ) : step === 3 ? (
                   <>
-                    每個 token 還帶著一個 V(value)向量，也就是它要「提供」的內容。
-                    用剛剛的 weights 加權求和:weight 越大的 token,它的 V
-                    貢獻越多(每列的亮度 ∝ weight)。
+                    每個 token 還帶著一個 V（value）向量，也就是它要「提供」的內容。
+                    用剛剛的 weights 加權求和：weight 越大的 token，它的 V
+                    貢獻越多（每列的亮度 ∝ weight）。
                   </>
                 ) : (
                   <>
-                    加權求和的結果,就是{" "}
+                    加權求和的結果，就是{" "}
                     <span className="font-mono text-accent">
-                      {sentence.tokens[mech.qi]}
+                      {schematic.tokens[mech.qi]}
                     </span>{" "}
-                    在這個 head 的輸出向量:它一步就混入了整句話裡它最關注的資訊,
-                    不必像 RNN 一樣把狀態沿著鏈條傳。下面的連線就是這一排
-                    weights，也就是「注意力總覽」檢視裡 hover 看到的結果。
+                    在這個 head 的輸出向量：它一步就混入了整句話裡它最關注的資訊，
+                    不必像 RNN 一樣把狀態沿著鏈條傳。切回「真實模型」，
+                    Qwen 的 28 層 × 16 個 head 做的就是這件事——只是 d 是 1024。
                   </>
                 )}
               </p>
             </div>
 
-            {/* Final phase payoff: the mechanism ties back to the RESULT view. */}
+            {/* Final phase payoff: the mechanism ties back to the lines view. */}
             {step === LAST_STEP ? (
               <div className="rounded-md border border-border/30 bg-bg">
                 <AttentionLines
-                  tokens={sentence.tokens}
-                  weights={weights}
+                  tokens={schematic.tokens}
+                  weights={mech.matrix}
                   focusToken={mech.qi}
                   height={200}
                 />

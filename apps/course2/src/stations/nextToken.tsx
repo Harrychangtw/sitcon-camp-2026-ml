@@ -1,41 +1,51 @@
 /**
  * NEXT TOKEN — station 04 of Course 2.
  *
- * The unifying idea: every language task is just "predict the next token." The
- * student types a prompt and watches a probability distribution over the next
- * token, then reshapes it with temperature and top-k.
+ * The unifying idea: every language task is just "predict the next token."
+ * The student types ANY prompt and watches a REAL next-token distribution —
+ * Qwen3-0.6B computed live on the GPU server — then reshapes it with
+ * temperature and top-k. The tokens are the model's real subword pieces
+ * (a leading space is part of the token — the "␣" mark), which ties straight
+ * back to the tokenizer station.
  *
- * The browser NEVER trains. A precomputed word-level bigram table
- * (public/data/course2/next-token/distributions.json, written by
- * `camp-precompute next-token`) is loaded via @camp/data; the only in-browser
- * math is the light temperature/top-k transform on the exported logits.
+ * The browser NEVER runs the model. Preset prompts are RECORDED Qwen outputs
+ * (distributions.json, written by `camp-precompute next-token` with the same
+ * code + settings the server runs), so offline fallback is honest; the only
+ * in-browser math is the light temperature/top-k transform on the exported
+ * log-probs.
  */
-import { useEffect, useMemo, useState } from "react";
-import { LabeledSlider, SegmentedControl, StationLayout } from "@camp/ui";
+import { useEffect, useMemo, useRef, useState } from "react";
+import {
+  LabeledSlider,
+  LiveStatus,
+  SegmentedControl,
+  StationLayout,
+  type LiveState,
+} from "@camp/ui";
 import { Heatmap } from "@camp/viz";
-import { liveInfer, liveInferenceEnabled, loadJSON } from "@camp/data";
+import { liveInferTimed, loadJSON } from "@camp/data";
 
 interface TokenLogit {
   token: string;
-  /** log(prob) from the precomputed table; softmax(logit/T) recovers probs. */
+  /** log P(token|prompt) from the real model; softmax(logit/T) → probs. */
   logit: number;
 }
 
 /** Response of the live server's POST /next-token/predict — the same entry
- * shape as one context's list in distributions.json. */
+ * shape as one prompt's list in distributions.json. */
 interface LivePredict {
   prompt: string;
-  context: string;
-  contextKnown: boolean;
+  model: string;
   topN: number;
   entries: TokenLogit[];
 }
 
 interface Distributions {
+  model: string;
   topN: number;
   suggestions: string[];
-  fallback: TokenLogit[];
-  bigram: Record<string, TokenLogit[]>;
+  /** Recorded real-model outputs for the preset prompts. */
+  prompts: Record<string, TokenLogit[]>;
 }
 
 type Decoding = "sampling" | "greedy";
@@ -47,10 +57,10 @@ interface Prob {
 
 const DATA_URL = "/data/course2/next-token/distributions.json";
 
-/** Last whitespace/punctuation-delimited word of the prompt, lowercased. */
-function lastToken(prompt: string): string {
-  const words = prompt.toLowerCase().match(/[a-z]+/g);
-  return words && words.length ? words[words.length - 1]! : "";
+/** Make a subword piece visible: leading space → ␣, newline → ⏎. These ARE
+ * part of the token — showing them is the honest move. */
+function displayToken(token: string): string {
+  return token.replace(/^ /, "␣").replace(/\n/g, "⏎");
 }
 
 /** softmax(logit / T) → probabilities. Light, allowed in-browser math. */
@@ -79,8 +89,7 @@ export function NextTokenStation() {
   const [topK, setTopK] = useState(8);
   const [decoding, setDecoding] = useState<Decoding>("sampling");
 
-  // 2. LOAD PRECOMPUTED DATA — via @camp/data inside an effect (the reference
-  //    pattern). No training, no model weights: just the bigram table.
+  // 2. LOAD PRECOMPUTED DATA — recorded real-model outputs for the presets.
   useEffect(() => {
     let alive = true;
     loadJSON<Distributions>(DATA_URL)
@@ -91,44 +100,80 @@ export function NextTokenStation() {
     };
   }, []);
 
-  // LIVE OPT-IN — when VITE_LIVE_INFERENCE_URL is set, every prompt is routed
-  // through the live server (same bigram model, rebuilt from the same code).
-  // On any failure `liveInfer` yields null and the local precomputed table
-  // below answers exactly as before.
-  const [livePred, setLivePred] = useState<LivePredict | null>(null);
+  // A preset prompt already has its recorded distribution — no round-trip.
+  const trimmed = prompt.trim();
+  const presetEntries = dist?.prompts[trimmed] ?? null;
+
+  // ALWAYS-PREDICT — any non-preset prompt goes to the GPU server, which runs
+  // the SAME model that recorded the presets. On any failure `liveInferTimed`
+  // yields null and the station keeps the last good distribution (LiveStatus
+  // says so honestly).
+  const [live, setLive] = useState<LivePredict | null>(null);
+  const [liveMs, setLiveMs] = useState(0);
+  const [livePending, setLivePending] = useState(false);
+  const [liveFailed, setLiveFailed] = useState(false);
 
   useEffect(() => {
-    if (!liveInferenceEnabled()) return;
+    setLive(null);
+    setLiveFailed(false);
+    if (!trimmed || presetEntries) return;
     let alive = true;
+    setLivePending(true);
+    // Debounced: only ask the server once typing pauses.
     const timer = setTimeout(() => {
-      liveInfer<LivePredict>("/next-token/predict", { prompt }).then((r) => {
-        if (alive && r && r.prompt === prompt) setLivePred(r);
-      });
-    }, 300);
+      liveInferTimed<LivePredict>("/next-token/predict", { prompt: trimmed }).then(
+        (r) => {
+          if (!alive) return;
+          setLivePending(false);
+          if (r && r.data.prompt === trimmed) {
+            setLive(r.data);
+            setLiveMs(r.ms);
+          } else {
+            setLiveFailed(true);
+          }
+        },
+      );
+    }, 350);
     return () => {
       alive = false;
       clearTimeout(timer);
+      setLivePending(false);
     };
-  }, [prompt]);
+  }, [trimmed, presetEntries]);
 
-  // 3. DERIVED CANVAS DATA — a pure function of state + loaded data. The live
-  // result (when fresh) and the precomputed table produce the same shape.
-  const { base, contextKnown, context } = useMemo(() => {
-    if (livePred && livePred.prompt === prompt) {
-      return {
-        context: livePred.context,
-        contextKnown: livePred.contextKnown,
-        base: livePred.entries,
-      };
+  const liveHit = live && live.prompt === trimmed ? live : null;
+
+  const liveState = useMemo<LiveState>(() => {
+    if (!trimmed || presetEntries) return { kind: "idle" };
+    if (livePending) return { kind: "pending" };
+    if (liveHit) return { kind: "live", ms: liveMs };
+    if (liveFailed) return { kind: "cached" };
+    return { kind: "idle" };
+  }, [trimmed, presetEntries, livePending, liveHit, liveMs, liveFailed]);
+
+  // 3. DERIVED CANVAS DATA — preset and live answers flow through the SAME
+  //    path. When both are missing (offline, non-preset prompt) the last good
+  //    distribution stays on screen, labelled with the prompt it belongs to.
+  const lastGood = useRef<{ prompt: string; entries: TokenLogit[] } | null>(null);
+
+  const { base, basePrompt } = useMemo(() => {
+    if (presetEntries) {
+      lastGood.current = { prompt: trimmed, entries: presetEntries };
+      return { base: presetEntries, basePrompt: trimmed };
     }
-    const ctx = lastToken(prompt);
-    const table = dist?.bigram[ctx];
-    return {
-      context: ctx,
-      contextKnown: Boolean(table),
-      base: table ?? dist?.fallback ?? [],
-    };
-  }, [dist, prompt, livePred]);
+    if (liveHit) {
+      lastGood.current = { prompt: liveHit.prompt, entries: liveHit.entries };
+      return { base: liveHit.entries, basePrompt: liveHit.prompt };
+    }
+    if (lastGood.current) {
+      return { base: lastGood.current.entries, basePrompt: lastGood.current.prompt };
+    }
+    const first = dist?.suggestions[0];
+    const entries = first ? dist?.prompts[first] ?? [] : [];
+    return { base: entries, basePrompt: first ?? "" };
+  }, [dist, trimmed, presetEntries, liveHit]);
+
+  const stale = basePrompt !== trimmed;
 
   const probs = useMemo<Prob[]>(() => {
     if (base.length === 0) return [];
@@ -147,7 +192,7 @@ export function NextTokenStation() {
   // Heatmap consumes the SAME probabilities as a 1×N row (proves the reused
   // primitive; station 05 feeds it multi-row hidden states).
   const heatMatrix = useMemo(() => [probs.map((p) => p.prob)], [probs]);
-  const heatCols = useMemo(() => probs.map((p) => p.token), [probs]);
+  const heatCols = useMemo(() => probs.map((p) => displayToken(p.token)), [probs]);
 
   return (
     <StationLayout
@@ -156,7 +201,9 @@ export function NextTokenStation() {
       controls={
         <>
           <label className="block">
-            <div className="mb-1 font-mono text-xs text-muted">輸入</div>
+            <div className="mb-1 font-mono text-xs text-muted">
+              輸入（隨便打，GPU 會即時算）
+            </div>
             <input
               type="text"
               value={prompt}
@@ -164,16 +211,8 @@ export function NextTokenStation() {
               placeholder="輸入一段文字…"
               className="w-full rounded-md border border-border bg-panel px-2 py-1.5 text-sm text-fg outline-none placeholder:text-muted focus:border-accent"
             />
-            <div className="mt-1 font-mono text-[10px] uppercase tracking-wide text-muted">
-              context ={" "}
-              {context ? (
-                <span className={contextKnown ? "text-accent" : "text-warning"}>
-                  {context}
-                </span>
-              ) : (
-                <span className="text-warning">∅</span>
-              )}
-              {!contextKnown && context ? " · 未知，改用詞頻" : ""}
+            <div className="mt-1">
+              <LiveStatus state={liveState} />
             </div>
           </label>
 
@@ -227,7 +266,10 @@ export function NextTokenStation() {
       takeaway={
         <span>
           一個訓練好的 next token 預測器，加上一個 temperature 旋鈕，就是完整的
-          生成迴圈。
+          生成迴圈。這裡的每一條長條都是真的：GPU 上的{" "}
+          <span className="font-mono">Qwen3-0.6B</span>{" "}
+          對你打的字算出來的分布。注意它預測的是 token，不是單字——「␣」表示
+          token 自帶空格。
         </span>
       }
     >
@@ -244,12 +286,21 @@ export function NextTokenStation() {
             <div>
               <div className="mb-1 font-mono text-xs uppercase tracking-wide text-muted">
                 P(next token)
+                {stale && basePrompt ? (
+                  <span className="text-warning">
+                    {" "}
+                    · 顯示「{basePrompt}」的結果
+                  </span>
+                ) : null}
               </div>
               <p className="text-sm text-muted">
                 {decoding === "greedy" ? (
                   <>
                     貪婪解碼永遠取 argmax：{" "}
-                    <span className="font-mono text-accent">{argmaxToken}</span>。
+                    <span className="font-mono text-accent">
+                      {argmaxToken ? displayToken(argmaxToken) : ""}
+                    </span>
+                    。
                   </>
                 ) : (
                   <>
@@ -274,7 +325,7 @@ export function NextTokenStation() {
                         isArgmax ? "text-accent" : "text-muted"
                       }`}
                     >
-                      {p.token}
+                      {displayToken(p.token)}
                     </span>
                     <div className="relative h-4 flex-1 overflow-hidden rounded-sm bg-panel">
                       <div

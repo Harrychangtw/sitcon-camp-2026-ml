@@ -1,1307 +1,4408 @@
 {
   "generator": "camp-precompute order-shuffle",
-  "generatedAt": "2026-07-02T09:26:47.184812+00:00",
-  "note": "Bag-of-words is recomputed in-browser: sum `lexicon` over the word multiset (order-invariant) then apply `scoreMapping` (softmax over [-temp\u00b7s, neutralBias, temp\u00b7s]). `arrangements` holds the order-aware model's precomputed prediction for every permutation.",
-  "labels": [
-    "negative",
-    "neutral",
-    "positive"
+  "generatedAt": "2026-07-04T10:20:50.720219+00:00",
+  "station": "order-shuffle",
+  "model": "Qwen/Qwen3-0.6B",
+  "embeddingModel": "Qwen/Qwen3-Embedding-0.6B",
+  "note": "Recorded real-model outputs. `wordVectors` are the leading 24 dims of each word's L2-normalised Qwen3-Embedding vector — the browser mean-pools them (symmetric, provably order-invariant). `arrangements` holds Qwen3-0.6B's sequence log-prob / perplexity for every permutation — the order-sensitive side. Same code + settings as the live server (camp_precompute.qwen).",
+  "fingerprintDims": 24,
+  "logProbDomain": [
+    -11.0,
+    -2.0
   ],
-  "scoreMapping": {
-    "temp": 1.3,
-    "neutralBias": 0.8
-  },
   "sentences": [
     {
-      "sentenceId": "not-bad-just-good",
-      "prompt": "Arrange the words. Does the meaning flip when the order does?",
+      "sentenceId": "cat-chased-mouse",
+      "prompt": "重新排列這些詞——通順度會變，但詞袋指紋動也不動。",
       "words": [
-        "not",
-        "bad",
-        "just",
-        "good"
+        "the",
+        "cat",
+        "chased",
+        "a",
+        "mouse"
       ],
-      "lexicon": {
-        "not": 0.0,
-        "bad": -1.0,
-        "just": 0.0,
-        "good": 1.0
+      "wordVectors": {
+        "the": [
+          -0.0222,
+          -0.0398,
+          -0.0155,
+          -0.0452,
+          0.0097,
+          0.0076,
+          0.0128,
+          0.0396,
+          -0.0454,
+          -0.02,
+          -0.0206,
+          -0.0659,
+          0.1147,
+          -0.0157,
+          -0.0698,
+          0.1187,
+          -0.0413,
+          0.0483,
+          0.1533,
+          -0.0845,
+          0.0034,
+          0.0123,
+          -0.0476,
+          0.1553
+        ],
+        "cat": [
+          0.0137,
+          0.0016,
+          -0.0121,
+          -0.0374,
+          0.0074,
+          0.0177,
+          0.016,
+          0.0742,
+          0.0009,
+          0.0391,
+          -0.0151,
+          -0.0222,
+          0.0908,
+          -0.0122,
+          -0.0574,
+          0.0757,
+          0.0354,
+          0.0811,
+          0.1406,
+          -0.0269,
+          -0.0221,
+          0.0591,
+          -0.014,
+          0.1338
+        ],
+        "chased": [
+          0.0439,
+          -0.0562,
+          -0.0135,
+          -0.0094,
+          0.0149,
+          -0.0913,
+          0.0359,
+          0.0256,
+          0.0212,
+          0.0708,
+          -0.0315,
+          -0.0215,
+          0.0962,
+          -0.0122,
+          -0.0635,
+          0.1152,
+          0.0212,
+          -0.0277,
+          0.1191,
+          0.0383,
+          -0.0217,
+          0.016,
+          -0.0334,
+          0.1045
+        ],
+        "a": [
+          0.0084,
+          -0.0364,
+          -0.0162,
+          -0.0427,
+          0.0233,
+          0.0537,
+          -0.0037,
+          0.0669,
+          0.0084,
+          -0.0008,
+          -0.0255,
+          -0.0276,
+          0.0791,
+          -0.0156,
+          -0.0825,
+          0.0903,
+          -0.0684,
+          0.0559,
+          0.1001,
+          -0.0454,
+          -0.0095,
+          0.024,
+          -0.0422,
+          0.2002
+        ],
+        "mouse": [
+          -0.0119,
+          -0.0566,
+          -0.0128,
+          -0.1328,
+          0.042,
+          0.0015,
+          0.0527,
+          0.0598,
+          -0.011,
+          0.064,
+          -0.0315,
+          -0.0287,
+          0.0933,
+          -0.0117,
+          -0.0601,
+          0.0737,
+          0.0216,
+          0.0231,
+          0.1079,
+          -0.0034,
+          -0.0078,
+          0.0087,
+          -0.0322,
+          0.1416
+        ]
       },
-      "labels": [
-        "negative",
-        "neutral",
-        "positive"
-      ],
       "arrangements": [
         {
           "order": [
             0,
             1,
             2,
-            3
+            3,
+            4
           ],
-          "prediction": {
-            "label": "positive",
-            "score": 0.854,
-            "scores": {
-              "negative": 0.005,
-              "neutral": 0.141,
-              "positive": 0.854
-            }
-          }
+          "avgLogProb": -5.5036,
+          "ppl": 245.57
         },
         {
           "order": [
+            0,
+            1,
+            2,
+            4,
+            3
+          ],
+          "avgLogProb": -8.1775,
+          "ppl": 3559.94
+        },
+        {
+          "order": [
+            0,
+            1,
+            3,
+            2,
+            4
+          ],
+          "avgLogProb": -9.1282,
+          "ppl": 9211.43
+        },
+        {
+          "order": [
+            0,
+            1,
+            3,
+            4,
+            2
+          ],
+          "avgLogProb": -8.5266,
+          "ppl": 5047.26
+        },
+        {
+          "order": [
+            0,
+            1,
+            4,
+            2,
+            3
+          ],
+          "avgLogProb": -8.0471,
+          "ppl": 3124.72
+        },
+        {
+          "order": [
+            0,
+            1,
+            4,
+            3,
+            2
+          ],
+          "avgLogProb": -9.7445,
+          "ppl": 17060.14
+        },
+        {
+          "order": [
+            0,
+            2,
+            1,
+            3,
+            4
+          ],
+          "avgLogProb": -9.6559,
+          "ppl": 15613.64
+        },
+        {
+          "order": [
+            0,
+            2,
+            1,
+            4,
+            3
+          ],
+          "avgLogProb": -10.0619,
+          "ppl": 23432.99
+        },
+        {
+          "order": [
+            0,
+            2,
+            3,
+            1,
+            4
+          ],
+          "avgLogProb": -9.6109,
+          "ppl": 14926.6
+        },
+        {
+          "order": [
+            0,
+            2,
+            3,
+            4,
+            1
+          ],
+          "avgLogProb": -9.5465,
+          "ppl": 13995.62
+        },
+        {
+          "order": [
+            0,
+            2,
+            4,
+            1,
+            3
+          ],
+          "avgLogProb": -9.6973,
+          "ppl": 16273.61
+        },
+        {
+          "order": [
+            0,
+            2,
+            4,
+            3,
+            1
+          ],
+          "avgLogProb": -9.6385,
+          "ppl": 15344.31
+        },
+        {
+          "order": [
+            0,
+            3,
+            1,
+            2,
+            4
+          ],
+          "avgLogProb": -9.271,
+          "ppl": 10625.37
+        },
+        {
+          "order": [
+            0,
+            3,
+            1,
+            4,
+            2
+          ],
+          "avgLogProb": -9.9059,
+          "ppl": 20048.31
+        },
+        {
+          "order": [
+            0,
+            3,
+            2,
+            1,
+            4
+          ],
+          "avgLogProb": -10.8432,
+          "ppl": 51184.91
+        },
+        {
+          "order": [
+            0,
+            3,
+            2,
+            4,
+            1
+          ],
+          "avgLogProb": -11.0266,
+          "ppl": 61488.17
+        },
+        {
+          "order": [
+            0,
+            3,
+            4,
+            1,
+            2
+          ],
+          "avgLogProb": -10.2094,
+          "ppl": 27157.27
+        },
+        {
+          "order": [
+            0,
+            3,
+            4,
+            2,
+            1
+          ],
+          "avgLogProb": -10.4217,
+          "ppl": 33580.47
+        },
+        {
+          "order": [
+            0,
+            4,
+            1,
+            2,
+            3
+          ],
+          "avgLogProb": -8.2555,
+          "ppl": 3848.74
+        },
+        {
+          "order": [
+            0,
+            4,
+            1,
+            3,
+            2
+          ],
+          "avgLogProb": -9.8448,
+          "ppl": 18860.03
+        },
+        {
+          "order": [
+            0,
+            4,
+            2,
+            1,
+            3
+          ],
+          "avgLogProb": -9.5474,
+          "ppl": 14008.23
+        },
+        {
+          "order": [
+            0,
+            4,
+            2,
+            3,
+            1
+          ],
+          "avgLogProb": -7.2683,
+          "ppl": 1434.11
+        },
+        {
+          "order": [
+            0,
+            4,
+            3,
+            1,
+            2
+          ],
+          "avgLogProb": -8.4002,
+          "ppl": 4447.96
+        },
+        {
+          "order": [
+            0,
+            4,
+            3,
+            2,
+            1
+          ],
+          "avgLogProb": -9.4041,
+          "ppl": 12138.04
+        },
+        {
+          "order": [
+            1,
+            0,
+            2,
+            3,
+            4
+          ],
+          "avgLogProb": -9.7062,
+          "ppl": 16419.09
+        },
+        {
+          "order": [
+            1,
+            0,
+            2,
+            4,
+            3
+          ],
+          "avgLogProb": -10.2534,
+          "ppl": 28378.87
+        },
+        {
+          "order": [
+            1,
+            0,
+            3,
+            2,
+            4
+          ],
+          "avgLogProb": -11.0916,
+          "ppl": 65617.65
+        },
+        {
+          "order": [
+            1,
+            0,
+            3,
+            4,
+            2
+          ],
+          "avgLogProb": -9.5107,
+          "ppl": 13503.44
+        },
+        {
+          "order": [
+            1,
+            0,
+            4,
+            2,
+            3
+          ],
+          "avgLogProb": -8.4715,
+          "ppl": 4776.68
+        },
+        {
+          "order": [
+            1,
+            0,
+            4,
+            3,
+            2
+          ],
+          "avgLogProb": -9.8527,
+          "ppl": 19009.61
+        },
+        {
+          "order": [
+            1,
+            2,
+            0,
+            3,
+            4
+          ],
+          "avgLogProb": -9.1167,
+          "ppl": 9106.1
+        },
+        {
+          "order": [
+            1,
+            2,
+            0,
+            4,
+            3
+          ],
+          "avgLogProb": -8.2411,
+          "ppl": 3793.71
+        },
+        {
+          "order": [
+            1,
+            2,
+            3,
+            0,
+            4
+          ],
+          "avgLogProb": -9.0222,
+          "ppl": 8284.98
+        },
+        {
+          "order": [
+            1,
+            2,
+            3,
+            4,
+            0
+          ],
+          "avgLogProb": -8.0631,
+          "ppl": 3175.12
+        },
+        {
+          "order": [
+            1,
+            2,
+            4,
+            0,
+            3
+          ],
+          "avgLogProb": -10.0144,
+          "ppl": 22345.94
+        },
+        {
+          "order": [
+            1,
+            2,
+            4,
+            3,
+            0
+          ],
+          "avgLogProb": -9.8821,
+          "ppl": 19576.79
+        },
+        {
+          "order": [
+            1,
+            3,
+            0,
+            2,
+            4
+          ],
+          "avgLogProb": -10.1505,
+          "ppl": 25603.9
+        },
+        {
+          "order": [
+            1,
+            3,
+            0,
+            4,
+            2
+          ],
+          "avgLogProb": -9.328,
+          "ppl": 11248.61
+        },
+        {
+          "order": [
+            1,
+            3,
+            2,
+            0,
+            4
+          ],
+          "avgLogProb": -8.8603,
+          "ppl": 7046.6
+        },
+        {
+          "order": [
+            1,
+            3,
+            2,
+            4,
+            0
+          ],
+          "avgLogProb": -10.5207,
+          "ppl": 37075.07
+        },
+        {
+          "order": [
+            1,
+            3,
+            4,
+            0,
+            2
+          ],
+          "avgLogProb": -9.9301,
+          "ppl": 20539.39
+        },
+        {
+          "order": [
+            1,
+            3,
+            4,
+            2,
+            0
+          ],
+          "avgLogProb": -9.1635,
+          "ppl": 9542.4
+        },
+        {
+          "order": [
+            1,
+            4,
+            0,
+            2,
+            3
+          ],
+          "avgLogProb": -8.772,
+          "ppl": 6451.06
+        },
+        {
+          "order": [
+            1,
+            4,
+            0,
+            3,
+            2
+          ],
+          "avgLogProb": -10.0642,
+          "ppl": 23486.94
+        },
+        {
+          "order": [
+            1,
+            4,
+            2,
+            0,
+            3
+          ],
+          "avgLogProb": -8.4561,
+          "ppl": 4703.68
+        },
+        {
+          "order": [
+            1,
+            4,
+            2,
+            3,
+            0
+          ],
+          "avgLogProb": -8.4376,
+          "ppl": 4617.46
+        },
+        {
+          "order": [
+            1,
+            4,
+            3,
+            0,
+            2
+          ],
+          "avgLogProb": -9.5737,
+          "ppl": 14381.53
+        },
+        {
+          "order": [
+            1,
+            4,
+            3,
+            2,
+            0
+          ],
+          "avgLogProb": -8.9073,
+          "ppl": 7385.69
+        },
+        {
+          "order": [
+            2,
+            0,
+            1,
+            3,
+            4
+          ],
+          "avgLogProb": -7.2835,
+          "ppl": 1456.08
+        },
+        {
+          "order": [
+            2,
+            0,
+            1,
+            4,
+            3
+          ],
+          "avgLogProb": -7.5427,
+          "ppl": 1886.92
+        },
+        {
+          "order": [
+            2,
+            0,
+            3,
+            1,
+            4
+          ],
+          "avgLogProb": -8.1319,
+          "ppl": 3401.26
+        },
+        {
+          "order": [
+            2,
+            0,
+            3,
+            4,
+            1
+          ],
+          "avgLogProb": -8.1693,
+          "ppl": 3530.87
+        },
+        {
+          "order": [
+            2,
+            0,
+            4,
+            1,
+            3
+          ],
+          "avgLogProb": -8.0461,
+          "ppl": 3121.6
+        },
+        {
+          "order": [
+            2,
+            0,
+            4,
+            3,
+            1
+          ],
+          "avgLogProb": -7.6527,
+          "ppl": 2106.32
+        },
+        {
+          "order": [
+            2,
+            1,
+            0,
+            3,
+            4
+          ],
+          "avgLogProb": -8.8926,
+          "ppl": 7277.92
+        },
+        {
+          "order": [
+            2,
+            1,
+            0,
+            4,
+            3
+          ],
+          "avgLogProb": -8.4947,
+          "ppl": 4888.79
+        },
+        {
+          "order": [
+            2,
+            1,
+            3,
+            0,
+            4
+          ],
+          "avgLogProb": -8.9599,
+          "ppl": 7784.58
+        },
+        {
+          "order": [
+            2,
+            1,
+            3,
+            4,
+            0
+          ],
+          "avgLogProb": -8.6035,
+          "ppl": 5450.7
+        },
+        {
+          "order": [
+            2,
+            1,
+            4,
+            0,
+            3
+          ],
+          "avgLogProb": -9.3795,
+          "ppl": 11843.09
+        },
+        {
+          "order": [
+            2,
+            1,
+            4,
+            3,
+            0
+          ],
+          "avgLogProb": -9.3503,
+          "ppl": 11502.27
+        },
+        {
+          "order": [
+            2,
+            3,
+            0,
+            1,
+            4
+          ],
+          "avgLogProb": -8.1778,
+          "ppl": 3561.01
+        },
+        {
+          "order": [
+            2,
+            3,
+            0,
+            4,
+            1
+          ],
+          "avgLogProb": -8.5304,
+          "ppl": 5066.47
+        },
+        {
+          "order": [
+            2,
+            3,
+            1,
+            0,
+            4
+          ],
+          "avgLogProb": -7.3074,
+          "ppl": 1491.29
+        },
+        {
+          "order": [
+            2,
+            3,
+            1,
+            4,
+            0
+          ],
+          "avgLogProb": -7.847,
+          "ppl": 2558.05
+        },
+        {
+          "order": [
+            2,
+            3,
+            4,
+            0,
+            1
+          ],
+          "avgLogProb": -7.4151,
+          "ppl": 1660.88
+        },
+        {
+          "order": [
+            2,
+            3,
+            4,
+            1,
+            0
+          ],
+          "avgLogProb": -8.0325,
+          "ppl": 3079.43
+        },
+        {
+          "order": [
+            2,
+            4,
+            0,
+            1,
+            3
+          ],
+          "avgLogProb": -8.4922,
+          "ppl": 4876.58
+        },
+        {
+          "order": [
+            2,
+            4,
+            0,
+            3,
+            1
+          ],
+          "avgLogProb": -9.0949,
+          "ppl": 8909.74
+        },
+        {
+          "order": [
+            2,
+            4,
+            1,
+            0,
+            3
+          ],
+          "avgLogProb": -9.6437,
+          "ppl": 15424.31
+        },
+        {
+          "order": [
+            2,
+            4,
+            1,
+            3,
+            0
+          ],
+          "avgLogProb": -9.5399,
+          "ppl": 13903.56
+        },
+        {
+          "order": [
+            2,
+            4,
+            3,
+            0,
+            1
+          ],
+          "avgLogProb": -8.5624,
+          "ppl": 5231.22
+        },
+        {
+          "order": [
+            2,
+            4,
+            3,
+            1,
+            0
+          ],
+          "avgLogProb": -8.6069,
+          "ppl": 5469.27
+        },
+        {
+          "order": [
+            3,
+            0,
+            1,
+            2,
+            4
+          ],
+          "avgLogProb": -9.239,
+          "ppl": 10290.74
+        },
+        {
+          "order": [
+            3,
+            0,
+            1,
+            4,
+            2
+          ],
+          "avgLogProb": -10.0796,
+          "ppl": 23851.44
+        },
+        {
+          "order": [
+            3,
+            0,
+            2,
+            1,
+            4
+          ],
+          "avgLogProb": -11.1013,
+          "ppl": 66257.24
+        },
+        {
+          "order": [
+            3,
+            0,
+            2,
+            4,
+            1
+          ],
+          "avgLogProb": -11.0155,
+          "ppl": 60809.42
+        },
+        {
+          "order": [
+            3,
+            0,
+            4,
+            1,
+            2
+          ],
+          "avgLogProb": -10.3006,
+          "ppl": 29750.46
+        },
+        {
+          "order": [
+            3,
+            0,
+            4,
+            2,
+            1
+          ],
+          "avgLogProb": -10.5411,
+          "ppl": 37839.17
+        },
+        {
+          "order": [
+            3,
+            1,
+            0,
+            2,
+            4
+          ],
+          "avgLogProb": -9.507,
+          "ppl": 13453.57
+        },
+        {
+          "order": [
+            3,
+            1,
+            0,
+            4,
+            2
+          ],
+          "avgLogProb": -8.6883,
+          "ppl": 5933.09
+        },
+        {
+          "order": [
+            3,
+            1,
+            2,
+            0,
+            4
+          ],
+          "avgLogProb": -6.4348,
+          "ppl": 623.16
+        },
+        {
+          "order": [
+            3,
+            1,
+            2,
+            4,
+            0
+          ],
+          "avgLogProb": -8.8215,
+          "ppl": 6778.42
+        },
+        {
+          "order": [
+            3,
+            1,
+            4,
+            0,
+            2
+          ],
+          "avgLogProb": -10.2334,
+          "ppl": 27816.93
+        },
+        {
+          "order": [
+            3,
+            1,
+            4,
+            2,
+            0
+          ],
+          "avgLogProb": -8.8728,
+          "ppl": 7135.23
+        },
+        {
+          "order": [
+            3,
+            2,
+            0,
+            1,
+            4
+          ],
+          "avgLogProb": -8.4463,
+          "ppl": 4657.81
+        },
+        {
+          "order": [
+            3,
+            2,
+            0,
+            4,
+            1
+          ],
+          "avgLogProb": -8.4136,
+          "ppl": 4507.96
+        },
+        {
+          "order": [
+            3,
+            2,
+            1,
+            0,
+            4
+          ],
+          "avgLogProb": -9.7139,
+          "ppl": 16546.01
+        },
+        {
+          "order": [
+            3,
+            2,
+            1,
+            4,
+            0
+          ],
+          "avgLogProb": -10.4894,
+          "ppl": 35932.59
+        },
+        {
+          "order": [
+            3,
+            2,
+            4,
+            0,
+            1
+          ],
+          "avgLogProb": -9.7877,
+          "ppl": 17813.29
+        },
+        {
+          "order": [
+            3,
+            2,
+            4,
+            1,
+            0
+          ],
+          "avgLogProb": -10.3989,
+          "ppl": 32823.5
+        },
+        {
+          "order": [
+            3,
+            4,
+            0,
+            1,
+            2
+          ],
+          "avgLogProb": -8.5707,
+          "ppl": 5274.82
+        },
+        {
+          "order": [
+            3,
+            4,
+            0,
+            2,
+            1
+          ],
+          "avgLogProb": -9.7803,
+          "ppl": 17681.96
+        },
+        {
+          "order": [
+            3,
+            4,
+            1,
+            0,
+            2
+          ],
+          "avgLogProb": -9.9664,
+          "ppl": 21298.67
+        },
+        {
+          "order": [
+            3,
+            4,
+            1,
+            2,
+            0
+          ],
+          "avgLogProb": -8.4641,
+          "ppl": 4741.46
+        },
+        {
+          "order": [
+            3,
+            4,
+            2,
+            0,
+            1
+          ],
+          "avgLogProb": -8.1206,
+          "ppl": 3363.04
+        },
+        {
+          "order": [
+            3,
+            4,
+            2,
+            1,
+            0
+          ],
+          "avgLogProb": -9.7536,
+          "ppl": 17216.1
+        },
+        {
+          "order": [
+            4,
+            0,
+            1,
+            2,
+            3
+          ],
+          "avgLogProb": -8.0915,
+          "ppl": 3266.58
+        },
+        {
+          "order": [
+            4,
             0,
             1,
             3,
             2
           ],
-          "prediction": {
-            "label": "positive",
-            "score": 0.854,
-            "scores": {
-              "negative": 0.005,
-              "neutral": 0.141,
-              "positive": 0.854
-            }
-          }
+          "avgLogProb": -9.3771,
+          "ppl": 11814.7
         },
         {
           "order": [
+            4,
             0,
             2,
             1,
             3
           ],
-          "prediction": {
-            "label": "positive",
-            "score": 0.854,
-            "scores": {
-              "negative": 0.005,
-              "neutral": 0.141,
-              "positive": 0.854
-            }
-          }
+          "avgLogProb": -9.8322,
+          "ppl": 18623.88
         },
         {
           "order": [
+            4,
             0,
             2,
             3,
             1
           ],
-          "prediction": {
-            "label": "negative",
-            "score": 0.854,
-            "scores": {
-              "negative": 0.854,
-              "neutral": 0.141,
-              "positive": 0.005
-            }
-          }
+          "avgLogProb": -8.5292,
+          "ppl": 5060.4
         },
         {
           "order": [
+            4,
             0,
             3,
             1,
             2
           ],
-          "prediction": {
-            "label": "negative",
-            "score": 0.854,
-            "scores": {
-              "negative": 0.854,
-              "neutral": 0.141,
-              "positive": 0.005
-            }
-          }
+          "avgLogProb": -9.2819,
+          "ppl": 10741.82
         },
         {
           "order": [
+            4,
             0,
             3,
             2,
             1
           ],
-          "prediction": {
-            "label": "negative",
-            "score": 0.854,
-            "scores": {
-              "negative": 0.854,
-              "neutral": 0.141,
-              "positive": 0.005
-            }
-          }
+          "avgLogProb": -10.6197,
+          "ppl": 40933.33
         },
         {
           "order": [
+            4,
             1,
             0,
             2,
             3
           ],
-          "prediction": {
-            "label": "negative",
-            "score": 0.854,
-            "scores": {
-              "negative": 0.854,
-              "neutral": 0.141,
-              "positive": 0.005
-            }
-          }
+          "avgLogProb": -8.459,
+          "ppl": 4717.34
         },
         {
           "order": [
+            4,
             1,
             0,
             3,
             2
           ],
-          "prediction": {
-            "label": "negative",
-            "score": 0.854,
-            "scores": {
-              "negative": 0.854,
-              "neutral": 0.141,
-              "positive": 0.005
-            }
-          }
+          "avgLogProb": -9.9685,
+          "ppl": 21343.45
         },
         {
           "order": [
+            4,
             1,
             2,
             0,
             3
           ],
-          "prediction": {
-            "label": "negative",
-            "score": 0.854,
-            "scores": {
-              "negative": 0.854,
-              "neutral": 0.141,
-              "positive": 0.005
-            }
-          }
+          "avgLogProb": -8.1785,
+          "ppl": 3563.51
         },
         {
           "order": [
+            4,
             1,
             2,
             3,
             0
           ],
-          "prediction": {
-            "label": "neutral",
-            "score": 0.527,
-            "scores": {
-              "negative": 0.237,
-              "neutral": 0.527,
-              "positive": 0.237
-            }
-          }
+          "avgLogProb": -8.1787,
+          "ppl": 3564.22
         },
         {
           "order": [
+            4,
             1,
             3,
             0,
             2
           ],
-          "prediction": {
-            "label": "neutral",
-            "score": 0.527,
-            "scores": {
-              "negative": 0.237,
-              "neutral": 0.527,
-              "positive": 0.237
-            }
-          }
+          "avgLogProb": -9.3564,
+          "ppl": 11572.65
         },
         {
           "order": [
+            4,
             1,
             3,
             2,
             0
           ],
-          "prediction": {
-            "label": "neutral",
-            "score": 0.527,
-            "scores": {
-              "negative": 0.237,
-              "neutral": 0.527,
-              "positive": 0.237
-            }
-          }
+          "avgLogProb": -8.4507,
+          "ppl": 4678.35
         },
         {
           "order": [
+            4,
             2,
             0,
             1,
             3
           ],
-          "prediction": {
-            "label": "positive",
-            "score": 0.854,
-            "scores": {
-              "negative": 0.005,
-              "neutral": 0.141,
-              "positive": 0.854
-            }
-          }
+          "avgLogProb": -7.6181,
+          "ppl": 2034.69
         },
         {
           "order": [
+            4,
             2,
             0,
             3,
             1
           ],
-          "prediction": {
-            "label": "negative",
-            "score": 0.854,
-            "scores": {
-              "negative": 0.854,
-              "neutral": 0.141,
-              "positive": 0.005
-            }
-          }
+          "avgLogProb": -8.1343,
+          "ppl": 3409.43
         },
         {
           "order": [
+            4,
             2,
             1,
             0,
             3
           ],
-          "prediction": {
-            "label": "negative",
-            "score": 0.854,
-            "scores": {
-              "negative": 0.854,
-              "neutral": 0.141,
-              "positive": 0.005
-            }
-          }
+          "avgLogProb": -9.1459,
+          "ppl": 9375.92
         },
         {
           "order": [
+            4,
             2,
             1,
             3,
             0
           ],
-          "prediction": {
-            "label": "neutral",
-            "score": 0.527,
-            "scores": {
-              "negative": 0.237,
-              "neutral": 0.527,
-              "positive": 0.237
-            }
-          }
+          "avgLogProb": -9.2858,
+          "ppl": 10783.8
         },
         {
           "order": [
+            4,
             2,
             3,
             0,
             1
           ],
-          "prediction": {
-            "label": "positive",
-            "score": 0.854,
-            "scores": {
-              "negative": 0.005,
-              "neutral": 0.141,
-              "positive": 0.854
-            }
-          }
+          "avgLogProb": -8.2522,
+          "ppl": 3836.06
         },
         {
           "order": [
+            4,
             2,
             3,
             1,
             0
           ],
-          "prediction": {
-            "label": "neutral",
-            "score": 0.527,
-            "scores": {
-              "negative": 0.237,
-              "neutral": 0.527,
-              "positive": 0.237
-            }
-          }
+          "avgLogProb": -7.8941,
+          "ppl": 2681.42
         },
         {
           "order": [
+            4,
             3,
             0,
             1,
             2
           ],
-          "prediction": {
-            "label": "positive",
-            "score": 0.854,
-            "scores": {
-              "negative": 0.005,
-              "neutral": 0.141,
-              "positive": 0.854
-            }
-          }
+          "avgLogProb": -8.5811,
+          "ppl": 5329.97
         },
         {
           "order": [
+            4,
             3,
             0,
             2,
             1
           ],
-          "prediction": {
-            "label": "positive",
-            "score": 0.854,
-            "scores": {
-              "negative": 0.005,
-              "neutral": 0.141,
-              "positive": 0.854
-            }
-          }
+          "avgLogProb": -9.8072,
+          "ppl": 18164.06
         },
         {
           "order": [
+            4,
             3,
             1,
             0,
             2
           ],
-          "prediction": {
-            "label": "neutral",
-            "score": 0.527,
-            "scores": {
-              "negative": 0.237,
-              "neutral": 0.527,
-              "positive": 0.237
-            }
-          }
+          "avgLogProb": -9.1377,
+          "ppl": 9299.35
         },
         {
           "order": [
+            4,
             3,
             1,
             2,
             0
           ],
-          "prediction": {
-            "label": "neutral",
-            "score": 0.527,
-            "scores": {
-              "negative": 0.237,
-              "neutral": 0.527,
-              "positive": 0.237
-            }
-          }
+          "avgLogProb": -7.9011,
+          "ppl": 2700.25
         },
         {
           "order": [
+            4,
             3,
             2,
             0,
             1
           ],
-          "prediction": {
-            "label": "positive",
-            "score": 0.854,
-            "scores": {
-              "negative": 0.005,
-              "neutral": 0.141,
-              "positive": 0.854
-            }
-          }
+          "avgLogProb": -8.0054,
+          "ppl": 2997.1
         },
         {
           "order": [
+            4,
             3,
             2,
             1,
             0
           ],
-          "prediction": {
-            "label": "neutral",
-            "score": 0.527,
-            "scores": {
-              "negative": 0.237,
-              "neutral": 0.527,
-              "positive": 0.237
-            }
-          }
+          "avgLogProb": -9.7647,
+          "ppl": 17408.26
         }
       ]
     },
     {
-      "sentenceId": "never-awful-always-great",
-      "prompt": "Where you put \u201cnever\u201d decides everything.",
+      "sentenceId": "she-opened-door",
+      "prompt": "哪一種排列讀起來最像人話？",
       "words": [
-        "never",
-        "awful",
-        "always",
-        "great"
+        "she",
+        "quietly",
+        "opened",
+        "the",
+        "door"
       ],
-      "lexicon": {
-        "never": 0.0,
-        "awful": -1.0,
-        "always": 0.0,
-        "great": 1.0
+      "wordVectors": {
+        "she": [
+          -0.0016,
+          0.0119,
+          -0.0113,
+          0.0104,
+          -0.0287,
+          -0.0167,
+          -0.0045,
+          0.0226,
+          -0.0157,
+          0.007,
+          -0.0219,
+          -0.0186,
+          0.1436,
+          -0.0122,
+          -0.0615,
+          0.0349,
+          -0.0192,
+          0.0623,
+          0.166,
+          -0.0598,
+          -0.0156,
+          -0.032,
+          -0.0562,
+          0.1123
+        ],
+        "quietly": [
+          -0.0226,
+          -0.0679,
+          -0.0115,
+          -0.0184,
+          0.0099,
+          0.0022,
+          0.0275,
+          0.0432,
+          -0.0457,
+          0.0116,
+          -0.0405,
+          -0.0156,
+          0.0518,
+          -0.0131,
+          -0.0542,
+          0.0542,
+          0.032,
+          0.0216,
+          0.1416,
+          -0.0378,
+          -0.0005,
+          0.0266,
+          -0.0986,
+          0.1387
+        ],
+        "opened": [
+          -0.0031,
+          -0.0444,
+          -0.0143,
+          -0.0781,
+          0.0376,
+          -0.0084,
+          0.0109,
+          0.0505,
+          -0.01,
+          0.0466,
+          -0.0586,
+          -0.0215,
+          0.084,
+          -0.0141,
+          -0.0669,
+          0.0767,
+          -0.0581,
+          0.0432,
+          0.1206,
+          -0.0134,
+          -0.0002,
+          0.0014,
+          -0.0374,
+          0.1318
+        ],
+        "the": [
+          -0.0222,
+          -0.0398,
+          -0.0155,
+          -0.0452,
+          0.0097,
+          0.0076,
+          0.0128,
+          0.0396,
+          -0.0454,
+          -0.02,
+          -0.0206,
+          -0.0659,
+          0.1147,
+          -0.0157,
+          -0.0698,
+          0.1187,
+          -0.0413,
+          0.0483,
+          0.1533,
+          -0.0845,
+          0.0034,
+          0.0123,
+          -0.0476,
+          0.1553
+        ],
+        "door": [
+          -0.0149,
+          -0.019,
+          -0.0114,
+          -0.0854,
+          -0.0045,
+          0.0014,
+          0.0583,
+          0.0051,
+          -0.0131,
+          0.0464,
+          -0.052,
+          -0.0179,
+          0.1094,
+          -0.011,
+          -0.0396,
+          0.1064,
+          0.0216,
+          0.0309,
+          0.1187,
+          0.0149,
+          0.0031,
+          -0.0136,
+          -0.0483,
+          0.0908
+        ]
       },
-      "labels": [
-        "negative",
-        "neutral",
-        "positive"
-      ],
       "arrangements": [
         {
           "order": [
             0,
             1,
             2,
-            3
+            3,
+            4
           ],
-          "prediction": {
-            "label": "positive",
-            "score": 0.919,
-            "scores": {
-              "negative": 0.001,
-              "neutral": 0.079,
-              "positive": 0.919
-            }
-          }
+          "avgLogProb": -5.9197,
+          "ppl": 372.3
         },
         {
           "order": [
+            0,
+            1,
+            2,
+            4,
+            3
+          ],
+          "avgLogProb": -8.7663,
+          "ppl": 6414.4
+        },
+        {
+          "order": [
+            0,
+            1,
+            3,
+            2,
+            4
+          ],
+          "avgLogProb": -8.9927,
+          "ppl": 8044.15
+        },
+        {
+          "order": [
+            0,
+            1,
+            3,
+            4,
+            2
+          ],
+          "avgLogProb": -8.5008,
+          "ppl": 4918.7
+        },
+        {
+          "order": [
+            0,
+            1,
+            4,
+            2,
+            3
+          ],
+          "avgLogProb": -8.7722,
+          "ppl": 6452.35
+        },
+        {
+          "order": [
+            0,
+            1,
+            4,
+            3,
+            2
+          ],
+          "avgLogProb": -10.4438,
+          "ppl": 34330.86
+        },
+        {
+          "order": [
+            0,
+            2,
+            1,
+            3,
+            4
+          ],
+          "avgLogProb": -7.4609,
+          "ppl": 1738.71
+        },
+        {
+          "order": [
+            0,
+            2,
+            1,
+            4,
+            3
+          ],
+          "avgLogProb": -9.6668,
+          "ppl": 15784.76
+        },
+        {
+          "order": [
+            0,
+            2,
+            3,
+            1,
+            4
+          ],
+          "avgLogProb": -8.9525,
+          "ppl": 7727.19
+        },
+        {
+          "order": [
+            0,
+            2,
+            3,
+            4,
+            1
+          ],
+          "avgLogProb": -5.8926,
+          "ppl": 362.35
+        },
+        {
+          "order": [
+            0,
+            2,
+            4,
+            1,
+            3
+          ],
+          "avgLogProb": -8.5486,
+          "ppl": 5159.53
+        },
+        {
+          "order": [
+            0,
+            2,
+            4,
+            3,
+            1
+          ],
+          "avgLogProb": -9.8185,
+          "ppl": 18370.47
+        },
+        {
+          "order": [
+            0,
+            3,
+            1,
+            2,
+            4
+          ],
+          "avgLogProb": -9.518,
+          "ppl": 13602.38
+        },
+        {
+          "order": [
+            0,
+            3,
+            1,
+            4,
+            2
+          ],
+          "avgLogProb": -10.6794,
+          "ppl": 43451.47
+        },
+        {
+          "order": [
+            0,
+            3,
+            2,
+            1,
+            4
+          ],
+          "avgLogProb": -10.3009,
+          "ppl": 29759.39
+        },
+        {
+          "order": [
+            0,
+            3,
+            2,
+            4,
+            1
+          ],
+          "avgLogProb": -9.5455,
+          "ppl": 13981.64
+        },
+        {
+          "order": [
+            0,
+            3,
+            4,
+            1,
+            2
+          ],
+          "avgLogProb": -8.0629,
+          "ppl": 3174.48
+        },
+        {
+          "order": [
+            0,
+            3,
+            4,
+            2,
+            1
+          ],
+          "avgLogProb": -7.5469,
+          "ppl": 1894.86
+        },
+        {
+          "order": [
+            0,
+            4,
+            1,
+            2,
+            3
+          ],
+          "avgLogProb": -7.0723,
+          "ppl": 1178.86
+        },
+        {
+          "order": [
+            0,
+            4,
+            1,
+            3,
+            2
+          ],
+          "avgLogProb": -8.9814,
+          "ppl": 7953.76
+        },
+        {
+          "order": [
+            0,
+            4,
+            2,
+            1,
+            3
+          ],
+          "avgLogProb": -7.378,
+          "ppl": 1600.39
+        },
+        {
+          "order": [
+            0,
+            4,
+            2,
+            3,
+            1
+          ],
+          "avgLogProb": -8.9266,
+          "ppl": 7529.62
+        },
+        {
+          "order": [
+            0,
+            4,
+            3,
+            1,
+            2
+          ],
+          "avgLogProb": -9.8205,
+          "ppl": 18407.25
+        },
+        {
+          "order": [
+            0,
+            4,
+            3,
+            2,
+            1
+          ],
+          "avgLogProb": -9.206,
+          "ppl": 9956.69
+        },
+        {
+          "order": [
+            1,
+            0,
+            2,
+            3,
+            4
+          ],
+          "avgLogProb": -4.2172,
+          "ppl": 67.84
+        },
+        {
+          "order": [
+            1,
+            0,
+            2,
+            4,
+            3
+          ],
+          "avgLogProb": -6.4072,
+          "ppl": 606.19
+        },
+        {
+          "order": [
+            1,
+            0,
+            3,
+            2,
+            4
+          ],
+          "avgLogProb": -6.8215,
+          "ppl": 917.36
+        },
+        {
+          "order": [
+            1,
+            0,
+            3,
+            4,
+            2
+          ],
+          "avgLogProb": -6.1394,
+          "ppl": 463.78
+        },
+        {
+          "order": [
+            1,
+            0,
+            4,
+            2,
+            3
+          ],
+          "avgLogProb": -6.559,
+          "ppl": 705.57
+        },
+        {
+          "order": [
+            1,
+            0,
+            4,
+            3,
+            2
+          ],
+          "avgLogProb": -7.995,
+          "ppl": 2966.09
+        },
+        {
+          "order": [
+            1,
+            2,
+            0,
+            3,
+            4
+          ],
+          "avgLogProb": -6.4573,
+          "ppl": 637.34
+        },
+        {
+          "order": [
+            1,
+            2,
+            0,
+            4,
+            3
+          ],
+          "avgLogProb": -7.5101,
+          "ppl": 1826.4
+        },
+        {
+          "order": [
+            1,
+            2,
+            3,
+            0,
+            4
+          ],
+          "avgLogProb": -7.57,
+          "ppl": 1939.14
+        },
+        {
+          "order": [
+            1,
+            2,
+            3,
+            4,
+            0
+          ],
+          "avgLogProb": -4.9847,
+          "ppl": 146.16
+        },
+        {
+          "order": [
+            1,
+            2,
+            4,
+            0,
+            3
+          ],
+          "avgLogProb": -6.8906,
+          "ppl": 982.99
+        },
+        {
+          "order": [
+            1,
+            2,
+            4,
+            3,
+            0
+          ],
+          "avgLogProb": -6.9134,
+          "ppl": 1005.66
+        },
+        {
+          "order": [
+            1,
+            3,
+            0,
+            2,
+            4
+          ],
+          "avgLogProb": -6.8961,
+          "ppl": 988.41
+        },
+        {
+          "order": [
+            1,
+            3,
+            0,
+            4,
+            2
+          ],
+          "avgLogProb": -7.057,
+          "ppl": 1160.96
+        },
+        {
+          "order": [
+            1,
+            3,
+            2,
+            0,
+            4
+          ],
+          "avgLogProb": -7.6161,
+          "ppl": 2030.63
+        },
+        {
+          "order": [
+            1,
+            3,
+            2,
+            4,
+            0
+          ],
+          "avgLogProb": -6.507,
+          "ppl": 669.81
+        },
+        {
+          "order": [
+            1,
+            3,
+            4,
+            0,
+            2
+          ],
+          "avgLogProb": -5.4601,
+          "ppl": 235.12
+        },
+        {
+          "order": [
+            1,
+            3,
+            4,
+            2,
+            0
+          ],
+          "avgLogProb": -6.233,
+          "ppl": 509.28
+        },
+        {
+          "order": [
+            1,
+            4,
+            0,
+            2,
+            3
+          ],
+          "avgLogProb": -6.3282,
+          "ppl": 560.15
+        },
+        {
+          "order": [
+            1,
+            4,
+            0,
+            3,
+            2
+          ],
+          "avgLogProb": -7.7295,
+          "ppl": 2274.46
+        },
+        {
+          "order": [
+            1,
+            4,
+            2,
+            0,
+            3
+          ],
+          "avgLogProb": -7.3862,
+          "ppl": 1613.56
+        },
+        {
+          "order": [
+            1,
+            4,
+            2,
+            3,
+            0
+          ],
+          "avgLogProb": -6.9936,
+          "ppl": 1089.64
+        },
+        {
+          "order": [
+            1,
+            4,
+            3,
+            0,
+            2
+          ],
+          "avgLogProb": -7.6964,
+          "ppl": 2200.41
+        },
+        {
+          "order": [
+            1,
+            4,
+            3,
+            2,
+            0
+          ],
+          "avgLogProb": -7.7431,
+          "ppl": 2305.61
+        },
+        {
+          "order": [
+            2,
+            0,
+            1,
+            3,
+            4
+          ],
+          "avgLogProb": -9.601,
+          "ppl": 14779.55
+        },
+        {
+          "order": [
+            2,
+            0,
+            1,
+            4,
+            3
+          ],
+          "avgLogProb": -10.6482,
+          "ppl": 42116.72
+        },
+        {
+          "order": [
+            2,
+            0,
+            3,
+            1,
+            4
+          ],
+          "avgLogProb": -10.7687,
+          "ppl": 47510.21
+        },
+        {
+          "order": [
+            2,
+            0,
+            3,
+            4,
+            1
+          ],
+          "avgLogProb": -8.1154,
+          "ppl": 3345.6
+        },
+        {
+          "order": [
+            2,
+            0,
+            4,
+            1,
+            3
+          ],
+          "avgLogProb": -9.4259,
+          "ppl": 12405.56
+        },
+        {
+          "order": [
+            2,
+            0,
+            4,
+            3,
+            1
+          ],
+          "avgLogProb": -10.6972,
+          "ppl": 44231.83
+        },
+        {
+          "order": [
+            2,
+            1,
+            0,
+            3,
+            4
+          ],
+          "avgLogProb": -9.3383,
+          "ppl": 11365.07
+        },
+        {
+          "order": [
+            2,
+            1,
+            0,
+            4,
+            3
+          ],
+          "avgLogProb": -10.3058,
+          "ppl": 29905.57
+        },
+        {
+          "order": [
+            2,
+            1,
+            3,
+            0,
+            4
+          ],
+          "avgLogProb": -9.9453,
+          "ppl": 20853.98
+        },
+        {
+          "order": [
+            2,
+            1,
+            3,
+            4,
+            0
+          ],
+          "avgLogProb": -7.6027,
+          "ppl": 2003.6
+        },
+        {
+          "order": [
+            2,
+            1,
+            4,
+            0,
+            3
+          ],
+          "avgLogProb": -9.3193,
+          "ppl": 11151.17
+        },
+        {
+          "order": [
+            2,
+            1,
+            4,
+            3,
+            0
+          ],
+          "avgLogProb": -9.4335,
+          "ppl": 12500.2
+        },
+        {
+          "order": [
+            2,
+            3,
+            0,
+            1,
+            4
+          ],
+          "avgLogProb": -10.6776,
+          "ppl": 43373.33
+        },
+        {
+          "order": [
+            2,
+            3,
+            0,
+            4,
+            1
+          ],
+          "avgLogProb": -9.8605,
+          "ppl": 19158.47
+        },
+        {
+          "order": [
+            2,
+            3,
+            1,
+            0,
+            4
+          ],
+          "avgLogProb": -10.8239,
+          "ppl": 50206.51
+        },
+        {
+          "order": [
+            2,
+            3,
+            1,
+            4,
+            0
+          ],
+          "avgLogProb": -9.4127,
+          "ppl": 12242.88
+        },
+        {
+          "order": [
+            2,
+            3,
+            4,
+            0,
+            1
+          ],
+          "avgLogProb": -7.4717,
+          "ppl": 1757.59
+        },
+        {
+          "order": [
+            2,
+            3,
+            4,
+            1,
+            0
+          ],
+          "avgLogProb": -7.5859,
+          "ppl": 1970.22
+        },
+        {
+          "order": [
+            2,
+            4,
+            0,
+            1,
+            3
+          ],
+          "avgLogProb": -9.6917,
+          "ppl": 16182.73
+        },
+        {
+          "order": [
+            2,
+            4,
+            0,
+            3,
+            1
+          ],
+          "avgLogProb": -10.4317,
+          "ppl": 33917.96
+        },
+        {
+          "order": [
+            2,
+            4,
+            1,
+            0,
+            3
+          ],
+          "avgLogProb": -9.7022,
+          "ppl": 16353.55
+        },
+        {
+          "order": [
+            2,
+            4,
+            1,
+            3,
+            0
+          ],
+          "avgLogProb": -9.6032,
+          "ppl": 14812.1
+        },
+        {
+          "order": [
+            2,
+            4,
+            3,
+            0,
+            1
+          ],
+          "avgLogProb": -9.6106,
+          "ppl": 14922.12
+        },
+        {
+          "order": [
+            2,
+            4,
+            3,
+            1,
+            0
+          ],
+          "avgLogProb": -9.3851,
+          "ppl": 11909.6
+        },
+        {
+          "order": [
+            3,
+            0,
+            1,
+            2,
+            4
+          ],
+          "avgLogProb": -10.3802,
+          "ppl": 32215.4
+        },
+        {
+          "order": [
+            3,
+            0,
+            1,
+            4,
+            2
+          ],
+          "avgLogProb": -11.0862,
+          "ppl": 65264.27
+        },
+        {
+          "order": [
+            3,
+            0,
+            2,
+            1,
+            4
+          ],
+          "avgLogProb": -11.3542,
+          "ppl": 85323.06
+        },
+        {
+          "order": [
+            3,
+            0,
+            2,
+            4,
+            1
+          ],
+          "avgLogProb": -9.9789,
+          "ppl": 21566.58
+        },
+        {
+          "order": [
+            3,
+            0,
+            4,
+            1,
+            2
+          ],
+          "avgLogProb": -11.2548,
+          "ppl": 77249.83
+        },
+        {
+          "order": [
+            3,
+            0,
+            4,
+            2,
+            1
+          ],
+          "avgLogProb": -10.647,
+          "ppl": 42066.21
+        },
+        {
+          "order": [
+            3,
+            1,
+            0,
+            2,
+            4
+          ],
+          "avgLogProb": -9.5168,
+          "ppl": 13586.07
+        },
+        {
+          "order": [
+            3,
+            1,
+            0,
+            4,
+            2
+          ],
+          "avgLogProb": -10.3432,
+          "ppl": 31045.22
+        },
+        {
+          "order": [
+            3,
+            1,
+            2,
+            0,
+            4
+          ],
+          "avgLogProb": -11.4559,
+          "ppl": 94457.0
+        },
+        {
+          "order": [
+            3,
+            1,
+            2,
+            4,
+            0
+          ],
+          "avgLogProb": -8.9255,
+          "ppl": 7521.34
+        },
+        {
+          "order": [
+            3,
+            1,
+            4,
+            0,
+            2
+          ],
+          "avgLogProb": -9.9175,
+          "ppl": 20282.22
+        },
+        {
+          "order": [
+            3,
+            1,
+            4,
+            2,
+            0
+          ],
+          "avgLogProb": -10.6387,
+          "ppl": 41718.5
+        },
+        {
+          "order": [
+            3,
+            2,
+            0,
+            1,
+            4
+          ],
+          "avgLogProb": -11.5648,
+          "ppl": 105324.36
+        },
+        {
+          "order": [
+            3,
+            2,
+            0,
+            4,
+            1
+          ],
+          "avgLogProb": -11.3361,
+          "ppl": 83792.6
+        },
+        {
+          "order": [
+            3,
+            2,
+            1,
+            0,
+            4
+          ],
+          "avgLogProb": -11.5974,
+          "ppl": 108814.51
+        },
+        {
+          "order": [
+            3,
+            2,
+            1,
+            4,
+            0
+          ],
+          "avgLogProb": -10.3389,
+          "ppl": 30912.01
+        },
+        {
+          "order": [
+            3,
+            2,
+            4,
+            0,
+            1
+          ],
+          "avgLogProb": -9.6718,
+          "ppl": 15863.88
+        },
+        {
+          "order": [
+            3,
+            2,
+            4,
+            1,
+            0
+          ],
+          "avgLogProb": -10.0567,
+          "ppl": 23311.45
+        },
+        {
+          "order": [
+            3,
+            4,
+            0,
+            1,
+            2
+          ],
+          "avgLogProb": -8.0405,
+          "ppl": 3104.16
+        },
+        {
+          "order": [
+            3,
+            4,
+            0,
+            2,
+            1
+          ],
+          "avgLogProb": -7.3953,
+          "ppl": 1628.31
+        },
+        {
+          "order": [
+            3,
+            4,
+            1,
+            0,
+            2
+          ],
+          "avgLogProb": -8.7492,
+          "ppl": 6305.64
+        },
+        {
+          "order": [
+            3,
+            4,
+            1,
+            2,
+            0
+          ],
+          "avgLogProb": -8.6005,
+          "ppl": 5434.38
+        },
+        {
+          "order": [
+            3,
+            4,
+            2,
+            0,
+            1
+          ],
+          "avgLogProb": -8.7117,
+          "ppl": 6073.56
+        },
+        {
+          "order": [
+            3,
+            4,
+            2,
+            1,
+            0
+          ],
+          "avgLogProb": -7.9626,
+          "ppl": 2871.53
+        },
+        {
+          "order": [
+            4,
+            0,
+            1,
+            2,
+            3
+          ],
+          "avgLogProb": -8.6339,
+          "ppl": 5618.95
+        },
+        {
+          "order": [
+            4,
             0,
             1,
             3,
             2
           ],
-          "prediction": {
-            "label": "positive",
-            "score": 0.854,
-            "scores": {
-              "negative": 0.005,
-              "neutral": 0.141,
-              "positive": 0.854
-            }
-          }
+          "avgLogProb": -10.8738,
+          "ppl": 52775.38
         },
         {
           "order": [
+            4,
             0,
             2,
             1,
             3
           ],
-          "prediction": {
-            "label": "positive",
-            "score": 0.919,
-            "scores": {
-              "negative": 0.001,
-              "neutral": 0.079,
-              "positive": 0.919
-            }
-          }
+          "avgLogProb": -9.3438,
+          "ppl": 11427.75
         },
         {
           "order": [
+            4,
             0,
             2,
             3,
             1
           ],
-          "prediction": {
-            "label": "negative",
-            "score": 0.919,
-            "scores": {
-              "negative": 0.919,
-              "neutral": 0.079,
-              "positive": 0.001
-            }
-          }
+          "avgLogProb": -10.3854,
+          "ppl": 32383.36
         },
         {
           "order": [
+            4,
             0,
             3,
             1,
             2
           ],
-          "prediction": {
-            "label": "negative",
-            "score": 0.854,
-            "scores": {
-              "negative": 0.854,
-              "neutral": 0.141,
-              "positive": 0.005
-            }
-          }
+          "avgLogProb": -11.6474,
+          "ppl": 114393.55
         },
         {
           "order": [
+            4,
             0,
             3,
             2,
             1
           ],
-          "prediction": {
-            "label": "negative",
-            "score": 0.919,
-            "scores": {
-              "negative": 0.919,
-              "neutral": 0.079,
-              "positive": 0.001
-            }
-          }
+          "avgLogProb": -11.0836,
+          "ppl": 65094.8
         },
         {
           "order": [
+            4,
             1,
             0,
             2,
             3
           ],
-          "prediction": {
-            "label": "negative",
-            "score": 0.919,
-            "scores": {
-              "negative": 0.919,
-              "neutral": 0.079,
-              "positive": 0.001
-            }
-          }
+          "avgLogProb": -7.9244,
+          "ppl": 2763.91
         },
         {
           "order": [
+            4,
             1,
             0,
             3,
             2
           ],
-          "prediction": {
-            "label": "negative",
-            "score": 0.854,
-            "scores": {
-              "negative": 0.854,
-              "neutral": 0.141,
-              "positive": 0.005
-            }
-          }
+          "avgLogProb": -10.047,
+          "ppl": 23086.42
         },
         {
           "order": [
+            4,
             1,
             2,
             0,
             3
           ],
-          "prediction": {
-            "label": "negative",
-            "score": 0.919,
-            "scores": {
-              "negative": 0.919,
-              "neutral": 0.079,
-              "positive": 0.001
-            }
-          }
+          "avgLogProb": -9.2281,
+          "ppl": 10179.18
         },
         {
           "order": [
+            4,
             1,
             2,
             3,
             0
           ],
-          "prediction": {
-            "label": "neutral",
-            "score": 0.477,
-            "scores": {
-              "negative": 0.112,
-              "neutral": 0.477,
-              "positive": 0.411
-            }
-          }
+          "avgLogProb": -8.6225,
+          "ppl": 5555.26
         },
         {
           "order": [
+            4,
             1,
             3,
             0,
             2
           ],
-          "prediction": {
-            "label": "neutral",
-            "score": 0.527,
-            "scores": {
-              "negative": 0.237,
-              "neutral": 0.527,
-              "positive": 0.237
-            }
-          }
+          "avgLogProb": -9.3505,
+          "ppl": 11504.57
         },
         {
           "order": [
+            4,
             1,
             3,
             2,
             0
           ],
-          "prediction": {
-            "label": "neutral",
-            "score": 0.527,
-            "scores": {
-              "negative": 0.237,
-              "neutral": 0.527,
-              "positive": 0.237
-            }
-          }
+          "avgLogProb": -9.291,
+          "ppl": 10840.02
         },
         {
           "order": [
+            4,
             2,
             0,
             1,
             3
           ],
-          "prediction": {
-            "label": "positive",
-            "score": 0.919,
-            "scores": {
-              "negative": 0.001,
-              "neutral": 0.079,
-              "positive": 0.919
-            }
-          }
+          "avgLogProb": -10.0501,
+          "ppl": 23158.1
         },
         {
           "order": [
+            4,
             2,
             0,
             3,
             1
           ],
-          "prediction": {
-            "label": "negative",
-            "score": 0.919,
-            "scores": {
-              "negative": 0.919,
-              "neutral": 0.079,
-              "positive": 0.001
-            }
-          }
+          "avgLogProb": -11.0737,
+          "ppl": 64453.54
         },
         {
           "order": [
+            4,
             2,
             1,
             0,
             3
           ],
-          "prediction": {
-            "label": "negative",
-            "score": 0.919,
-            "scores": {
-              "negative": 0.919,
-              "neutral": 0.079,
-              "positive": 0.001
-            }
-          }
+          "avgLogProb": -10.3467,
+          "ppl": 31154.06
         },
         {
           "order": [
+            4,
             2,
             1,
             3,
             0
           ],
-          "prediction": {
-            "label": "neutral",
-            "score": 0.477,
-            "scores": {
-              "negative": 0.411,
-              "neutral": 0.477,
-              "positive": 0.112
-            }
-          }
+          "avgLogProb": -9.8449,
+          "ppl": 18861.91
         },
         {
           "order": [
+            4,
             2,
             3,
             0,
             1
           ],
-          "prediction": {
-            "label": "positive",
-            "score": 0.919,
-            "scores": {
-              "negative": 0.001,
-              "neutral": 0.079,
-              "positive": 0.919
-            }
-          }
+          "avgLogProb": -10.6518,
+          "ppl": 42268.61
         },
         {
           "order": [
+            4,
             2,
             3,
             1,
             0
           ],
-          "prediction": {
-            "label": "neutral",
-            "score": 0.477,
-            "scores": {
-              "negative": 0.112,
-              "neutral": 0.477,
-              "positive": 0.411
-            }
-          }
+          "avgLogProb": -10.3262,
+          "ppl": 30521.91
         },
         {
           "order": [
+            4,
             3,
             0,
             1,
             2
           ],
-          "prediction": {
-            "label": "positive",
-            "score": 0.854,
-            "scores": {
-              "negative": 0.005,
-              "neutral": 0.141,
-              "positive": 0.854
-            }
-          }
+          "avgLogProb": -9.337,
+          "ppl": 11350.31
         },
         {
           "order": [
+            4,
             3,
             0,
             2,
             1
           ],
-          "prediction": {
-            "label": "positive",
-            "score": 0.919,
-            "scores": {
-              "negative": 0.001,
-              "neutral": 0.079,
-              "positive": 0.919
-            }
-          }
+          "avgLogProb": -9.333,
+          "ppl": 11305.0
         },
         {
           "order": [
+            4,
             3,
             1,
             0,
             2
           ],
-          "prediction": {
-            "label": "neutral",
-            "score": 0.527,
-            "scores": {
-              "negative": 0.237,
-              "neutral": 0.527,
-              "positive": 0.237
-            }
-          }
+          "avgLogProb": -9.593,
+          "ppl": 14661.79
         },
         {
           "order": [
+            4,
             3,
             1,
             2,
             0
           ],
-          "prediction": {
-            "label": "neutral",
-            "score": 0.527,
-            "scores": {
-              "negative": 0.237,
-              "neutral": 0.527,
-              "positive": 0.237
-            }
-          }
+          "avgLogProb": -10.0671,
+          "ppl": 23555.16
         },
         {
           "order": [
+            4,
             3,
             2,
             0,
             1
           ],
-          "prediction": {
-            "label": "positive",
-            "score": 0.919,
-            "scores": {
-              "negative": 0.001,
-              "neutral": 0.079,
-              "positive": 0.919
-            }
-          }
+          "avgLogProb": -9.3075,
+          "ppl": 11020.36
         },
         {
           "order": [
+            4,
             3,
             2,
             1,
             0
           ],
-          "prediction": {
-            "label": "neutral",
-            "score": 0.477,
-            "scores": {
-              "negative": 0.411,
-              "neutral": 0.477,
-              "positive": 0.112
-            }
-          }
+          "avgLogProb": -9.5422,
+          "ppl": 13935.57
         }
       ]
     },
     {
-      "sentenceId": "not-happy-very-sad",
-      "prompt": "\u201cvery\u201d amplifies whatever word comes next.",
+      "sentenceId": "zh-cat-eats-fish",
+      "prompt": "中文也一樣：順序才讓句子成立。",
       "words": [
-        "not",
-        "happy",
-        "very",
-        "sad"
+        "小貓",
+        "喜歡",
+        "偷",
+        "吃",
+        "魚"
       ],
-      "lexicon": {
-        "not": 0.0,
-        "happy": 1.0,
-        "very": 0.0,
-        "sad": -1.0
+      "wordVectors": {
+        "小貓": [
+          -0.0059,
+          -0.0193,
+          -0.0118,
+          -0.0347,
+          -0.0025,
+          -0.0099,
+          0.0154,
+          0.0262,
+          0.0281,
+          0.063,
+          -0.0082,
+          -0.0542,
+          0.0713,
+          -0.0107,
+          -0.0496,
+          0.0272,
+          0.0864,
+          0.1123,
+          0.1436,
+          0.0151,
+          -0.084,
+          0.0266,
+          -0.0078,
+          0.1562
+        ],
+        "喜歡": [
+          -0.0144,
+          -0.0574,
+          -0.0117,
+          0.0349,
+          0.0471,
+          0.014,
+          0.0483,
+          0.0031,
+          0.033,
+          0.0376,
+          -0.0132,
+          -0.0253,
+          0.0596,
+          -0.0107,
+          -0.0457,
+          0.0483,
+          -0.0005,
+          0.0286,
+          0.1338,
+          -0.0806,
+          -0.0276,
+          -0.0354,
+          -0.0508,
+          0.0291
+        ],
+        "偷": [
+          -0.0188,
+          -0.0315,
+          -0.0104,
+          0.0334,
+          -0.0177,
+          -0.0586,
+          0.0474,
+          0.1177,
+          -0.0142,
+          0.0806,
+          -0.0386,
+          -0.0173,
+          0.0508,
+          -0.0096,
+          -0.0598,
+          0.063,
+          0.1226,
+          -0.0287,
+          0.1162,
+          -0.0471,
+          -0.0581,
+          0.0192,
+          -0.033,
+          -0.0598
+        ],
+        "吃": [
+          -0.0742,
+          -0.0075,
+          -0.0071,
+          -0.0291,
+          -0.031,
+          0.0503,
+          0.0645,
+          0.0369,
+          -0.0221,
+          0.126,
+          -0.0018,
+          -0.0503,
+          0.106,
+          -0.0061,
+          -0.0549,
+          0.0347,
+          0.0718,
+          0.0046,
+          0.0771,
+          -0.0781,
+          -0.041,
+          -0.0254,
+          -0.0254,
+          -0.0254
+        ],
+        "魚": [
+          0.008,
+          -0.0476,
+          -0.0076,
+          0.0574,
+          0.0649,
+          0.04,
+          0.104,
+          0.1396,
+          0.0183,
+          0.0791,
+          -0.0791,
+          -0.0044,
+          0.0593,
+          -0.0079,
+          -0.0518,
+          0.0654,
+          0.1123,
+          0.0393,
+          0.0825,
+          -0.0674,
+          -0.0393,
+          0.0337,
+          -0.0098,
+          0.1367
+        ]
       },
-      "labels": [
-        "negative",
-        "neutral",
-        "positive"
-      ],
       "arrangements": [
         {
           "order": [
             0,
             1,
             2,
-            3
+            3,
+            4
           ],
-          "prediction": {
-            "label": "negative",
-            "score": 0.919,
-            "scores": {
-              "negative": 0.919,
-              "neutral": 0.079,
-              "positive": 0.001
-            }
-          }
+          "avgLogProb": -6.6972,
+          "ppl": 810.13
         },
         {
           "order": [
+            0,
+            1,
+            2,
+            4,
+            3
+          ],
+          "avgLogProb": -7.9592,
+          "ppl": 2861.78
+        },
+        {
+          "order": [
+            0,
+            1,
+            3,
+            2,
+            4
+          ],
+          "avgLogProb": -7.8556,
+          "ppl": 2580.14
+        },
+        {
+          "order": [
+            0,
+            1,
+            3,
+            4,
+            2
+          ],
+          "avgLogProb": -8.0895,
+          "ppl": 3260.06
+        },
+        {
+          "order": [
+            0,
+            1,
+            4,
+            2,
+            3
+          ],
+          "avgLogProb": -8.1468,
+          "ppl": 3452.31
+        },
+        {
+          "order": [
+            0,
+            1,
+            4,
+            3,
+            2
+          ],
+          "avgLogProb": -8.6418,
+          "ppl": 5663.51
+        },
+        {
+          "order": [
+            0,
+            2,
+            1,
+            3,
+            4
+          ],
+          "avgLogProb": -7.7274,
+          "ppl": 2269.69
+        },
+        {
+          "order": [
+            0,
+            2,
+            1,
+            4,
+            3
+          ],
+          "avgLogProb": -8.6572,
+          "ppl": 5751.41
+        },
+        {
+          "order": [
+            0,
+            2,
+            3,
+            1,
+            4
+          ],
+          "avgLogProb": -7.9907,
+          "ppl": 2953.36
+        },
+        {
+          "order": [
+            0,
+            2,
+            3,
+            4,
+            1
+          ],
+          "avgLogProb": -8.339,
+          "ppl": 4183.9
+        },
+        {
+          "order": [
+            0,
+            2,
+            4,
+            1,
+            3
+          ],
+          "avgLogProb": -7.8878,
+          "ppl": 2664.58
+        },
+        {
+          "order": [
+            0,
+            2,
+            4,
+            3,
+            1
+          ],
+          "avgLogProb": -8.6422,
+          "ppl": 5665.78
+        },
+        {
+          "order": [
+            0,
+            3,
+            1,
+            2,
+            4
+          ],
+          "avgLogProb": -8.6742,
+          "ppl": 5850.02
+        },
+        {
+          "order": [
+            0,
+            3,
+            1,
+            4,
+            2
+          ],
+          "avgLogProb": -9.5073,
+          "ppl": 13457.61
+        },
+        {
+          "order": [
+            0,
+            3,
+            2,
+            1,
+            4
+          ],
+          "avgLogProb": -9.074,
+          "ppl": 8725.46
+        },
+        {
+          "order": [
+            0,
+            3,
+            2,
+            4,
+            1
+          ],
+          "avgLogProb": -9.0858,
+          "ppl": 8829.03
+        },
+        {
+          "order": [
+            0,
+            3,
+            4,
+            1,
+            2
+          ],
+          "avgLogProb": -8.5454,
+          "ppl": 5143.04
+        },
+        {
+          "order": [
+            0,
+            3,
+            4,
+            2,
+            1
+          ],
+          "avgLogProb": -9.1774,
+          "ppl": 9675.96
+        },
+        {
+          "order": [
+            0,
+            4,
+            1,
+            2,
+            3
+          ],
+          "avgLogProb": -7.2073,
+          "ppl": 1349.24
+        },
+        {
+          "order": [
+            0,
+            4,
+            1,
+            3,
+            2
+          ],
+          "avgLogProb": -8.4228,
+          "ppl": 4549.62
+        },
+        {
+          "order": [
+            0,
+            4,
+            2,
+            1,
+            3
+          ],
+          "avgLogProb": -8.5098,
+          "ppl": 4963.17
+        },
+        {
+          "order": [
+            0,
+            4,
+            2,
+            3,
+            1
+          ],
+          "avgLogProb": -8.2535,
+          "ppl": 3841.05
+        },
+        {
+          "order": [
+            0,
+            4,
+            3,
+            1,
+            2
+          ],
+          "avgLogProb": -8.8858,
+          "ppl": 7228.6
+        },
+        {
+          "order": [
+            0,
+            4,
+            3,
+            2,
+            1
+          ],
+          "avgLogProb": -9.0328,
+          "ppl": 8373.27
+        },
+        {
+          "order": [
+            1,
+            0,
+            2,
+            3,
+            4
+          ],
+          "avgLogProb": -7.1657,
+          "ppl": 1294.27
+        },
+        {
+          "order": [
+            1,
+            0,
+            2,
+            4,
+            3
+          ],
+          "avgLogProb": -7.7711,
+          "ppl": 2371.08
+        },
+        {
+          "order": [
+            1,
+            0,
+            3,
+            2,
+            4
+          ],
+          "avgLogProb": -8.4876,
+          "ppl": 4854.2
+        },
+        {
+          "order": [
+            1,
+            0,
+            3,
+            4,
+            2
+          ],
+          "avgLogProb": -8.2989,
+          "ppl": 4019.45
+        },
+        {
+          "order": [
+            1,
+            0,
+            4,
+            2,
+            3
+          ],
+          "avgLogProb": -7.6199,
+          "ppl": 2038.36
+        },
+        {
+          "order": [
+            1,
+            0,
+            4,
+            3,
+            2
+          ],
+          "avgLogProb": -8.6492,
+          "ppl": 5705.58
+        },
+        {
+          "order": [
+            1,
+            2,
+            0,
+            3,
+            4
+          ],
+          "avgLogProb": -8.8312,
+          "ppl": 6844.5
+        },
+        {
+          "order": [
+            1,
+            2,
+            0,
+            4,
+            3
+          ],
+          "avgLogProb": -8.5014,
+          "ppl": 4921.65
+        },
+        {
+          "order": [
+            1,
+            2,
+            3,
+            0,
+            4
+          ],
+          "avgLogProb": -6.4331,
+          "ppl": 622.1
+        },
+        {
+          "order": [
+            1,
+            2,
+            3,
+            4,
+            0
+          ],
+          "avgLogProb": -8.4632,
+          "ppl": 4737.19
+        },
+        {
+          "order": [
+            1,
+            2,
+            4,
+            0,
+            3
+          ],
+          "avgLogProb": -9.3422,
+          "ppl": 11409.48
+        },
+        {
+          "order": [
+            1,
+            2,
+            4,
+            3,
+            0
+          ],
+          "avgLogProb": -8.846,
+          "ppl": 6946.55
+        },
+        {
+          "order": [
+            1,
+            3,
+            0,
+            2,
+            4
+          ],
+          "avgLogProb": -9.3352,
+          "ppl": 11329.89
+        },
+        {
+          "order": [
+            1,
+            3,
+            0,
+            4,
+            2
+          ],
+          "avgLogProb": -9.7559,
+          "ppl": 17255.74
+        },
+        {
+          "order": [
+            1,
+            3,
+            2,
+            0,
+            4
+          ],
+          "avgLogProb": -9.4857,
+          "ppl": 13170.04
+        },
+        {
+          "order": [
+            1,
+            3,
+            2,
+            4,
+            0
+          ],
+          "avgLogProb": -9.6256,
+          "ppl": 15147.64
+        },
+        {
+          "order": [
+            1,
+            3,
+            4,
+            0,
+            2
+          ],
+          "avgLogProb": -10.5083,
+          "ppl": 36618.18
+        },
+        {
+          "order": [
+            1,
+            3,
+            4,
+            2,
+            0
+          ],
+          "avgLogProb": -10.3429,
+          "ppl": 31035.9
+        },
+        {
+          "order": [
+            1,
+            4,
+            0,
+            2,
+            3
+          ],
+          "avgLogProb": -7.8724,
+          "ppl": 2623.86
+        },
+        {
+          "order": [
+            1,
+            4,
+            0,
+            3,
+            2
+          ],
+          "avgLogProb": -9.057,
+          "ppl": 8578.38
+        },
+        {
+          "order": [
+            1,
+            4,
+            2,
+            0,
+            3
+          ],
+          "avgLogProb": -8.0479,
+          "ppl": 3127.22
+        },
+        {
+          "order": [
+            1,
+            4,
+            2,
+            3,
+            0
+          ],
+          "avgLogProb": -6.5109,
+          "ppl": 672.43
+        },
+        {
+          "order": [
+            1,
+            4,
+            3,
+            0,
+            2
+          ],
+          "avgLogProb": -7.8433,
+          "ppl": 2548.6
+        },
+        {
+          "order": [
+            1,
+            4,
+            3,
+            2,
+            0
+          ],
+          "avgLogProb": -8.0996,
+          "ppl": 3293.15
+        },
+        {
+          "order": [
+            2,
+            0,
+            1,
+            3,
+            4
+          ],
+          "avgLogProb": -6.9143,
+          "ppl": 1006.57
+        },
+        {
+          "order": [
+            2,
+            0,
+            1,
+            4,
+            3
+          ],
+          "avgLogProb": -7.9137,
+          "ppl": 2734.49
+        },
+        {
+          "order": [
+            2,
+            0,
+            3,
+            1,
+            4
+          ],
+          "avgLogProb": -8.6661,
+          "ppl": 5802.82
+        },
+        {
+          "order": [
+            2,
+            0,
+            3,
+            4,
+            1
+          ],
+          "avgLogProb": -8.4644,
+          "ppl": 4742.88
+        },
+        {
+          "order": [
+            2,
+            0,
+            4,
+            1,
+            3
+          ],
+          "avgLogProb": -7.3453,
+          "ppl": 1548.9
+        },
+        {
+          "order": [
+            2,
+            0,
+            4,
+            3,
+            1
+          ],
+          "avgLogProb": -8.3133,
+          "ppl": 4077.75
+        },
+        {
+          "order": [
+            2,
+            1,
+            0,
+            3,
+            4
+          ],
+          "avgLogProb": -6.8076,
+          "ppl": 904.7
+        },
+        {
+          "order": [
+            2,
+            1,
+            0,
+            4,
+            3
+          ],
+          "avgLogProb": -6.6938,
+          "ppl": 807.38
+        },
+        {
+          "order": [
+            2,
+            1,
+            3,
+            0,
+            4
+          ],
+          "avgLogProb": -6.2435,
+          "ppl": 514.66
+        },
+        {
+          "order": [
+            2,
+            1,
+            3,
+            4,
+            0
+          ],
+          "avgLogProb": -7.2309,
+          "ppl": 1381.47
+        },
+        {
+          "order": [
+            2,
+            1,
+            4,
+            0,
+            3
+          ],
+          "avgLogProb": -7.477,
+          "ppl": 1766.93
+        },
+        {
+          "order": [
+            2,
+            1,
+            4,
+            3,
+            0
+          ],
+          "avgLogProb": -7.1963,
+          "ppl": 1334.48
+        },
+        {
+          "order": [
+            2,
+            3,
+            0,
+            1,
+            4
+          ],
+          "avgLogProb": -9.2746,
+          "ppl": 10663.69
+        },
+        {
+          "order": [
+            2,
+            3,
+            0,
+            4,
+            1
+          ],
+          "avgLogProb": -8.8705,
+          "ppl": 7118.84
+        },
+        {
+          "order": [
+            2,
+            3,
+            1,
+            0,
+            4
+          ],
+          "avgLogProb": -9.4435,
+          "ppl": 12625.83
+        },
+        {
+          "order": [
+            2,
+            3,
+            1,
+            4,
+            0
+          ],
+          "avgLogProb": -10.1385,
+          "ppl": 25298.49
+        },
+        {
+          "order": [
+            2,
+            3,
+            4,
+            0,
+            1
+          ],
+          "avgLogProb": -9.7555,
+          "ppl": 17248.84
+        },
+        {
+          "order": [
+            2,
+            3,
+            4,
+            1,
+            0
+          ],
+          "avgLogProb": -9.605,
+          "ppl": 14838.79
+        },
+        {
+          "order": [
+            2,
+            4,
+            0,
+            1,
+            3
+          ],
+          "avgLogProb": -6.9483,
+          "ppl": 1041.38
+        },
+        {
+          "order": [
+            2,
+            4,
+            0,
+            3,
+            1
+          ],
+          "avgLogProb": -8.7194,
+          "ppl": 6120.51
+        },
+        {
+          "order": [
+            2,
+            4,
+            1,
+            0,
+            3
+          ],
+          "avgLogProb": -8.1956,
+          "ppl": 3624.97
+        },
+        {
+          "order": [
+            2,
+            4,
+            1,
+            3,
+            0
+          ],
+          "avgLogProb": -7.3087,
+          "ppl": 1493.23
+        },
+        {
+          "order": [
+            2,
+            4,
+            3,
+            0,
+            1
+          ],
+          "avgLogProb": -8.2586,
+          "ppl": 3860.69
+        },
+        {
+          "order": [
+            2,
+            4,
+            3,
+            1,
+            0
+          ],
+          "avgLogProb": -8.445,
+          "ppl": 4651.76
+        },
+        {
+          "order": [
+            3,
+            0,
+            1,
+            2,
+            4
+          ],
+          "avgLogProb": -8.3872,
+          "ppl": 4390.51
+        },
+        {
+          "order": [
+            3,
+            0,
+            1,
+            4,
+            2
+          ],
+          "avgLogProb": -9.621,
+          "ppl": 15078.12
+        },
+        {
+          "order": [
+            3,
+            0,
+            2,
+            1,
+            4
+          ],
+          "avgLogProb": -9.173,
+          "ppl": 9633.48
+        },
+        {
+          "order": [
+            3,
+            0,
+            2,
+            4,
+            1
+          ],
+          "avgLogProb": -8.9725,
+          "ppl": 7883.29
+        },
+        {
+          "order": [
+            3,
+            0,
+            4,
+            1,
+            2
+          ],
+          "avgLogProb": -8.4126,
+          "ppl": 4503.45
+        },
+        {
+          "order": [
+            3,
+            0,
+            4,
+            2,
+            1
+          ],
+          "avgLogProb": -8.9717,
+          "ppl": 7876.98
+        },
+        {
+          "order": [
+            3,
+            1,
+            0,
+            2,
+            4
+          ],
+          "avgLogProb": -7.5721,
+          "ppl": 1943.22
+        },
+        {
+          "order": [
+            3,
+            1,
+            0,
+            4,
+            2
+          ],
+          "avgLogProb": -7.6929,
+          "ppl": 2192.72
+        },
+        {
+          "order": [
+            3,
+            1,
+            2,
+            0,
+            4
+          ],
+          "avgLogProb": -6.9992,
+          "ppl": 1095.76
+        },
+        {
+          "order": [
+            3,
+            1,
+            2,
+            4,
+            0
+          ],
+          "avgLogProb": -7.3037,
+          "ppl": 1485.79
+        },
+        {
+          "order": [
+            3,
+            1,
+            4,
+            0,
+            2
+          ],
+          "avgLogProb": -8.6691,
+          "ppl": 5820.26
+        },
+        {
+          "order": [
+            3,
+            1,
+            4,
+            2,
+            0
+          ],
+          "avgLogProb": -8.1834,
+          "ppl": 3581.01
+        },
+        {
+          "order": [
+            3,
+            2,
+            0,
+            1,
+            4
+          ],
+          "avgLogProb": -8.9847,
+          "ppl": 7980.05
+        },
+        {
+          "order": [
+            3,
+            2,
+            0,
+            4,
+            1
+          ],
+          "avgLogProb": -8.6064,
+          "ppl": 5466.53
+        },
+        {
+          "order": [
+            3,
+            2,
+            1,
+            0,
+            4
+          ],
+          "avgLogProb": -8.2276,
+          "ppl": 3742.84
+        },
+        {
+          "order": [
+            3,
+            2,
+            1,
+            4,
+            0
+          ],
+          "avgLogProb": -9.2133,
+          "ppl": 10029.64
+        },
+        {
+          "order": [
+            3,
+            2,
+            4,
+            0,
+            1
+          ],
+          "avgLogProb": -8.1488,
+          "ppl": 3459.23
+        },
+        {
+          "order": [
+            3,
+            2,
+            4,
+            1,
+            0
+          ],
+          "avgLogProb": -8.3569,
+          "ppl": 4259.47
+        },
+        {
+          "order": [
+            3,
+            4,
+            0,
+            1,
+            2
+          ],
+          "avgLogProb": -7.5332,
+          "ppl": 1869.08
+        },
+        {
+          "order": [
+            3,
+            4,
+            0,
+            2,
+            1
+          ],
+          "avgLogProb": -8.5686,
+          "ppl": 5263.76
+        },
+        {
+          "order": [
+            3,
+            4,
+            1,
+            0,
+            2
+          ],
+          "avgLogProb": -8.3115,
+          "ppl": 4070.41
+        },
+        {
+          "order": [
+            3,
+            4,
+            1,
+            2,
+            0
+          ],
+          "avgLogProb": -7.7888,
+          "ppl": 2413.42
+        },
+        {
+          "order": [
+            3,
+            4,
+            2,
+            0,
+            1
+          ],
+          "avgLogProb": -8.2729,
+          "ppl": 3916.29
+        },
+        {
+          "order": [
+            3,
+            4,
+            2,
+            1,
+            0
+          ],
+          "avgLogProb": -8.6144,
+          "ppl": 5510.44
+        },
+        {
+          "order": [
+            4,
+            0,
+            1,
+            2,
+            3
+          ],
+          "avgLogProb": -7.0748,
+          "ppl": 1181.81
+        },
+        {
+          "order": [
+            4,
             0,
             1,
             3,
             2
           ],
-          "prediction": {
-            "label": "negative",
-            "score": 0.854,
-            "scores": {
-              "negative": 0.854,
-              "neutral": 0.141,
-              "positive": 0.005
-            }
-          }
+          "avgLogProb": -8.0389,
+          "ppl": 3099.2
         },
         {
           "order": [
+            4,
             0,
             2,
             1,
             3
           ],
-          "prediction": {
-            "label": "negative",
-            "score": 0.919,
-            "scores": {
-              "negative": 0.919,
-              "neutral": 0.079,
-              "positive": 0.001
-            }
-          }
+          "avgLogProb": -8.41,
+          "ppl": 4491.76
         },
         {
           "order": [
+            4,
             0,
             2,
             3,
             1
           ],
-          "prediction": {
-            "label": "positive",
-            "score": 0.919,
-            "scores": {
-              "negative": 0.001,
-              "neutral": 0.079,
-              "positive": 0.919
-            }
-          }
+          "avgLogProb": -8.3471,
+          "ppl": 4217.93
         },
         {
           "order": [
+            4,
             0,
             3,
             1,
             2
           ],
-          "prediction": {
-            "label": "positive",
-            "score": 0.854,
-            "scores": {
-              "negative": 0.005,
-              "neutral": 0.141,
-              "positive": 0.854
-            }
-          }
+          "avgLogProb": -9.1541,
+          "ppl": 9453.12
         },
         {
           "order": [
+            4,
             0,
             3,
             2,
             1
           ],
-          "prediction": {
-            "label": "positive",
-            "score": 0.919,
-            "scores": {
-              "negative": 0.001,
-              "neutral": 0.079,
-              "positive": 0.919
-            }
-          }
+          "avgLogProb": -9.3468,
+          "ppl": 11462.09
         },
         {
           "order": [
+            4,
             1,
             0,
             2,
             3
           ],
-          "prediction": {
-            "label": "positive",
-            "score": 0.919,
-            "scores": {
-              "negative": 0.001,
-              "neutral": 0.079,
-              "positive": 0.919
-            }
-          }
+          "avgLogProb": -6.8781,
+          "ppl": 970.78
         },
         {
           "order": [
+            4,
             1,
             0,
             3,
             2
           ],
-          "prediction": {
-            "label": "positive",
-            "score": 0.854,
-            "scores": {
-              "negative": 0.005,
-              "neutral": 0.141,
-              "positive": 0.854
-            }
-          }
+          "avgLogProb": -7.9747,
+          "ppl": 2906.49
         },
         {
           "order": [
+            4,
             1,
             2,
             0,
             3
           ],
-          "prediction": {
-            "label": "positive",
-            "score": 0.919,
-            "scores": {
-              "negative": 0.001,
-              "neutral": 0.079,
-              "positive": 0.919
-            }
-          }
+          "avgLogProb": -7.6417,
+          "ppl": 2083.28
         },
         {
           "order": [
+            4,
             1,
             2,
             3,
             0
           ],
-          "prediction": {
-            "label": "neutral",
-            "score": 0.477,
-            "scores": {
-              "negative": 0.411,
-              "neutral": 0.477,
-              "positive": 0.112
-            }
-          }
+          "avgLogProb": -6.5243,
+          "ppl": 681.5
         },
         {
           "order": [
+            4,
             1,
             3,
             0,
             2
           ],
-          "prediction": {
-            "label": "neutral",
-            "score": 0.527,
-            "scores": {
-              "negative": 0.237,
-              "neutral": 0.527,
-              "positive": 0.237
-            }
-          }
+          "avgLogProb": -7.6909,
+          "ppl": 2188.34
         },
         {
           "order": [
+            4,
             1,
             3,
             2,
             0
           ],
-          "prediction": {
-            "label": "neutral",
-            "score": 0.527,
-            "scores": {
-              "negative": 0.237,
-              "neutral": 0.527,
-              "positive": 0.237
-            }
-          }
+          "avgLogProb": -8.3126,
+          "ppl": 4074.89
         },
         {
           "order": [
+            4,
             2,
             0,
             1,
             3
           ],
-          "prediction": {
-            "label": "negative",
-            "score": 0.919,
-            "scores": {
-              "negative": 0.919,
-              "neutral": 0.079,
-              "positive": 0.001
-            }
-          }
+          "avgLogProb": -6.9116,
+          "ppl": 1003.85
         },
         {
           "order": [
+            4,
             2,
             0,
             3,
             1
           ],
-          "prediction": {
-            "label": "positive",
-            "score": 0.919,
-            "scores": {
-              "negative": 0.001,
-              "neutral": 0.079,
-              "positive": 0.919
-            }
-          }
+          "avgLogProb": -7.9929,
+          "ppl": 2959.87
         },
         {
           "order": [
+            4,
             2,
             1,
             0,
             3
           ],
-          "prediction": {
-            "label": "positive",
-            "score": 0.919,
-            "scores": {
-              "negative": 0.001,
-              "neutral": 0.079,
-              "positive": 0.919
-            }
-          }
+          "avgLogProb": -7.72,
+          "ppl": 2252.96
         },
         {
           "order": [
+            4,
             2,
             1,
             3,
             0
           ],
-          "prediction": {
-            "label": "neutral",
-            "score": 0.477,
-            "scores": {
-              "negative": 0.112,
-              "neutral": 0.477,
-              "positive": 0.411
-            }
-          }
+          "avgLogProb": -7.0758,
+          "ppl": 1182.99
         },
         {
           "order": [
+            4,
             2,
             3,
             0,
             1
           ],
-          "prediction": {
-            "label": "negative",
-            "score": 0.919,
-            "scores": {
-              "negative": 0.919,
-              "neutral": 0.079,
-              "positive": 0.001
-            }
-          }
+          "avgLogProb": -7.098,
+          "ppl": 1209.55
         },
         {
           "order": [
+            4,
             2,
             3,
             1,
             0
           ],
-          "prediction": {
-            "label": "neutral",
-            "score": 0.477,
-            "scores": {
-              "negative": 0.411,
-              "neutral": 0.477,
-              "positive": 0.112
-            }
-          }
+          "avgLogProb": -7.5661,
+          "ppl": 1931.59
         },
         {
           "order": [
+            4,
             3,
             0,
             1,
             2
           ],
-          "prediction": {
-            "label": "negative",
-            "score": 0.854,
-            "scores": {
-              "negative": 0.854,
-              "neutral": 0.141,
-              "positive": 0.005
-            }
-          }
+          "avgLogProb": -9.2642,
+          "ppl": 10553.36
         },
         {
           "order": [
+            4,
             3,
             0,
             2,
             1
           ],
-          "prediction": {
-            "label": "negative",
-            "score": 0.919,
-            "scores": {
-              "negative": 0.919,
-              "neutral": 0.079,
-              "positive": 0.001
-            }
-          }
+          "avgLogProb": -10.0761,
+          "ppl": 23768.11
         },
         {
           "order": [
+            4,
             3,
             1,
             0,
             2
           ],
-          "prediction": {
-            "label": "neutral",
-            "score": 0.527,
-            "scores": {
-              "negative": 0.237,
-              "neutral": 0.527,
-              "positive": 0.237
-            }
-          }
+          "avgLogProb": -10.0169,
+          "ppl": 22401.88
         },
         {
           "order": [
+            4,
             3,
             1,
             2,
             0
           ],
-          "prediction": {
-            "label": "neutral",
-            "score": 0.527,
-            "scores": {
-              "negative": 0.237,
-              "neutral": 0.527,
-              "positive": 0.237
-            }
-          }
+          "avgLogProb": -9.6883,
+          "ppl": 16127.8
         },
         {
           "order": [
+            4,
             3,
             2,
             0,
             1
           ],
-          "prediction": {
-            "label": "negative",
-            "score": 0.919,
-            "scores": {
-              "negative": 0.919,
-              "neutral": 0.079,
-              "positive": 0.001
-            }
-          }
+          "avgLogProb": -10.74,
+          "ppl": 46166.05
         },
         {
           "order": [
+            4,
             3,
             2,
             1,
             0
           ],
-          "prediction": {
-            "label": "neutral",
-            "score": 0.477,
-            "scores": {
-              "negative": 0.112,
-              "neutral": 0.477,
-              "positive": 0.411
-            }
-          }
+          "avgLogProb": -10.4135,
+          "ppl": 33306.24
         }
       ]
     }
