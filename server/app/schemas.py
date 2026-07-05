@@ -4,10 +4,12 @@ Response shapes are SCHEMA-COMPATIBLE with the precomputed artifacts each
 endpoint substitutes for (the frontend renders live results through the exact
 same viz path as precomputed data):
 
-- /embedding/lookup   → one element of points.json + neighbors.json
-- /next-token/predict → one context's entry list from distributions.json
-- /rnn/forward        → one element of activations.json `sequences[]`
+- /embedding/lookup      → one element of points.json + neighbors.json
+- /next-token/predict    → one prompt's entry list from distributions.json
+- /rnn/forward           → one element of activations.json `sequences[]`
 - /transformer/attention → one element of attention.json `sentences[]`
+- /order-shuffle/score   → one element of predictions.json `arrangements[]`
+- /order-shuffle/bag     → a slice of a preset's `wordVectors`
 
 Field names come from the real artifacts — do not rename without regenerating
 the artifacts to match.
@@ -65,11 +67,12 @@ class EmbeddingLookupResponse(BaseModel):
 
 
 class NextTokenRequest(BaseModel):
-    prompt: str = Field(max_length=500)
+    prompt: str = Field(min_length=1, max_length=500)
 
 
 class TokenLogit(BaseModel):
-    """Mirrors one element of distributions.json bigram/fallback lists."""
+    """One real Qwen subword piece + its log-probability. Mirrors one element
+    of a distributions.json `prompts[...]` list."""
 
     token: str
     logit: float
@@ -77,8 +80,7 @@ class TokenLogit(BaseModel):
 
 class NextTokenResponse(BaseModel):
     prompt: str
-    context: str
-    contextKnown: bool
+    model: str
     topN: int
     entries: list[TokenLogit]
 
@@ -112,30 +114,57 @@ class TransformerRequest(BaseModel):
     text: str = Field(min_length=1, max_length=200)
 
 
-class TransformerHeadQKV(BaseModel):
-    """Mirrors attention.json layers[l].qkv[h]."""
-
-    q: list[list[float]]
-    k: list[list[float]]
-    v: list[list[float]]
-
-
 class TransformerLayer(BaseModel):
-    """Mirrors attention.json sentences[].layers[l]."""
+    """Mirrors attention.json sentences[].layers[l]: heads[h] is a real Qwen
+    [query][key] attention matrix (causal — keys ≤ query)."""
 
     heads: list[list[list[float]]]
-    qkv: list[TransformerHeadQKV]
 
 
 class TransformerResponse(BaseModel):
-    """Mirrors one element of attention.json `sentences[]` (plus the tensor
-    metadata the artifact carries at top level, for standalone consumers)."""
+    """Mirrors one element of attention.json `sentences[]` plus the tensor
+    dims the station needs for its layer/head pickers."""
 
     sentenceId: str
     tokens: list[str]
     layers: list[TransformerLayer]
-    headLabels: list[str]
-    qkvDim: int
+    nLayers: int
+    nHeads: int
+
+
+# --- order-shuffle ----------------------------------------------------------------
+
+
+class OrderScoreRequest(BaseModel):
+    """The current chip arrangement, in order."""
+
+    tokens: list[str] = Field(min_length=2, max_length=12)
+
+
+class OrderScoreResponse(BaseModel):
+    """Qwen's fluency for the ordered sequence — mirrors one element of
+    predictions.json `arrangements[]` (minus the preset-only `order` index)."""
+
+    tokens: list[str]
+    text: str
+    avgLogProb: float
+    ppl: float
+
+
+class OrderBagRequest(BaseModel):
+    """The word SET for the bag-of-words side. Deliberately order-free: the
+    station sends sorted unique words, so a reorder cannot even change the
+    request — invariance by construction."""
+
+    words: list[str] = Field(min_length=1, max_length=12)
+
+
+class OrderBagResponse(BaseModel):
+    """Per-word embedding fingerprints (leading dims of the L2-normalised
+    Qwen3-Embedding vector) — mirrors a preset's `wordVectors`."""
+
+    vectors: dict[str, list[float]]
+    fingerprintDims: int
 
 
 # --- health ----------------------------------------------------------------------

@@ -1,32 +1,41 @@
 """Load every model + vocab into memory ONCE, at startup (FastAPI lifespan).
 
 Never load per request. The models are the SAME ones the precompute pipeline
-uses:
+uses (imported from camp_precompute), with the same settings:
 
-- embedding: the ONE multilingual encoder (camp_precompute.embedding.MODEL,
-  loaded via its load_encoder helper) on the resolved device, plus the exported
-  npz state (combined zh+en vocab vectors, PCA params, k-means centroids)
-  written by `camp-precompute export-embedding-state`, plus the shipped
-  points/neighbors JSON so in-vocab lookups return the artifact values verbatim.
-- next-token: the bigram/unigram tables, rebuilt deterministically by importing
-  camp_precompute.cli.build_next_token_tables (pure counting — no file).
-- rnn: the fixed-seed weights + preset vocab embeddings, rebuilt
-  deterministically by importing camp_precompute.rnn.build_rnn_state.
-- transformer: pure functions of the tokens (camp_precompute.cli
-  .build_transformer_sentence) — nothing to preload beyond the import.
+- embedding: the ONE multilingual encoder (camp_precompute.embedding.MODEL)
+  on the resolved device, plus the exported npz state (combined zh+en vocab
+  vectors, PCA params, k-means centroids) written by
+  `camp-precompute export-embedding-state`, plus the shipped points/neighbors
+  JSON so in-vocab lookups return the artifact values verbatim.
+- lm: Qwen3-0.6B (camp_precompute.qwen — float32, eager attention, eval,
+  no sampling), serving next-token, transformer attention, and order-shuffle
+  fluency. Loaded once; ~2.4 GB VRAM.
+- rnn: the TRAINED GRU language model exported by `camp-precompute train-rnn`
+  (rnn_state.npz — real weights, not random).
+
+Concurrency: deliberately ONE process on ONE device. A 0.6B model answers a
+short prompt in tens of ms, but a class of ~40 students hitting Enter together
+will queue (FastAPI runs these sync endpoints in a threadpool; `lm_lock` below
+serialises GPU forwards so they queue predictably instead of interleaving).
+Scaling to the 4× V100 box means N uvicorn workers pinned via
+CUDA_VISIBLE_DEVICES=0..3 behind the existing reverse proxy, OR a batching
+queue — future work, not now (see README).
 """
 
 from __future__ import annotations
 
 import json
 import logging
-from dataclasses import dataclass
+import threading
+from dataclasses import dataclass, field
 from pathlib import Path
 
 import numpy as np
 
 from camp_precompute import embedding as emb_mod
-from camp_precompute.rnn import build_rnn_state
+from camp_precompute import qwen as qwen_mod
+from camp_precompute.rnn import RnnState, load_rnn_state
 
 from .config import Settings, resolve_device
 
@@ -55,19 +64,19 @@ class ModelStore:
     device: str
     gpu: str | None
     embedding: EmbeddingState
-    next_token: dict
-    rnn_w_h: np.ndarray
-    rnn_w_x: np.ndarray
-    rnn_b: np.ndarray
-    rnn_emb: dict[str, np.ndarray]
+    qwen_tok: object
+    qwen_model: object
+    rnn: RnnState
+    # Serialises Qwen forwards across request threads: concurrent students
+    # queue (predictable tens-of-ms each) instead of interleaving CUDA work.
+    lm_lock: threading.Lock = field(default_factory=threading.Lock)
 
     @property
     def model_names(self) -> list[str]:
         return [
             f"embedding:{emb_mod.MODEL}",
-            "next-token:bigram",
-            "rnn:fixed-weights",
-            "transformer:synthetic-attention",
+            f"lm:{qwen_mod.MODEL}",
+            "rnn:trained-gru16-alice",
         ]
 
 
@@ -134,20 +143,19 @@ def load_models(settings: Settings) -> ModelStore:
 
     embedding = _load_embedding(device, settings.weights_dir, settings.data_dir)
 
-    from camp_precompute.cli import build_next_token_tables
+    log.info("loading %s on %s…", qwen_mod.MODEL, device)
+    qwen_tok, qwen_model = qwen_mod.load_qwen(device)
 
-    w_h, w_x, b, rnn_emb = build_rnn_state()
+    rnn_state = load_rnn_state(settings.weights_dir)
 
     store = ModelStore(
         settings=settings,
         device=device,
         gpu=gpu,
         embedding=embedding,
-        next_token=build_next_token_tables(),
-        rnn_w_h=w_h,
-        rnn_w_x=w_x,
-        rnn_b=b,
-        rnn_emb=rnn_emb,
+        qwen_tok=qwen_tok,
+        qwen_model=qwen_model,
+        rnn=rnn_state,
     )
     log.info("models ready: %s", ", ".join(store.model_names))
     return store
@@ -162,3 +170,11 @@ def encode_word(store: ModelStore, word: str) -> np.ndarray:
     with torch.no_grad():
         vecs = emb_mod.encode_words(store.embedding.encoder, [word])
     return vecs[0]
+
+
+def encode_words(store: ModelStore, words: list[str]) -> np.ndarray:
+    """Batch variant of encode_word (order-shuffle's bag-of-words vectors)."""
+    import torch
+
+    with torch.no_grad():
+        return emb_mod.encode_words(store.embedding.encoder, words)

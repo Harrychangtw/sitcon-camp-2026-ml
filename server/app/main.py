@@ -20,10 +20,11 @@ from typing import Annotated
 
 from fastapi import Depends, FastAPI, Header, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.middleware.gzip import GZipMiddleware
 
 from .config import load_settings
 from .loader import load_models
-from .routers import embedding, next_token, rnn, transformer
+from .routers import embedding, next_token, order_shuffle, rnn, transformer
 from .schemas import HealthResponse
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
@@ -51,6 +52,11 @@ app.add_middleware(
     allow_headers=["Content-Type", "X-Camp-Token"],
 )
 
+# The transformer route returns the full 28-layer × 16-head attention tensor
+# (~1–2 MB of highly repetitive JSON for a 24-token sentence); gzip shrinks it
+# ~10× on the wire.
+app.add_middleware(GZipMiddleware, minimum_size=8192)
+
 
 def require_token(
     x_camp_token: Annotated[str, Header(alias="X-Camp-Token")] = "",
@@ -65,6 +71,7 @@ app.include_router(embedding.router, dependencies=AUTH)
 app.include_router(next_token.router, dependencies=AUTH)
 app.include_router(rnn.router, dependencies=AUTH)
 app.include_router(transformer.router, dependencies=AUTH)
+app.include_router(order_shuffle.router, dependencies=AUTH)
 
 
 @app.get("/health", response_model=HealthResponse)

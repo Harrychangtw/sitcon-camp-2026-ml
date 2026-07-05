@@ -1,44 +1,42 @@
-"""POST /next-token/predict — live substitute for one context's entry in
-distributions.json (tokens + next-token logit distribution).
+"""POST /next-token/predict — REAL next-token distribution from Qwen3-0.6B.
 
-The tables are rebuilt at startup by the SAME camp_precompute function that
-writes the artifact, so entries are identical to the shipped JSON for every
-context. The lookup rule mirrors the station: key on the LAST word of the
-prompt, fall back to the unigram distribution for unknown context.
+Live substitute for one prompt's entry in distributions.json. The presets in
+that artifact are recorded outputs of the SAME model + settings (see
+camp_precompute.qwen), so typing a preset prompt live reproduces its shipped
+values. Any other prompt gets a genuine distribution too — no bigram table,
+no unknown-context fallback, no dead-ends.
+
+Long prompts are truncated to the last NEXT_TOKEN_MAX_TOKENS tokens (the tail
+is what conditions the next token) rather than rejected.
 """
 
 from __future__ import annotations
 
-import re
+from fastapi import APIRouter, HTTPException, Request
 
-from fastapi import APIRouter, Request
+from camp_precompute import qwen
 
 from ..loader import ModelStore
 from ..schemas import NextTokenRequest, NextTokenResponse, TokenLogit
 
 router = APIRouter(prefix="/next-token", tags=["next-token"])
 
-# Same word regex as the precompute corpus tokenizer and the station.
-_WORD_RE = re.compile(r"[a-z]+")
-
 
 @router.post("/predict", response_model=NextTokenResponse)
 def predict(req: NextTokenRequest, request: Request) -> NextTokenResponse:
     store: ModelStore = request.app.state.store
-    tables = store.next_token
 
-    words = _WORD_RE.findall(req.prompt.lower())
-    context = words[-1] if words else ""
+    if not req.prompt.strip():
+        raise HTTPException(status_code=422, detail="empty prompt")
 
-    entries = tables["bigram"].get(context)
-    context_known = entries is not None
-    if entries is None:
-        entries = tables["fallback"]
+    with store.lm_lock:
+        entries = qwen.next_token_entries(store.qwen_tok, store.qwen_model, req.prompt)
+    if not entries:
+        raise HTTPException(status_code=422, detail="prompt produced no tokens")
 
     return NextTokenResponse(
         prompt=req.prompt,
-        context=context,
-        contextKnown=context_known,
-        topN=tables["topN"],
+        model=qwen.MODEL,
+        topN=qwen.NEXT_TOKEN_TOP_N,
         entries=[TokenLogit(**e) for e in entries],
     )
