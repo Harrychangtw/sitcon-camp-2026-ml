@@ -1,8 +1,11 @@
 // @camp/ui — station shell, controls, and theme.
 // Public API. Anything not re-exported here is private to the package.
 
-export { StationLayout } from "./StationLayout";
-export type { StationLayoutProps } from "./StationLayout";
+export { StationLayout, StationHeaderTitleProvider } from "./StationLayout";
+export type {
+  StationLayoutProps,
+  StationHeaderTitleRenderer,
+} from "./StationLayout";
 
 export { LabeledSlider } from "./LabeledSlider";
 export type { LabeledSliderProps } from "./LabeledSlider";

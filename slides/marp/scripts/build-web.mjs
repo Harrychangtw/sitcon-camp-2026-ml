@@ -25,6 +25,19 @@ import { readFileSync, writeFileSync, mkdirSync, rmSync, cpSync, readdirSync, co
 import { dirname, resolve, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
+// harrychang-me already serves the Artific family from /fonts/artific-fonts/
+// (static woff2 weights, wired in apps/harrychang-me/app/layout.tsx and
+// populated at build time by that app's scripts/fetch-fonts.mjs). A `--base`
+// bundle mounts under that same host, so it points its Artific @font-face at
+// those files instead of shipping its own Artific-Variable.ttf. The deck only
+// renders Artific at wght 400 (BODY) and 700 (HEAD) — see themes/camp-dark.css.
+const SITE_ARTIFIC_FONTS = '/fonts/artific-fonts'
+const siteArtificFaces =
+  `@font-face {font-family:'Artific Variable';src:url('${SITE_ARTIFIC_FONTS}/Artific-Regular.woff2') format('woff2'),` +
+  `local('Artific Regular'), local('Artific-Regular');font-weight:400;font-style:normal;font-display:swap}` +
+  `@font-face {font-family:'Artific Variable';src:url('${SITE_ARTIFIC_FONTS}/Artific-Bold.woff2') format('woff2'),` +
+  `local('Artific Bold'), local('Artific-Bold');font-weight:700;font-style:normal;font-display:swap}`
+
 const here = dirname(fileURLToPath(import.meta.url))
 const root = resolve(here, '..')                 // slides/marp
 const deck = join(root, 'deck/course2.md')
@@ -39,25 +52,38 @@ execFileSync(
   { stdio: 'inherit', cwd: root },
 )
 
-// 2. Fresh bundle skeleton.
-rmSync(bundle, { recursive: true, force: true })
-mkdirSync(join(bundle, 'assets/figures'), { recursive: true })
-
-// 3. Copy assets under one flat root.
-cpSync(join(root, 'assets/bg'), join(bundle, 'assets/bg'), { recursive: true })
-cpSync(join(root, 'assets/fonts'), join(bundle, 'assets/fonts'), { recursive: true })
-for (const f of readdirSync(figuresDir).filter((n) => n.endsWith('.png')))
-  copyFileSync(join(figuresDir, f), join(bundle, 'assets/figures', f))
-
-// 4. Rewrite the relative roots the HTML/theme use. Order: deepest first.
+// 2. Resolve the mount base up front — it decides which fonts we bundle.
 const args = process.argv.slice(2)
 const baseArg = args.find((a) => a.startsWith('--base='))
 const base = (baseArg ? baseArg.slice('--base='.length) : process.env.DECK_BASE || '').replace(/\/$/, '')
 
+// 3. Fresh bundle skeleton.
+rmSync(bundle, { recursive: true, force: true })
+mkdirSync(join(bundle, 'assets/figures'), { recursive: true })
+
+// 4. Copy assets under one flat root.
+cpSync(join(root, 'assets/bg'), join(bundle, 'assets/bg'), { recursive: true })
+// Noto + Fira always ship with the bundle; the host site does not serve those.
+// Artific-Variable.ttf ships only in the portable (relative) bundle — a --base
+// build inherits Artific from the host (see siteArtificFaces above).
+cpSync(join(root, 'assets/fonts'), join(bundle, 'assets/fonts'), {
+  recursive: true,
+  filter: (src) => !(base && src.endsWith('Artific-Variable.ttf')),
+})
+for (const f of readdirSync(figuresDir).filter((n) => n.endsWith('.png')))
+  copyFileSync(join(figuresDir, f), join(bundle, 'assets/figures', f))
+
+// 5. Rewrite the relative roots the HTML/theme use. Order: deepest first.
 let html = readFileSync(tmpHtml, 'utf8')
 html = html.split('../../figures/').join('./assets/figures/')
 html = html.split('../assets/').join('./assets/')
-if (base) html = html.split('./assets/').join(`${base}/assets/`) // absolute mount
+if (base) {
+  html = html.split('./assets/').join(`${base}/assets/`) // absolute mount
+  // Repoint Artific at the host site's served woff2 (dropped from the bundle).
+  const before = html
+  html = html.replace(/@font-face \{font-family:'Artific Variable';[^}]*\}/, siteArtificFaces)
+  if (html === before) throw new Error('Artific @font-face block not found — theme changed; update siteArtificFaces')
+}
 writeFileSync(join(bundle, 'index.html'), html)
 console.log('bundle ->', bundle, base ? `(base ${base})` : '(relative)')
 

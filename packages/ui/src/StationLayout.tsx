@@ -1,9 +1,44 @@
-import type { ReactNode } from "react";
+import { createContext, useContext, type ReactNode } from "react";
+
+/**
+ * Optional app-provided renderer for the header's top-left title area. Lets an
+ * app swap the plain `<h1>` for something richer (e.g. a station-navigation
+ * dropdown) without `@camp/ui` knowing anything about routing or the station
+ * list. It receives the station `title` so the app can render it as the label.
+ */
+export type StationHeaderTitleRenderer = (title: string) => ReactNode;
+
+const HeaderTitleContext = createContext<StationHeaderTitleRenderer | null>(
+  null,
+);
+
+/**
+ * Wrap the routed app in this to have every `StationLayout` render `render(title)`
+ * in place of its default `<h1>`. Without a provider, `StationLayout` falls back
+ * to the plain title, so the component stays usable standalone.
+ */
+export function StationHeaderTitleProvider({
+  render,
+  children,
+}: {
+  render: StationHeaderTitleRenderer;
+  children: ReactNode;
+}) {
+  return (
+    <HeaderTitleContext.Provider value={render}>
+      {children}
+    </HeaderTitleContext.Provider>
+  );
+}
 
 export interface StationLayoutProps {
   /** Station title, shown in the header. */
   title: string;
-  /** Optional one-line framing of the problem the student is poking at. */
+  /**
+   * Optional one-line framing of the problem. Currently NOT rendered — the
+   * header is a compact floating island with just the title/nav. Kept so
+   * stations can carry this copy without a breaking change.
+   */
   subtitle?: string;
   /** Right-rail content: sliders, toggles, run buttons. Stacks below the canvas on mobile. */
   controls: ReactNode;
@@ -38,11 +73,18 @@ export function StationLayout({
   takeaway,
   fullBleed = false,
 }: StationLayoutProps) {
+  const renderTitle = useContext(HeaderTitleContext);
   return (
     <div className="flex h-full min-h-0 flex-col bg-bg text-fg">
-      <header className="shrink-0 border-b border-border px-5 py-4">
-        <h1 className="text-lg font-semibold">{title}</h1>
-        {subtitle ? <p className="mt-1 text-sm text-muted">{subtitle}</p> : null}
+      {/* No spanning header bar: the title/nav floats as an island at top-left.
+          `subtitle` is intentionally not rendered here (kept on the type so
+          stations can still pass framing copy without a breaking change). */}
+      <header className="shrink-0 px-4 pt-4">
+        {renderTitle ? (
+          renderTitle(title)
+        ) : (
+          <h1 className="text-lg font-semibold">{title}</h1>
+        )}
       </header>
 
       <div className="flex min-h-0 flex-1 flex-col md:flex-row">

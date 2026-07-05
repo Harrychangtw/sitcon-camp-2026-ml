@@ -64,7 +64,7 @@ MLP(bag) 前後輸出一模一樣；RNN 的輸出會變。
 - Blank lines inside the divs are required (markdown must render inside HTML).
 - Where the card asserts UI the station does not have yet, add
   `<!-- STATION SPEC: <what the builder must support for this card to be true> -->`.
-  These get collected into REPORT.md as the 4×V100 inference-UI requirements.
+  These are the inference-UI requirements handed to the station builders.
 
 ## Debriefs carry evidence
 
@@ -129,8 +129,8 @@ frame + URL + 「截圖：…」 capture instruction), created by
 | `placeholder_station_<tokenizer·embedding·shuffle·nexttoken·rnn·transformer>.png` | the six course2 stations |
 
 Reference them like any figure. Every placeholder you use must appear in your
-section's `<!-- ASSET TODO: <file> — <exact capture instruction> -->` comment
-so the merge can build `ASSETS-TODO.md`.
+section's `<!-- ASSET TODO: <file>: <exact capture instruction> -->` comment
+recording how to capture the real asset.
 
 ## Copy rules (delta over COOKBOOK)
 
