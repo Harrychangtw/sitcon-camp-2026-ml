@@ -14,10 +14,12 @@
  */
 import { useEffect, useMemo, useState } from "react";
 import {
-  LabeledSlider,
+  BlockSlider,
+  BlockToggle,
+  DockControls,
   LiveStatus,
-  SegmentedControl,
   StationLayout,
+  SuggestInput,
   type LiveState,
 } from "@camp/ui";
 import {
@@ -61,6 +63,17 @@ interface LiveLookup {
 }
 
 const MAX_K = 15; // must match precompute TOP_K
+
+// Prebuilt examples surfaced in the search field when it's focused and empty —
+// bilingual on purpose (the whole point is one shared space across languages).
+const PRESETS = [
+  { label: "貓", value: "貓" },
+  { label: "cat", value: "cat" },
+  { label: "蘋果", value: "蘋果" },
+  { label: "apple", value: "apple" },
+  { label: "快樂", value: "快樂" },
+  { label: "music", value: "music" },
+] as const;
 
 export function EmbeddingStation() {
   // 1. STATE
@@ -220,9 +233,20 @@ export function EmbeddingStation() {
       title="Embedding"
       subtitle="token 只是一堆 id，語意是從哪裡來的？"
       fullBleed
+      input={
+        <SuggestInput
+          value={query}
+          onChange={setQuery}
+          onSubmit={setQuery}
+          ariaLabel="搜尋詞"
+          placeholder="搜尋一個詞…貓、cat、蘋果"
+          presets={PRESETS}
+          status={<LiveStatus state={liveState} />}
+        />
+      }
       controls={
-        <>
-          <SegmentedControl<Dim>
+        <DockControls>
+          <BlockToggle<Dim>
             label="投影"
             value={dim}
             onChange={setDim}
@@ -231,85 +255,16 @@ export function EmbeddingStation() {
               { label: "3D", value: "3d" },
             ]}
           />
-
-          <label className="flex flex-col gap-1.5">
-            <span className="font-mono text-xs text-muted">搜尋詞</span>
-            <input
-              type="text"
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              list="embedding-words"
-              placeholder="例如 貓、cat、蘋果…"
-              className="rounded-md border border-border bg-panel px-3 py-2 text-sm text-fg placeholder:text-muted focus:border-accent focus:outline-none"
-            />
-            <datalist id="embedding-words">
-              {points.map((p) => (
-                <option key={p.word} value={p.word} />
-              ))}
-            </datalist>
-            <LiveStatus state={liveState} />
-          </label>
-
-          <LabeledSlider
-            label="鄰居數（k）"
+          <BlockSlider
+            label="Top K"
             min={1}
             max={MAX_K}
             step={1}
             value={k}
             onChange={setK}
-            format={(v) => `${v}`}
+            ariaLabel="鄰居數 k"
           />
-
-          {/* Neighbour list — the "距離 ≈ 相似度" beat, made literal, across
-              both languages. Works identically for precomputed (in-vocab) and
-              live (novel) words. */}
-          {activeWord ? (
-            <div className="flex flex-col gap-2 border-t border-border/30 pt-3">
-              <span className="font-mono text-xs text-accent">
-                {activeWord} · 最近的 {nearest.length} 個
-              </span>
-              <ol className="flex flex-col gap-1">
-                {nearest.map((n, i) => (
-                  <li
-                    key={n.word}
-                    className="flex items-baseline justify-between gap-2 font-mono text-xs"
-                  >
-                    <span className="text-fg">
-                      <span className="text-muted">
-                        {String(i + 1).padStart(2, "0")}
-                      </span>{" "}
-                      {n.word}
-                      {langOf.get(n.word) ? (
-                        <span className="text-muted uppercase"> {langOf.get(n.word)}</span>
-                      ) : null}
-                    </span>
-                    <span className="text-muted">{n.score.toFixed(3)}</span>
-                  </li>
-                ))}
-              </ol>
-            </div>
-          ) : categories.length > 0 ? (
-            <div className="flex flex-col gap-2 border-t border-border/30 pt-3">
-              <span className="font-mono text-xs text-muted">類別（k-means 群集）</span>
-              <div className="flex flex-wrap gap-x-3 gap-y-1">
-                {categories.map((c) => (
-                  <span
-                    key={c}
-                    className="flex items-center gap-1.5 font-mono text-xs text-muted"
-                  >
-                    <span
-                      className="inline-block h-2.5 w-2.5 rounded-sm border border-border"
-                      style={{
-                        backgroundColor: rgbCss(catColors.get(c) ?? colors.muted),
-                      }}
-                    />
-                    {c}
-                  </span>
-                ))}
-              </div>
-            </div>
-          ) : null}
-        </>
+        </DockControls>
       }
       takeaway={
         <span>
@@ -326,32 +281,81 @@ export function EmbeddingStation() {
         </span>
       }
     >
-      <div className="flex h-full flex-col gap-3">
-        <p className="text-sm text-muted">
-          {loading
-            ? "載入 embedding 中… "
-            : `${points.length} 個詞（中＋英，同一個空間）投影到 ${dim.toUpperCase()}（離線 PCA）。`}
-          {activeWord
-            ? "它最近的鄰居會以亮綠色標示。"
-            : "搜尋任何一個詞，點亮它最近的鄰居。"}
-          {dim === "3d" ? " 拖曳可旋轉視角，滾動可縮放。" : ""}
-        </p>
-        <div className="min-h-0 flex-1">
+      <div className="relative h-full w-full">
+        {/* The point cloud fills the whole canvas. */}
+        <div className="absolute inset-0">
           {dim === "3d" ? (
-            <Scatter3D
-              data={scatterData}
-              colorBy
-              highlight={highlight}
-              fill
-            />
+            <Scatter3D data={scatterData} colorBy highlight={highlight} fill />
           ) : (
-            <Scatter2D
-              data={scatterData}
-              colorBy
-              highlight={highlight}
-              fill
-            />
+            <Scatter2D data={scatterData} colorBy highlight={highlight} fill />
           )}
+        </div>
+
+        {/* Quiet caption, bottom-left corner (the dock sits bottom-center). */}
+        <div className="pointer-events-none absolute bottom-2 left-3 max-w-xs font-mono text-[11px] leading-relaxed text-muted">
+          {loading
+            ? "載入 embedding 中…"
+            : `${points.length} 個詞（中＋英）· ${dim.toUpperCase()} 投影`}
+          {activeWord ? " · 亮綠色是最近的鄰居" : ""}
+          {dim === "3d" ? " · 拖曳旋轉、滾動縮放" : ""}
+        </div>
+
+        {/* Readouts thrown outside the dock: the neighbour list (the
+            "距離 ≈ 相似度" beat) or the category legend, floating top-right. */}
+        <div className="absolute right-3 top-14 z-20 w-60 max-w-[70vw]">
+          {activeWord ? (
+            <div className="rounded-md border border-border bg-panel/90 p-3 shadow-md backdrop-blur">
+              <span className="font-mono text-xs text-accent">
+                {activeWord} · 最近的 {nearest.length} 個
+              </span>
+              <ol className="mt-2 flex flex-col gap-1">
+                {nearest.map((n, i) => (
+                  <li
+                    key={n.word}
+                    className="flex items-baseline justify-between gap-2 font-mono text-xs"
+                  >
+                    <span className="text-fg">
+                      <span className="text-muted">
+                        {String(i + 1).padStart(2, "0")}
+                      </span>{" "}
+                      {n.word}
+                      {langOf.get(n.word) ? (
+                        <span className="text-muted uppercase">
+                          {" "}
+                          {langOf.get(n.word)}
+                        </span>
+                      ) : null}
+                    </span>
+                    <span className="text-muted">{n.score.toFixed(3)}</span>
+                  </li>
+                ))}
+              </ol>
+            </div>
+          ) : categories.length > 0 ? (
+            <div className="rounded-md border border-border bg-panel/90 p-3 shadow-md backdrop-blur">
+              <span className="font-mono text-xs text-muted">
+                類別（k-means 群集）
+              </span>
+              <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1">
+                {categories.map((c) => (
+                  <span
+                    key={c}
+                    className="flex items-center gap-1.5 font-mono text-xs text-muted"
+                  >
+                    <span
+                      className="inline-block h-2.5 w-2.5 rounded-sm border border-border"
+                      style={{
+                        backgroundColor: rgbCss(
+                          catColors.get(c) ?? colors.muted,
+                        ),
+                      }}
+                    />
+                    {c}
+                  </span>
+                ))}
+              </div>
+            </div>
+          ) : null}
         </div>
       </div>
     </StationLayout>

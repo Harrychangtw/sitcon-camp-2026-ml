@@ -40,7 +40,13 @@ export interface StationLayoutProps {
    * stations can carry this copy without a breaking change.
    */
   subtitle?: string;
-  /** Right-rail content: sliders, toggles, run buttons. Stacks below the canvas on mobile. */
+  /**
+   * Primary input zone: the LEFT half of the bottom-center dock. Optional — the
+   * one field students type into (a search box / prompt). Readouts and rich
+   * lists do NOT go here; keep this to the single primary input.
+   */
+  input?: ReactNode;
+  /** Controls: the RIGHT half of the bottom-center dock — sliders, toggles, run buttons. */
   controls: ReactNode;
   /** The main interactive canvas (a @camp/viz primitive, usually). */
   children: ReactNode;
@@ -56,63 +62,94 @@ export interface StationLayoutProps {
 }
 
 /**
- * The canonical shell every station renders inside. Header + centered canvas +
- * a properties-panel-style control rail on the RIGHT + optional takeaway
- * footer. The canvas keeps the visual focus; controls read as a settings panel
- * (each top-level node in `controls` is one section, separated by hairlines).
- * Responsive: the rail stacks below the canvas on screens narrower than `md`.
+ * The canonical shell every station renders inside. The canvas fills the whole
+ * area; three floating islands sit over it: the title/nav (top-left), the 重點
+ * info badge (top-right, expands on hover), and a bottom-center dock holding the
+ * primary `input` (left) and `controls` (right). Only controls live in the dock;
+ * rich readouts belong on the canvas, placed by the station.
  *
  * It owns layout only — no station state. State lives in the station component
  * (see apps/course2/src/stations/_reference for the pattern).
  */
 export function StationLayout({
   title,
-  subtitle,
   controls,
+  input,
   children,
   takeaway,
   fullBleed = false,
 }: StationLayoutProps) {
   const renderTitle = useContext(HeaderTitleContext);
   return (
-    <div className="flex h-full min-h-0 flex-col bg-bg text-fg">
-      {/* No spanning header bar: the title/nav floats as an island at top-left.
-          `subtitle` is intentionally not rendered here (kept on the type so
-          stations can still pass framing copy without a breaking change). */}
-      <header className="shrink-0 px-4 pt-4">
+    <div className="relative flex h-full min-h-0 flex-col overflow-hidden bg-bg text-fg">
+      {/* Title / nav island — top-left, floating over the canvas. */}
+      <div className="pointer-events-none absolute left-4 top-4 z-40 [&>*]:pointer-events-auto">
         {renderTitle ? (
           renderTitle(title)
         ) : (
           <h1 className="text-lg font-semibold">{title}</h1>
         )}
-      </header>
-
-      <div className="flex min-h-0 flex-1 flex-col md:flex-row">
-        <main className="order-1 min-h-0 flex-1 overflow-auto p-5">
-          {/* h-full so a station's `h-full`/`flex-1` canvas can size to the
-              available height (fill mode). Short content still stacks from top.
-              `fullBleed` drops the centered max-width so a canvas fills the whole
-              main width; text stations keep the capped readable column. */}
-          <div
-            className={
-              fullBleed ? "h-full w-full" : "mx-auto h-full max-w-5xl"
-            }
-          >
-            {children}
-          </div>
-        </main>
-        <aside className="order-2 shrink-0 border-t border-border bg-panel md:w-80 md:overflow-y-auto md:border-t-0 md:border-l">
-          <div className="flex flex-col divide-y divide-border [&>*]:px-5 [&>*]:py-4">
-            {controls}
-          </div>
-        </aside>
       </div>
 
+      {/* 重點 info badge — top-right corner. Grayed by default, neon on hover;
+          hovering reveals the takeaway panel (opens downward). Pure CSS, no
+          state, SSR-safe. `subtitle` is intentionally not rendered. */}
       {takeaway ? (
-        <footer className="shrink-0 border-t border-border bg-panel px-5 py-3 text-sm">
-          <span className="mr-2 font-mono text-xs text-accent">重點</span>
-          {takeaway}
-        </footer>
+        <div className="group absolute right-4 top-4 z-50">
+          <button
+            type="button"
+            aria-label="重點"
+            className="flex h-9 w-9 items-center justify-center rounded-full border border-border bg-panel text-muted shadow-sm transition-all hover:border-accent hover:text-accent hover:shadow-[0_0_12px] hover:shadow-accent/60"
+          >
+            <svg
+              viewBox="0 0 24 24"
+              className="h-5 w-5"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth={2}
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              aria-hidden="true"
+            >
+              <circle cx="12" cy="12" r="10" />
+              <line x1="12" y1="16" x2="12" y2="12" />
+              <line x1="12" y1="8" x2="12.01" y2="8" />
+            </svg>
+          </button>
+          <div className="pointer-events-none absolute right-0 top-full mt-2 w-max max-w-md -translate-y-1 rounded-md border border-border bg-panel px-4 py-3 text-sm opacity-0 shadow-md transition-all duration-150 group-hover:pointer-events-auto group-hover:translate-y-0 group-hover:opacity-100">
+            <div className="mb-1.5 font-mono text-sm font-semibold text-accent">
+              重點
+            </div>
+            {takeaway}
+          </div>
+        </div>
+      ) : null}
+
+      {/* Canvas. `pb-28` keeps scrollable content clear of the bottom dock;
+          full-bleed canvases size to `h-full` and the dock floats over them. */}
+      <main className="relative min-h-0 flex-1 overflow-auto p-5 pb-28">
+        <div
+          className={fullBleed ? "h-full w-full" : "mx-auto h-full max-w-5xl"}
+        >
+          {children}
+        </div>
+      </main>
+
+      {/* Bottom-center dock: input (left) · controls (right). */}
+      {input || controls ? (
+        <div className="pointer-events-none absolute inset-x-0 bottom-4 z-30 flex justify-center px-4">
+          <div className="pointer-events-auto flex max-w-full items-stretch gap-4 rounded-[18px] bg-panel/90 p-3 shadow-lg backdrop-blur">
+            {input ? (
+              <div className="flex shrink-0 items-stretch">{input}</div>
+            ) : null}
+            {input && controls ? (
+              <div className="w-px shrink-0 self-stretch bg-border" />
+            ) : null}
+            {controls ? (
+              <div className="flex items-center gap-x-5 gap-y-2">{controls}</div>
+            ) : null}
+          </div>
+        </div>
       ) : null}
     </div>
   );

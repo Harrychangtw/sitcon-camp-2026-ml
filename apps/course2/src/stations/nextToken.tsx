@@ -16,10 +16,12 @@
  */
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
-  LabeledSlider,
+  BlockSlider,
+  BlockToggle,
+  DockControls,
   LiveStatus,
-  SegmentedControl,
   StationLayout,
+  SuggestInput,
   type LiveState,
 } from "@camp/ui";
 import { Heatmap } from "@camp/viz";
@@ -198,43 +200,20 @@ export function NextTokenStation() {
     <StationLayout
       title="Next Token"
       subtitle="所有語言任務其實都一樣：預測 next token。"
+      input={
+        <SuggestInput
+          value={prompt}
+          onChange={setPrompt}
+          onSubmit={setPrompt}
+          ariaLabel="輸入文字"
+          placeholder="輸入一段文字…GPU 即時算"
+          presets={(dist?.suggestions ?? []).map((s) => ({ label: s, value: s }))}
+          status={<LiveStatus state={liveState} />}
+        />
+      }
       controls={
-        <>
-          <label className="block">
-            <div className="mb-1 font-mono text-xs text-muted">
-              輸入（隨便打，GPU 會即時算）
-            </div>
-            <input
-              type="text"
-              value={prompt}
-              onChange={(e) => setPrompt(e.target.value)}
-              placeholder="輸入一段文字…"
-              className="w-full rounded-md border border-border bg-panel px-2 py-1.5 text-sm text-fg outline-none placeholder:text-muted focus:border-accent"
-            />
-            <div className="mt-1">
-              <LiveStatus state={liveState} />
-            </div>
-          </label>
-
-          {dist?.suggestions?.length ? (
-            <div>
-              <div className="mb-1 font-mono text-xs text-muted">試試看</div>
-              <div className="flex flex-wrap gap-1.5">
-                {dist.suggestions.map((s) => (
-                  <button
-                    key={s}
-                    type="button"
-                    onClick={() => setPrompt(s)}
-                    className="rounded-md border border-border bg-panel px-2 py-1 text-left text-xs text-muted transition-colors hover:border-accent hover:text-fg"
-                  >
-                    {s}
-                  </button>
-                ))}
-              </div>
-            </div>
-          ) : null}
-
-          <SegmentedControl<Decoding>
+        <DockControls>
+          <BlockToggle<Decoding>
             label="解碼方式"
             value={decoding}
             onChange={setDecoding}
@@ -243,25 +222,27 @@ export function NextTokenStation() {
               { label: "貪婪", value: "greedy" },
             ]}
           />
-          <LabeledSlider
+          <BlockSlider
             label="Temperature"
             min={0.1}
             max={2}
             step={0.1}
             value={temperature}
             onChange={setTemperature}
-            format={(v) => (decoding === "greedy" ? "貪婪模式" : v.toFixed(1))}
+            disabled={decoding === "greedy"}
+            format={(v) => (decoding === "greedy" ? "貪婪" : v.toFixed(1))}
           />
-          <LabeledSlider
+          <BlockSlider
             label="Top-k"
             min={1}
             max={dist?.topN ?? 12}
             step={1}
             value={topK}
             onChange={setTopK}
-            format={(v) => (decoding === "greedy" ? "1 (貪婪)" : `${v}`)}
+            disabled={decoding === "greedy"}
+            format={(v) => (decoding === "greedy" ? "1" : `${v}`)}
           />
-        </>
+        </DockControls>
       }
       takeaway={
         <span>

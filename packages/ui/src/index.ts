@@ -19,6 +19,18 @@ export type {
   SegmentedOption,
 } from "./SegmentedControl";
 
+export { SuggestInput } from "./SuggestInput";
+export type { SuggestInputProps, SuggestPreset } from "./SuggestInput";
+
+export { DockControls } from "./DockControls";
+export type { DockControlsProps } from "./DockControls";
+
+export { BlockToggle } from "./BlockToggle";
+export type { BlockToggleProps, BlockToggleOption } from "./BlockToggle";
+
+export { BlockSlider } from "./BlockSlider";
+export type { BlockSliderProps } from "./BlockSlider";
+
 export { RunButton } from "./RunButton";
 export type { RunButtonProps } from "./RunButton";
 
