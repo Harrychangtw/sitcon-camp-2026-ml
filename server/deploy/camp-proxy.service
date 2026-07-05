@@ -1,0 +1,24 @@
+# The load-balancing proxy in front of camp-server@0..3 (see deploy/Caddyfile).
+#
+#   sudo cp server/deploy/camp-proxy.service /etc/systemd/system/
+#   sudo systemctl daemon-reload
+#   sudo systemctl enable --now camp-proxy
+#
+# Listens on 127.0.0.1:PROXY_PORT (default 8300) — the port the backend
+# tailscale funnel targets. Adjust User=, paths, and the caddy binary location.
+
+[Unit]
+Description=SITCON camp inference load balancer (caddy)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+User=ubuntu
+WorkingDirectory=/home/ubuntu/sitcon-camp-2026-ml/server/deploy
+EnvironmentFile=-/home/ubuntu/sitcon-camp-2026-ml/server/.env
+ExecStart=/home/ubuntu/.local/bin/caddy run --config /home/ubuntu/sitcon-camp-2026-ml/server/deploy/Caddyfile --adapter caddyfile
+Restart=on-failure
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target

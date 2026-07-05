@@ -61,15 +61,49 @@ identity. With real models that's no longer automatic. The new contract:
   from the shipped JSON. If verification fails, re-run with
   `--write-artifacts` and commit the JSON.
 
-## Concurrency (deliberately simple)
+## Concurrency: one process per GPU, replicated behind a proxy
 
-One process, one device. A 0.6B model answers a short prompt in tens of
-milliseconds, but a class of ~40 students hitting Enter together will queue:
-GPU forwards are serialised behind an in-process lock, so bursts degrade to
-predictable queueing, not interleaved chaos. If that ever becomes the
-bottleneck on the 4× V100 box, the path is N uvicorn workers pinned via
-`CUDA_VISIBLE_DEVICES=0..3` behind the existing reverse proxy, or a batching
-queue — future work, deliberately not built now.
+**The app is one process on one device** — GPU forwards serialise behind an
+in-process lock (`lm_lock`), so a burst degrades to predictable queueing, not
+interleaved chaos. That stays true. **Scaling is pure deploy config**: on the
+4× V100 camp box we run **four copies of the unchanged app**, each pinned to
+one physical card via `CUDA_VISIBLE_DEVICES=<i>` (each process sees only its
+card, so `DEVICE=auto` still resolves `cuda:0` inside it), listening on
+`127.0.0.1:8301..8304`, behind one caddy reverse proxy on the single public
+port (default 8300 — the port the backend tailscale funnel targets).
+
+Why replication, not the alternatives: the models fit on one card with room to
+spare, so sharding (`device_map="auto"`, DP/DDP) solves the wrong problem and
+is slower; `uvicorn --workers N` can't give each worker its own
+`CUDA_VISIBLE_DEVICES`; an in-process replica pool hits the GIL on the
+CPU-heavy attention-JSON path. Separate processes reuse the code verbatim and
+sidestep all three.
+
+The proxy (`deploy/Caddyfile`) balances by **in-flight count**
+(`lb_policy least_conn` — a transformer request costs far more than an
+embedding lookup), health-checks `GET /health` (unauthenticated by design) so
+a crashed replica is ejected instead of 502-ing a quarter of the class, and
+passes `X-Camp-Token` / CORS / the backends' gzip straight through.
+
+Launch it with systemd (`deploy/camp-server@.service` ×4 +
+`deploy/camp-proxy.service`) or tmux (`scripts/serve-multi.sh`) — see the
+runbook below. The 3090/dev box keeps the single process (`camp-server.service`
+/ `scripts/serve.sh`); never run both deploys on one machine.
+
+**Measured** (60-way synchronized burst, `server/scripts/loadtest.py`, local,
+warm, V100):
+
+| Route | Deploy | p50 | p95 | max | req/s |
+| --- | --- | --- | --- | --- | --- |
+| `/transformer/attention` | 1 process | 2.45 s | 3.63 s | 3.74 s | 15.9 |
+| `/transformer/attention` | 4 + proxy | **0.46 s** | **0.75 s** | **0.80 s** | **72.1** |
+| `/embedding/lookup` (novel word) | 1 process | 4.24 s | 6.18 s | 6.22 s | 9.6 |
+| `/embedding/lookup` (novel word) | 4 + proxy | **1.82 s** | **1.98 s** | **1.99 s** | **30.0** |
+
+Reproduce: `.venv/bin/python scripts/loadtest.py --base http://127.0.0.1:8300
+--route /transformer/attention -n 60` (token read from `server/.env`). If
+4-way ever isn't enough, the next lever is a cross-request batching queue —
+deliberately not built for a 60-person camp.
 
 ---
 
@@ -86,10 +120,11 @@ Two targets, one codebase. **Only `server/.env` differs between machines.**
 The models are small: `Qwen3-Embedding-0.6B` + `Qwen3-0.6B`, both loaded in
 float32 (~2.4 GB VRAM each — float32 on purpose: the V100 has no usable bf16,
 and it keeps precompute/server outputs agreeing to the exported rounding),
-plus a ~120 kB GRU npz. ~5 GB total on `cuda:0` — a sliver on either machine;
-the extra V100s buy nothing at this load and are deliberately not used.
-`DEVICE=cpu` also fully works (laptop dev / last-ditch fallback) — expect
-hundreds of ms instead of tens.
+plus a ~120 kB GRU npz. ~5 GB total per process — a sliver on either machine.
+The 3090 box runs **one** process; the V100 box runs **four** (one per card,
+~5 GB on each 32 GB card — see "Concurrency" above). `DEVICE=cpu` also fully
+works (laptop dev / last-ditch fallback) — expect hundreds of ms instead of
+tens.
 
 ## Shared path (identical on both machines)
 
@@ -161,8 +196,10 @@ origin (plus `http://localhost:5173` for dev), pick `PORT`, leave
 
 ### 4. Run persistently (systemd)
 
-`/etc/systemd/system/camp-server.service` — identical on both machines
-(adjust `User` and the repo path):
+Two mutually exclusive options — pick by box, never enable both:
+
+**(a) Single process — 3090 / dev box.**
+`/etc/systemd/system/camp-server.service` (adjust `User` and the repo path):
 
 ```ini
 [Unit]
@@ -188,10 +225,34 @@ sudo systemctl enable --now camp-server
 journalctl -u camp-server -f     # watch the startup log
 ```
 
+**(b) One replica per GPU — the 4× V100 camp box.** Install caddy (a single
+static binary, no root needed for the binary itself:
+`curl -sL "https://github.com/caddyserver/caddy/releases/download/v2.10.0/caddy_2.10.0_linux_amd64.tar.gz" | tar -xz caddy && mv caddy ~/.local/bin/`),
+then:
+
+```bash
+sudo cp server/deploy/camp-server@.service server/deploy/camp-proxy.service /etc/systemd/system/
+# edit both: User= and the absolute paths for this box
+sudo systemctl daemon-reload
+sudo systemctl enable --now camp-server@0 camp-server@1 camp-server@2 camp-server@3
+sudo systemctl enable --now camp-proxy
+journalctl -u camp-server@2 -f   # per-replica startup log
+```
+
+Instance `%i` = physical GPU index: it gets `CUDA_VISIBLE_DEVICES=%i` and
+listens on `127.0.0.1:$((BASE_PORT+1+i))` (8301..8304 by default); the proxy
+serves `127.0.0.1:PROXY_PORT` (8300). All read the shared `server/.env`.
+Startup note: the HF weight cache is shared on disk, so if it's cold, start
+`camp-server@0` alone first, let it download (~2.7 GB), then start the rest —
+they'll read from cache and just load VRAM.
+
 The startup log prints the resolved device and GPU name — confirm it says
-`resolved device=cuda:0 gpu=NVIDIA GeForce RTX 3090` (or `Tesla V100-SXM2-32GB`)
-so you know which machine it landed on and that it didn't silently fall back
-to CPU.
+`resolved device=cuda:0 gpu=NVIDIA GeForce RTX 3090` (or `Tesla V100-SXM2-32GB
+(CUDA_VISIBLE_DEVICES=2)` per replica) so you know which card it landed on and
+that it didn't silently fall back to CPU. On the multi-GPU deploy, each
+internal `127.0.0.1:830x/health` must report a **different**
+`CUDA_VISIBLE_DEVICES`, and `nvidia-smi` must show one python process per
+card.
 
 ### 5. Smoke test
 

@@ -109,9 +109,15 @@ export function EmbeddingStation() {
   // not an error: the live server embeds it with the SAME model and it drops
   // into the same cloud. On any failure `liveInferTimed` yields null and the
   // shipped cloud simply stays as-is (LiveStatus says so honestly).
+  //
+  // The station (and the server) work ONE word at a time: /embedding/lookup
+  // rejects whitespace with a 422. Honor that contract client-side so a typed
+  // phrase ("apple store") never fires a lookup the server is bound to reject —
+  // it's treated like a half-typed word (idle), not an offline failure.
   const missingWord = useMemo(() => {
     const q = query.trim().toLowerCase();
-    return q && points.length > 0 && !wordSet.has(q) ? q : null;
+    if (!q || /\s/.test(q)) return null;
+    return points.length > 0 && !wordSet.has(q) ? q : null;
   }, [query, points, wordSet]);
 
   const [live, setLive] = useState<LiveLookup | null>(null);

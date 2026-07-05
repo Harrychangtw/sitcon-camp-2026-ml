@@ -27,6 +27,7 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 import threading
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -131,6 +132,13 @@ def load_models(settings: Settings) -> ModelStore:
     gpu = None
     if device.startswith("cuda") and torch.cuda.is_available():
         gpu = torch.cuda.get_device_name(torch.device(device))
+        # Under the replicated multi-GPU deploy each process is pinned to one
+        # physical card via CUDA_VISIBLE_DEVICES, so "cuda:0" is ambiguous
+        # across replicas; tag the reported GPU with the mask so journalctl
+        # and /health show which physical card this process landed on.
+        visible = os.environ.get("CUDA_VISIBLE_DEVICES")
+        if visible:
+            gpu = f"{gpu} (CUDA_VISIBLE_DEVICES={visible})"
     # The operator's which-machine-did-it-land-on check (runbook smoke test).
     log.info(
         "resolved device=%s gpu=%s (torch %s, cuda available=%s, %d visible)",

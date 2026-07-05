@@ -1,0 +1,34 @@
+# Templated unit for the multi-GPU deploy (V100 box): one instance per GPU,
+# %i = physical GPU index. Enable all four:
+#
+#   sudo cp server/deploy/camp-server@.service /etc/systemd/system/
+#   sudo systemctl daemon-reload
+#   sudo systemctl enable --now camp-server@0 camp-server@1 camp-server@2 camp-server@3
+#
+# Each instance sees ONLY its card (CUDA_VISIBLE_DEVICES=%i), so the app's
+# DEVICE=auto still resolves cuda:0 inside it — the app stays single-device;
+# replication is pure deploy config. Instance %i listens on BASE_PORT+1+%i
+# (8301..8304 with the default BASE_PORT=8300), loopback only: the caddy proxy
+# (camp-proxy.service, deploy/Caddyfile) is the sole entry point.
+#
+# Mutually exclusive with the single-process camp-server.service documented in
+# server/README.md (the 3090/dev box) — never enable both on one machine.
+# Adjust User= and the three paths for your box.
+
+[Unit]
+Description=SITCON camp live inference backend (GPU %i)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+User=ubuntu
+WorkingDirectory=/home/ubuntu/sitcon-camp-2026-ml/server
+EnvironmentFile=/home/ubuntu/sitcon-camp-2026-ml/server/.env
+Environment=CUDA_VISIBLE_DEVICES=%i
+# Port arithmetic (BASE_PORT+1+%i) needs a shell; systemd can't compute.
+ExecStart=/bin/bash -c 'exec /home/ubuntu/sitcon-camp-2026-ml/server/.venv/bin/uvicorn app.main:app --host 127.0.0.1 --port $(( ${BASE_PORT:-8300} + 1 + %i ))'
+Restart=on-failure
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target
