@@ -172,6 +172,15 @@ h3 {
   line-height: 1.35;
 }
 
+/* h4 = small grey block label (used inside .station blocks; safe anywhere) */
+h4 {
+  margin: 0 0 32px;
+  font-size: 52px;
+  font-weight: 400;
+  letter-spacing: 0.06em;
+  color: var(--grey);
+}
+
 /* h6 = figure caption (markdown-native: `###### 圖說`) */
 h6 {
   display: block;
@@ -482,6 +491,84 @@ p > img:not(.emoji) {
 /* explicit grey tier when em is inconvenient */
 .l2 {
   color: var(--grey);
+}
+
+/* three-column utility (parallel to .cols) */
+.cols3 {
+  display: flex;
+  width: 100%;
+  gap: 72px;
+  align-items: flex-start;
+}
+.cols3 > div {
+  flex: 1 1 0;
+  min-width: 0;
+}
+
+/* ---- station card ------------------------------------------------------
+ * The fixed hand-off structure (CONVENTIONS.md): three labelled blocks —
+ * 你要動的旋鈕 · 試試看 · 你應該會看到 — then a .checkpoint line beneath.
+ * Markdown: <div class="station"><div class="st"><h4>你要動的旋鈕</h4> … .
+ * `.station.two` = two blocks only (rare).
+ */
+.station {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 50px;
+  width: 100%;
+  margin: 0 0 50px;
+}
+.station.two {
+  grid-template-columns: repeat(2, 1fr);
+}
+.station .st {
+  background: var(--card);
+  border: 2px solid var(--grey-mid);
+  border-radius: 50px;
+  padding: 56px 64px;
+  font-size: 60px;
+  line-height: 1.55;
+}
+.station .st h4 {
+  margin: 0 0 36px;
+  font-size: 46px;
+  font-weight: 400;
+  letter-spacing: 0.08em;
+  color: var(--grey);
+}
+.station .st p {
+  margin: 0 0 28px;
+  font-size: 60px;
+}
+.station .st p:last-child {
+  margin-bottom: 0;
+}
+.station .st ul {
+  margin: 0;
+  padding-left: 56px;
+}
+.station .st li {
+  margin: 0 0 22px;
+  font-size: 56px;
+  line-height: 1.5;
+}
+.station .st li:last-child {
+  margin-bottom: 0;
+}
+
+/* one-line self-check, Denny-style — lime left rule on a card strip */
+.checkpoint {
+  width: 100%;
+  margin: 0 0 44px;
+  padding: 36px 64px;
+  border-left: 12px solid var(--lime);
+  border-radius: 0 32px 32px 0;
+  background: var(--card);
+  font-size: 60px;
+  line-height: 1.5;
+}
+.checkpoint p {
+  margin: 0;
 }
 
 /* ---- statement page — sparse hero / cliffhanger beat --------------------
