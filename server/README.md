@@ -1,24 +1,32 @@
 # camp-server — live inference for Course 2 custom input
 
 A small FastAPI + torch service that runs the **same models the precompute
-pipeline uses** for arbitrary student input, on the four stations where the
+pipeline uses** for arbitrary student input, on the five stations where the
 precomputed lookup table has no row for what the student typed: **embedding**,
-**next-token**, **rnn-viz**, **transformer**.
+**next-token**, **rnn-viz**, **transformer**, **order-shuffle**.
 
 The golden rule (browser never trains, fixed-input stations use precomputed
 JSON) still holds everywhere else. This server is opt-in per station via
 `VITE_LIVE_INFERENCE_URL`; if it is unset or the server is unreachable, every
 station falls back to the precomputed artifacts and the class keeps working.
 
+Since wave 3, the models are **real**: one `Qwen/Qwen3-0.6B` causal LM serves
+every LM-shaped route (next-token distributions, transformer attention,
+order-shuffle fluency), the embedding routes keep `Qwen3-Embedding-0.6B`, and
+rnn-viz runs a small GRU **trained** by `camp-precompute train-rnn` (Qwen is a
+transformer — using it for the RNN lesson would defeat the lesson).
+
 ## Endpoints
 
 | Route | Mirrors artifact | Notes |
 | --- | --- | --- |
-| `GET /health` | — | No auth. `{status, device, gpu, models}` |
-| `POST /embedding/lookup` | one word of `points.{lang}.json` + `neighbors.{lang}.json` | `{word, lang}` → `{inVocab, point, neighbors, suggestions}`. In-vocab words return the shipped values verbatim; novel words are embedded live with the same BGE model + PCA/cluster params. |
-| `POST /next-token/predict` | one context of `distributions.json` | `{prompt}` → `{context, contextKnown, topN, entries}` (same bigram/unigram tables, rebuilt from the same code). |
-| `POST /rnn/forward` | one element of `activations.json sequences[]` | `{text}` or `{tokens}` → `{sequenceId, label, tokens, hiddenSize, hidden, influence}`. Preset vocab reuses the artifact's exact embeddings; novel tokens get deterministic crc32-seeded ones. Max 24 tokens. |
-| `POST /transformer/attention` | one element of `attention.json sentences[]` | `{text}` → `{sentenceId, tokens, layers, headLabels, qkvDim}`. Max 8 tokens (Q/K factorisation is exact only up to d=8). |
+| `GET /health` | — | No auth. `{status, device, gpu, models}` (models includes the loaded Qwen name). |
+| `POST /embedding/lookup` | one word of `points.json` + `neighbors.json` | `{word}` → `{inVocab, point, neighbors, suggestions}`. One shared zh+en space (`Qwen/Qwen3-Embedding-0.6B`). In-vocab words return the shipped values verbatim; novel words are embedded live with the same multilingual model + PCA/cluster params. |
+| `POST /next-token/predict` | one prompt of `distributions.json prompts{}` | `{prompt}` → `{prompt, model, topN, entries}` — real Qwen top-N log-probs over the full vocab; tokens are real subword pieces. Long prompts are truncated to the last 48 tokens, not rejected. |
+| `POST /rnn/forward` | one element of `activations.json sequences[]` | `{text}` or `{tokens}` → `{sequenceId, label, tokens, hiddenSize, hidden, influence}` from the **trained** GRU (`rnn_state.npz`). Out-of-vocab words map to `<unk>`. Max 24 tokens. |
+| `POST /transformer/attention` | one element of `attention.json sentences[]` | `{text}` → `{sentenceId, tokens, layers, nLayers, nHeads}` — real Qwen attention, all 28 layers × 16 heads (gzip on the wire). Max ~24 tokens (canvas legibility, not a model limit). |
+| `POST /order-shuffle/score` | one element of `predictions.json arrangements[]` | `{tokens}` → `{tokens, text, avgLogProb, ppl}` — Qwen sequence log-prob of the ordered arrangement (the order-SENSITIVE side). |
+| `POST /order-shuffle/bag` | a slice of `predictions.json wordVectors` | `{words}` → `{vectors, fingerprintDims}` — per-word embedding fingerprints; the browser mean-pools them (the order-INVARIANT side). The request takes a word *set*, so reordering can't even change it. |
 
 All inference routes require the `X-Camp-Token` header (shared secret from
 `CAMP_TOKEN`). CORS is restricted to `ALLOWED_ORIGINS`. Input lengths are
@@ -26,17 +34,42 @@ capped; bad input gets a 4xx with a clear message, never a stack trace.
 
 ## How live == precomputed is guaranteed
 
-- The server **imports** `camp_precompute` (path dependency): bigram tables,
-  RNN weights, and transformer attention are rebuilt at startup by the same
-  deterministic functions that wrote the artifacts — there is no second model.
-- The embedding station's state (vocab vectors, PCA params, k-means centroids)
-  is exported by `camp-precompute export-embedding-state`, which **verifies**
-  the recomputed state reproduces the shipped `points`/`neighbors` JSON exactly
-  and refuses (exit 1) if it does not. In-vocab lookups are additionally served
-  verbatim from the shipped JSON.
-- If verification fails (e.g. the Python env changed since the artifacts were
-  generated), run `camp-precompute export-embedding-state --write-artifacts`
-  to regenerate JSON + npz from **one** model instance, then commit the JSON.
+**The contract changed in wave 3.** Before, live == precomputed *by
+construction*: both sides imported the same deterministic function (bigram
+counts, fixed-seed RNN, synthetic attention), so equality was a mathematical
+identity. With real models that's no longer automatic. The new contract:
+**presets are recorded real-model outputs.**
+
+- Precompute **runs the real models** to bake the shipped preset artifacts
+  (`camp-precompute next-token / transformer / order-shuffle / rnn-viz`), and
+  the server runs the **same models with the same settings** for typed input —
+  both sides call the same helpers in `camp_precompute.qwen` (and
+  `camp_precompute.rnn`), with the determinism contract documented there:
+  float32, `attn_implementation="eager"`, `eval()` + `no_grad()`, no sampling
+  anywhere, exports rounded (log-probs 4 dp, attention 3 dp). So typing a
+  preset prompt live reproduces its shipped values, and offline fallback stays
+  honest. (Tiny cross-torch-version float drift below the rounding precision
+  is possible in principle; regenerate artifacts on the serving box if you
+  ever see a last-digit mismatch.)
+- The RNN's weights are a **file**, not a seed: `train-rnn` exports
+  `precompute/artifacts/rnn_state.npz`, and both the `rnn-viz` artifact build
+  and this server load that same npz (the server refuses to start without it).
+- The embedding station keeps its wave-2 guarantee: state is exported by
+  `camp-precompute export-embedding-state`, which **verifies** the recomputed
+  state reproduces the shipped `points`/`neighbors` JSON exactly and refuses
+  (exit 1) if it does not. In-vocab lookups are additionally served verbatim
+  from the shipped JSON. If verification fails, re-run with
+  `--write-artifacts` and commit the JSON.
+
+## Concurrency (deliberately simple)
+
+One process, one device. A 0.6B model answers a short prompt in tens of
+milliseconds, but a class of ~40 students hitting Enter together will queue:
+GPU forwards are serialised behind an in-process lock, so bursts degrade to
+predictable queueing, not interleaved chaos. If that ever becomes the
+bottleneck on the 4× V100 box, the path is N uvicorn workers pinned via
+`CUDA_VISIBLE_DEVICES=0..3` behind the existing reverse proxy, or a batching
+queue — future work, deliberately not built now.
 
 ---
 
@@ -50,10 +83,13 @@ Two targets, one codebase. **Only `server/.env` differs between machines.**
 | Driver | likely present | **absent** — Sidebar A |
 | Inbound | LAN / router port-forward — Sidebar B | TWCC security group — Sidebar A |
 
-The models are tiny (two ~400 MB BGE encoders; everything else is numpy). One
-process on `cuda:0` uses a sliver of VRAM on either machine; the extra V100s
-buy nothing at this load and are deliberately not used. `DEVICE=cpu` also fully
-works (laptop dev / last-ditch fallback) — lookups take ~100 ms instead of ~10.
+The models are small: `Qwen3-Embedding-0.6B` + `Qwen3-0.6B`, both loaded in
+float32 (~2.4 GB VRAM each — float32 on purpose: the V100 has no usable bf16,
+and it keeps precompute/server outputs agreeing to the exported rounding),
+plus a ~120 kB GRU npz. ~5 GB total on `cuda:0` — a sliver on either machine;
+the extra V100s buy nothing at this load and are deliberately not used.
+`DEVICE=cpu` also fully works (laptop dev / last-ditch fallback) — expect
+hundreds of ms instead of tens.
 
 ## Shared path (identical on both machines)
 
@@ -87,24 +123,30 @@ uv run python -c "import torch; print(torch.cuda.is_available(), torch.cuda.devi
 
 ### 2. Model state (weights + vocab)
 
-The embedding npz state must exist at `precompute/artifacts/`. Either copy it
-from the machine that generated the shipped JSON:
+TWO npz files must exist at `precompute/artifacts/`: the embedding state and
+the trained GRU. Either copy them from the machine that generated the shipped
+JSON:
 
 ```bash
-scp dev-box:sitcon-camp-2026-ml/precompute/artifacts/embedding_state.*.npz precompute/artifacts/
+scp dev-box:sitcon-camp-2026-ml/precompute/artifacts/{embedding_state,rnn_state}.npz precompute/artifacts/
 ```
 
-or regenerate + verify on this box (downloads the two BGE models, ~800 MB,
-then embeds the vocab — minutes on GPU):
+or regenerate on this box:
 
 ```bash
 cd ../precompute && uv sync
 uv run camp-precompute export-embedding-state   # exits 1 if it can't reproduce the shipped JSON
+uv run camp-precompute train-rnn                # trains the GRU on the committed Alice corpus (~1 min)
 cd ../server
 ```
 
-First server start also downloads the BGE models into `~/.cache/huggingface`
-if they aren't there yet.
+Note: retraining the GRU produces (slightly) different weights than the ones
+that recorded the shipped `activations.json` presets — after `train-rnn` on a
+new box, also run `camp-precompute rnn-viz` and commit the regenerated JSON so
+presets and server state stay one pair.
+
+First server start also downloads `Qwen3-Embedding-0.6B` and `Qwen3-0.6B`
+(~1.2 GB + ~1.5 GB) into `~/.cache/huggingface` if they aren't there yet.
 
 ### 3. Config — the only per-machine step
 
@@ -172,15 +214,19 @@ mirrors:
 ```bash
 TOKEN=<your CAMP_TOKEN>; BASE=http://<host>:<port>
 curl -s -X POST $BASE/embedding/lookup -H "X-Camp-Token: $TOKEN" -H "Content-Type: application/json" \
-  -d '{"word":"the","lang":"en"}'            # inVocab:true, point+neighbors == artifact values
+  -d '{"word":"貓"}'                         # inVocab:true, point+neighbors == artifact values (en words mixed in)
 curl -s -X POST $BASE/embedding/lookup -H "X-Camp-Token: $TOKEN" -H "Content-Type: application/json" \
-  -d '{"word":"blockchain","lang":"en"}'     # inVocab:false, live point + neighbors + suggestions
+  -d '{"word":"blockchain"}'                 # inVocab:false, live point + neighbors + suggestions
 curl -s -X POST $BASE/next-token/predict -H "X-Camp-Token: $TOKEN" -H "Content-Type: application/json" \
-  -d '{"prompt":"the cat sat on the"}'       # context:"the", contextKnown:true, entries[]
+  -d '{"prompt":"the cat sat on the"}'       # real Qwen entries[]; matches distributions.json prompts{} verbatim
 curl -s -X POST $BASE/rnn/forward -H "X-Camp-Token: $TOKEN" -H "Content-Type: application/json" \
-  -d '{"text":"the cat sat on the mat by the door"}'   # hidden 9×16, influence decays
+  -d '{"text":"the cat sat by the door and looked at the queen"}'  # hidden 11×16; matches activations.json preset
 curl -s -X POST $BASE/transformer/attention -H "X-Camp-Token: $TOKEN" -H "Content-Type: application/json" \
-  -d '{"text":"the cat sat on the mat"}'     # 3 layers × 3 heads + qkv
+  -d '{"text":"the cat sat on the mat"}'     # 28 layers × 16 heads of real attention (large; gzipped on the wire)
+curl -s -X POST $BASE/order-shuffle/score -H "X-Camp-Token: $TOKEN" -H "Content-Type: application/json" \
+  -d '{"tokens":["the","cat","chased","a","mouse"]}'   # avgLogProb ≈ -5.5; shuffle the tokens → ppl explodes
+curl -s -X POST $BASE/order-shuffle/bag -H "X-Camp-Token: $TOKEN" -H "Content-Type: application/json" \
+  -d '{"words":["cat","mouse"]}'             # 24-dim fingerprints per word
 ```
 
 An unauthed POST must return 401; a 30-token transformer prompt must return

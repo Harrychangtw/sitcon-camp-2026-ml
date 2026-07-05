@@ -1,11 +1,10 @@
 """POST /rnn/forward — live substitute for one element of activations.json
 `sequences[]` (per-timestep hidden vectors + the token-0 influence-decay trace).
 
-The weights and the preset-vocab embeddings are rebuilt deterministically from
-camp_precompute.rnn (same seed, same rng stream), so a preset sequence typed
-here returns exactly the shipped artifact values. Tokens outside the preset
-vocab get deterministic crc32-seeded embeddings (same word → same vector on
-every request and every machine).
+The weights are the TRAINED GRU exported by `camp-precompute train-rnn` — the
+same npz the artifact build reads — so a preset sequence typed here returns
+exactly the shipped values. Words outside the training vocab map to <unk>
+(honest: the model never saw them), which still drives a real forward pass.
 """
 
 from __future__ import annotations
@@ -25,7 +24,8 @@ router = APIRouter(prefix="/rnn", tags=["rnn"])
 MAX_TOKENS = 24
 MAX_TOKEN_LEN = 30
 
-# Lowercase words, or single Han characters (so zh input steps char-by-char).
+# Lowercase words, or single Han characters (so zh input steps char-by-char —
+# the GRU was trained on English, so Han tokens are honest <unk>s).
 _TOKEN_RE = re.compile(r"[a-z]+|[一-鿿]")
 
 
@@ -51,9 +51,7 @@ def forward(req: RnnForwardRequest, request: Request) -> RnnForwardResponse:
             status_code=422, detail=f"token too long (max {MAX_TOKEN_LEN} chars)"
         )
 
-    hidden, influence = run_sequence(
-        tokens, store.rnn_w_h, store.rnn_w_x, store.rnn_b, store.rnn_emb
-    )
+    hidden, influence = run_sequence(store.rnn, tokens)
 
     digest = hashlib.sha1("|".join(tokens).encode("utf-8")).hexdigest()[:8]
     return RnnForwardResponse(

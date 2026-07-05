@@ -2,7 +2,7 @@
   "course": "course2",
   "version": 1,
   "generator": "camp-precompute make-data",
-  "generatedAt": "2026-07-04T06:29:38.707605+00:00",
+  "generatedAt": "2026-07-04T10:34:27.181080+00:00",
   "note": "hello from camp-precompute \u2014 replace with real artifacts",
   "sample": [
     0.0,
@@ -13,54 +13,40 @@
   ],
   "artifacts": [
     {
-      "id": "embedding-neighbors-en",
+      "id": "embedding-neighbors",
       "kind": "json",
-      "path": "embedding/neighbors.en.json",
+      "path": "embedding/neighbors.json",
       "station": "embedding",
-      "bytes": 3623115
+      "bytes": 3616881
     },
     {
-      "id": "embedding-neighbors-zh",
+      "id": "embedding-points",
       "kind": "json",
-      "path": "embedding/neighbors.zh.json",
+      "path": "embedding/points.json",
       "station": "embedding",
-      "bytes": 3607472
-    },
-    {
-      "id": "embedding-points-en",
-      "kind": "json",
-      "path": "embedding/points.en.json",
-      "station": "embedding",
-      "bytes": 248963
-    },
-    {
-      "id": "embedding-points-zh",
-      "kind": "json",
-      "path": "embedding/points.zh.json",
-      "station": "embedding",
-      "bytes": 249625
+      "bytes": 574827
     },
     {
       "id": "next-token-distributions",
       "kind": "json",
       "path": "next-token/distributions.json",
       "station": "next-token",
-      "bytes": 12625
+      "bytes": 5725
     },
     {
       "id": "order-shuffle-predictions",
       "kind": "json",
       "path": "order-shuffle/predictions.json",
       "station": "order-shuffle",
-      "bytes": 26917
+      "bytes": 76045
     },
     {
       "id": "rnn-viz-activations",
       "kind": "json",
       "path": "rnn-viz/activations.json",
       "station": "rnn-viz",
-      "bytes": 9819,
-      "description": "Per-timestep hidden-state vectors from a small fixed-weight vanilla RNN, plus a token-0 influence-decay trace. Replayed on a heatmap; the browser never runs the RNN."
+      "bytes": 11294,
+      "description": "Per-timestep hidden-state vectors from a small TRAINED GRU language model (train-rnn), plus a token-0 influence-decay trace. Replayed on a heatmap; the browser never runs the RNN."
     },
     {
       "id": "tokenizer-vocab",
@@ -75,8 +61,8 @@
       "kind": "json",
       "path": "transformer/attention.json",
       "station": "transformer",
-      "bytes": 151167,
-      "description": "Precomputed self-attention tensor ([layer][head][query][key]) plus per-token Q/K/V vectors (qkv, factored to reproduce it) for the Transformer station's step-through. Replayed in-browser; only light dot-product/softmax arithmetic runs there."
+      "bytes": 781013,
+      "description": "Recorded REAL Qwen3-0.6B self-attention ([layer][head][query][key]) for the preset sentences, plus the fixed dim-6 mechanism schematic. Replayed in-browser; no model runs there."
     }
   ]
 }

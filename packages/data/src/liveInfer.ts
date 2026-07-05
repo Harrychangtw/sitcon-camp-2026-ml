@@ -18,11 +18,15 @@ interface LiveEnv {
   VITE_LIVE_INFERENCE_TOKEN?: string;
 }
 
-/** Vite statically replaces `import.meta.env.VITE_*`; outside Vite (or during
- * SSR in the shell app) `env` is simply absent and live inference stays off. */
+/** Vite injects `import.meta.env`; outside Vite (or during SSR in the shell
+ * app) `env` is simply absent and live inference stays off.
+ *
+ * The cast must stay INLINE around `import.meta`: Vite (and esbuild in prod
+ * builds) only recognises the literal `import.meta.env` member expression, so
+ * aliasing `import.meta` to a variable first leaves `env` undefined and
+ * silently disables live inference everywhere. */
 function liveEnv(): LiveEnv {
-  const meta = import.meta as unknown as { env?: LiveEnv };
-  return meta.env ?? {};
+  return (import.meta as { env?: LiveEnv }).env ?? {};
 }
 
 /** The configured server base URL (no trailing slash), or null when the
@@ -35,6 +39,13 @@ export function liveInferenceUrl(): string | null {
 /** Whether custom input should even offer the live path. */
 export function liveInferenceEnabled(): boolean {
   return liveInferenceUrl() !== null;
+}
+
+/** A live server response plus the wall-clock round-trip that produced it —
+ * the honest "a GPU computed this, and it took N ms" number for the UI. */
+export interface LiveResult<T> {
+  data: T;
+  ms: number;
 }
 
 /**
@@ -51,11 +62,25 @@ export async function liveInfer<T>(
   body: unknown,
   timeoutMs = 5000,
 ): Promise<T | null> {
+  const timed = await liveInferTimed<T>(path, body, timeoutMs);
+  return timed ? timed.data : null;
+}
+
+/**
+ * Like `liveInfer`, but also reports the round-trip latency. Same never-throws
+ * contract: any failure resolves to `null`.
+ */
+export async function liveInferTimed<T>(
+  path: string,
+  body: unknown,
+  timeoutMs = 5000,
+): Promise<LiveResult<T> | null> {
   const base = liveInferenceUrl();
   if (!base) return null;
 
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
+  const start = performance.now();
   try {
     const headers: Record<string, string> = {
       "Content-Type": "application/json",
@@ -70,7 +95,8 @@ export async function liveInfer<T>(
       signal: controller.signal,
     });
     if (!res.ok) return null;
-    return (await res.json()) as T;
+    const data = (await res.json()) as T;
+    return { data, ms: Math.round(performance.now() - start) };
   } catch {
     return null;
   } finally {

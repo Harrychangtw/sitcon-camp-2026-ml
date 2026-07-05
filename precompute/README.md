@@ -16,6 +16,15 @@ uv run camp-precompute make-data     # writes apps/course2/public/data/course2/m
 writes into `apps/course2/public/data/course2/`. Override the target with
 `--out <dir>`.
 
+The wave-3 station artifacts are **recorded real-model outputs** (see
+`server/README.md` → "How live == precomputed is guaranteed"): `next-token`,
+`transformer`, and `order-shuffle` run `Qwen/Qwen3-0.6B` (plus
+`Qwen3-Embedding-0.6B` for the bag-of-words vectors); `train-rnn` trains the
+small GRU whose exported weights both `rnn-viz` and the live server load.
+`data/rnn_corpus.txt` is that GRU's training corpus: *Alice's Adventures in
+Wonderland* (Project Gutenberg ebook #11 — **public domain**; Gutenberg
+boilerplate stripped).
+
 ## Layout
 
 ```

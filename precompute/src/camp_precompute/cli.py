@@ -13,7 +13,7 @@ import json
 import math
 import re
 import zlib
-from collections import Counter, defaultdict
+from collections import Counter
 from datetime import datetime, timezone
 from itertools import permutations
 from pathlib import Path
@@ -21,7 +21,7 @@ from pathlib import Path
 import numpy as np
 
 from .embedding import build_embedding, export_server_state
-from .rnn import rnn_viz
+from .rnn import rnn_viz, train_rnn
 
 COURSE = "course2"
 MANIFEST_VERSION = 1
@@ -77,135 +77,65 @@ def make_data(out_dir: Path) -> Path:
 
 
 # ---------------------------------------------------------------------------
-# next-token: a tiny word-level bigram "next-token predictor" (replay path).
+# next-token: REAL Qwen next-token distributions (wave 3).
 #
-# The heavy work (counting a corpus) happens HERE, offline. The browser only
-# loads the exported table and does the light temperature/top-k transform. No
-# training, no big data, no in-browser model — the golden rule holds.
+# The presets are RECORDED outputs of the same Qwen3-0.6B + settings the live
+# server runs (camp_precompute.qwen), so offline fallback shows exactly what
+# the GPU would answer for these prompts. The browser still only does the
+# light temperature/top-k transform on the exported log-probs.
 # ---------------------------------------------------------------------------
 
-# A small, deliberately-skewed toy corpus so common contexts ("the", "a", "to",
-# "is") produce intuitive, demo-friendly next-token distributions.
-NEXT_TOKEN_CORPUS = """
-the cat sat on the mat and the dog sat on the rug
-the cat chased the mouse across the room
-the dog ran to the park to play with the ball
-once upon a time a small robot wanted to learn
-once upon a time a young student wanted to build a model
-a model learns to predict the next token from data
-a language model is just a next token predictor
-machine learning is mostly about finding good patterns in data
-machine learning is fun when the model finally works
-the weather today is sunny and warm and bright
-the weather today is cloudy with a little rain
-i want to learn how a transformer reads a sentence
-i want to build a small model that can write text
-i want to understand why order matters so much
-to be or not to be is the question
-we train the model on data and then we test the model
-the student opened the laptop and started to code
-the robot picked up the ball and threw the ball back
-a good model predicts the next word with high confidence
-the next word is often the most likely word in context
-""".strip()
-
-# Curated starter prompts; each ends on a context the corpus knows well.
-NEXT_TOKEN_SUGGESTIONS = [
+# Curated preset prompts — the station's suggestion chips AND the offline
+# fallback's lookup keys. zh + en on purpose: the model is multilingual and
+# typing either should feel first-class.
+NEXT_TOKEN_PROMPTS = [
     "the cat sat on the",
-    "once upon a",
-    "i want to",
-    "machine learning is",
-    "the weather today is",
-    "a language model is just a next token",
+    "once upon a time",
+    "to be or not to",
+    "從前從前有一隻",
+    "下雨天記得帶",
+    "台灣最高的山是玉",
 ]
-
-NEXT_TOKEN_TOP_N = 12
-
-
-def _tokenize(text: str) -> list[list[str]]:
-    """Lowercase word-level tokens, one list per line/sentence."""
-    sentences = []
-    for line in text.splitlines():
-        words = re.findall(r"[a-z]+", line.lower())
-        if words:
-            sentences.append(words)
-    return sentences
-
-
-def _top_n_logits(counts: Counter[str], top_n: int) -> list[dict[str, float]]:
-    """Turn raw counts into the top-N tokens with log-probabilities (logits).
-
-    logit = log(prob) so the browser's softmax(logit / T) recovers the exported
-    distribution at T=1, sharpens for T<1, and flattens for T>1.
-    """
-    total = sum(counts.values())
-    if total == 0:
-        return []
-    ranked = counts.most_common(top_n)
-    return [
-        {"token": tok, "logit": round(math.log(c / total), 4)}
-        for tok, c in ranked
-    ]
-
-
-def build_next_token_tables() -> dict:
-    """The next-token "model": bigram table + unigram fallback, as pure data.
-
-    Deterministic counting over the committed corpus, so the artifact build AND
-    the live server rebuild identical tables by calling this — no file to drift.
-    Returns the artifact payload minus generator/timestamp metadata.
-    """
-    sentences = _tokenize(NEXT_TOKEN_CORPUS)
-
-    bigram_counts: dict[str, Counter[str]] = defaultdict(Counter)
-    unigram_counts: Counter[str] = Counter()
-    for words in sentences:
-        for i, w in enumerate(words):
-            unigram_counts[w] += 1
-            if i > 0:
-                bigram_counts[words[i - 1]][w] += 1
-
-    bigram = {
-        context: _top_n_logits(nexts, NEXT_TOKEN_TOP_N)
-        for context, nexts in sorted(bigram_counts.items())
-        if sum(nexts.values()) > 0
-    }
-
-    return {
-        "topN": NEXT_TOKEN_TOP_N,
-        "vocabSize": len(unigram_counts),
-        "suggestions": NEXT_TOKEN_SUGGESTIONS,
-        "fallback": _top_n_logits(unigram_counts, NEXT_TOKEN_TOP_N),
-        "bigram": bigram,
-    }
 
 
 def make_next_token(out_dir: Path) -> Path:
-    """Write distributions.json: a bigram next-token table + unigram fallback."""
+    """Write distributions.json: recorded Qwen top-N for the preset prompts."""
+    from . import qwen
+    from .embedding import _select_device
+
+    device = _select_device()
+    print(f"next-token: loading {qwen.MODEL} on {device}…")
+    tok, model = qwen.load_qwen(device)
+
+    prompts: dict[str, list[dict]] = {}
+    for p in NEXT_TOKEN_PROMPTS:
+        prompts[p] = qwen.next_token_entries(tok, model, p)
+        print(f"  {p!r} → {[e['token'] for e in prompts[p][:3]]}…")
+
     station_dir = out_dir / "next-token"
     station_dir.mkdir(parents=True, exist_ok=True)
-
-    tables = build_next_token_tables()
 
     payload = {
         "generator": "camp-precompute next-token",
         "generatedAt": datetime.now(timezone.utc).isoformat(),
         "station": "next-token",
-        "topN": tables["topN"],
+        "model": qwen.MODEL,
+        "topN": qwen.NEXT_TOKEN_TOP_N,
         "note": (
-            "Word-level bigram next-token table. Keyed on the LAST token of the "
-            "prompt; falls back to the unigram distribution for unknown context. "
-            "logit = log(prob); the browser applies softmax(logit / temperature) "
-            "and top-k."
+            f"Recorded real next-token distributions from {qwen.MODEL} for the "
+            "preset prompts (same code + decoding settings as the live server — "
+            "see camp_precompute.qwen). logit = log P(token|prompt); the browser "
+            "applies softmax(logit / temperature) and top-k. Tokens are the "
+            "model's real subword pieces (a leading space is part of the token)."
         ),
-        "vocabSize": tables["vocabSize"],
-        "suggestions": tables["suggestions"],
-        "fallback": tables["fallback"],
-        "bigram": tables["bigram"],
+        "suggestions": NEXT_TOKEN_PROMPTS,
+        "prompts": prompts,
     }
 
     path = station_dir / "distributions.json"
-    path.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
+    path.write_text(
+        json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
+    )
 
     upsert_manifest_artifact(
         out_dir,
@@ -258,143 +188,130 @@ def remove_manifest_artifact(out_dir: Path, artifact_id: str) -> None:
 
 
 # ---------------------------------------------------------------------------
-# order-shuffle station
+# order-shuffle station (wave 3: real models on BOTH sides)
 # ---------------------------------------------------------------------------
 # The wall this station exposes: word ORDER carries meaning, and an order-blind
-# bag-of-words model can't see it. Bag-of-words is order-invariant, so the
-# browser recomputes it live from the word multiset (light, allowed). The
-# ORDER-AWARE model's prediction for every arrangement is precomputed here — the
-# browser never runs a sequence model.
+# bag-of-words aggregate can't see it.
 #
-# The toy order-aware model is a left-to-right negation/intensifier scanner:
-# a negator ("not"/"never") flips the polarity of the NEXT sentiment word, and
-# an intensifier ("very"/"always") scales it. That adjacency is exactly what a
-# bag of words throws away — so "not bad just good" (positive) and "not good
-# just bad" (negative) share one multiset yet get opposite order-aware verdicts.
+#   - BAG-OF-WORDS side: mean pool of per-word embeddings (Qwen3-Embedding —
+#     the SAME encoder as the embedding station). Mean pooling is symmetric,
+#     so the fingerprint provably cannot move under shuffle. The browser only
+#     averages a handful of small vectors (light, allowed) — and it fetches
+#     per-WORD vectors keyed on the word set, so a reorder cannot even change
+#     the request. Invariance by construction, visible in the UI.
+#   - ORDER-AWARE side: Qwen3-0.6B sequence log-prob (fluency / perplexity)
+#     of the actual ordered sentence. Every conditional P(t_i | t_<i) changes
+#     when the order does — genuinely and honestly order-sensitive.
+#
+# Presets are RECORDED outputs of both real models; the live server runs the
+# same code (camp_precompute.qwen / .embedding) for typed sentences.
 
-# Word polarity. Sentiment words carry ±1; modifiers carry 0 so a bag-of-words
-# sum (which can't bind them to a neighbour) is dominated by the sentiment words.
-SENTIMENT = {
-    "good": 1.0,
-    "great": 1.0,
-    "happy": 1.0,
-    "bad": -1.0,
-    "awful": -1.0,
-    "sad": -1.0,
-}
-NEGATORS = {"not", "never"}
-INTENSIFIERS = {"very", "always"}
-LABELS = ["negative", "neutral", "positive"]
+# Fingerprint = the leading dims of the L2-normalised word embedding. Truncation
+# is linear, so mean-of-truncated == truncated-of-mean — the shipped fingerprint
+# is exactly the mean pool the lesson claims.
+ORDER_FP_DIMS = 24
 
-# Shared score → 3-label distribution mapping. Softmax over
-# [negative, neutral, positive] logits = [-k·s, bias, +k·s]. At s=0 the neutral
-# bias makes "neutral" the (weak) winner — a balanced multiset reads as "can't
-# decide", not a 3-way tie. The BROWSER mirrors these exact constants to turn
-# its bag-of-words multiset sum into a distribution, so both panels look alike
-# and BoW is provably order-invariant. Keep in sync with orderShuffle.tsx.
-SCORE_TEMP = 1.3
-NEUTRAL_BIAS = 0.8
+# Display domain for the fluency bar (avg log-prob per token): ≈ −2 reads
+# "fluent", ≈ −11 reads "word salad", for both en and zh at this model size.
+ORDER_LOGPROB_DOMAIN = (-11.0, -2.0)
 
-# Curated 4-word sentences. Each word is unique within a sentence, so an
-# arrangement is an unambiguous permutation of indices. Every permutation is
-# enumerated (4! = 24), which is small enough to ship.
-SENTENCES = [
+# Curated sentences: few, short, unique words (an arrangement is an unambiguous
+# index permutation; all n! arrangements are enumerated and shipped).
+ORDER_SENTENCES = [
     {
-        "sentenceId": "not-bad-just-good",
-        "prompt": "Arrange the words. Does the meaning flip when the order does?",
-        "words": ["not", "bad", "just", "good"],
+        "sentenceId": "cat-chased-mouse",
+        "prompt": "重新排列這些詞——通順度會變，但詞袋指紋動也不動。",
+        "words": ["the", "cat", "chased", "a", "mouse"],
     },
     {
-        "sentenceId": "never-awful-always-great",
-        "prompt": "Where you put “never” decides everything.",
-        "words": ["never", "awful", "always", "great"],
+        "sentenceId": "she-opened-door",
+        "prompt": "哪一種排列讀起來最像人話？",
+        "words": ["she", "quietly", "opened", "the", "door"],
     },
     {
-        "sentenceId": "not-happy-very-sad",
-        "prompt": "“very” amplifies whatever word comes next.",
-        "words": ["not", "happy", "very", "sad"],
+        "sentenceId": "zh-cat-eats-fish",
+        "prompt": "中文也一樣：順序才讓句子成立。",
+        "words": ["小貓", "喜歡", "偷", "吃", "魚"],
     },
 ]
 
 
-def _order_aware_score(words: list[str]) -> float:
-    """Left-to-right scan: a negator flips, an intensifier scales, the NEXT
-    sentiment word. Returns the summed signed polarity."""
-    total = 0.0
-    negate = False
-    scale = 1.0
-    for w in words:
-        if w in NEGATORS:
-            negate = True
-            continue
-        if w in INTENSIFIERS:
-            scale = 1.5
-            continue
-        if w in SENTIMENT:
-            value = SENTIMENT[w] * scale * (-1.0 if negate else 1.0)
-            total += value
-            negate = False
-            scale = 1.0
-    return total
-
-
-def _distribution(score: float) -> dict:
-    """Map a signed score to a {label, score, scores} prediction via the shared
-    softmax mapping (see SCORE_TEMP / NEUTRAL_BIAS)."""
-    logits = np.array([-SCORE_TEMP * score, NEUTRAL_BIAS, SCORE_TEMP * score])
-    ex = np.exp(logits - logits.max())
-    probs = ex / ex.sum()
-    scores = {label: round(float(p), 3) for label, p in zip(LABELS, probs)}
-    argmax = int(probs.argmax())
-    return {
-        "label": LABELS[argmax],
-        "score": scores[LABELS[argmax]],
-        "scores": scores,
-    }
-
-
 def build_order_shuffle() -> dict:
-    """Build the order-shuffle predictions payload (pure data, no I/O)."""
+    """Build the order-shuffle payload by RUNNING both real models."""
+    from . import qwen
+    from .embedding import _select_device, encode_words, load_encoder
+
+    device = _select_device()
+    print(f"order-shuffle: loading {qwen.MODEL} on {device}…")
+    tok, model = qwen.load_qwen(device)
+    print(f"order-shuffle: loading {emb_mod_name()} on {device}…")
+    encoder = load_encoder(device)
+
     sentences = []
-    for spec in SENTENCES:
+    for spec in ORDER_SENTENCES:
         words = spec["words"]
         n = len(words)
+
+        vecs = encode_words(encoder, words)
+        word_vectors = {
+            w: [round(float(x), 4) for x in vecs[i][:ORDER_FP_DIMS]]
+            for i, w in enumerate(words)
+        }
+
         arrangements = []
         for perm in permutations(range(n)):
-            ordered = [words[i] for i in perm]
-            score = _order_aware_score(ordered)
+            text = qwen.join_tokens([words[i] for i in perm])
+            score = qwen.sequence_logprob(tok, model, text)
             arrangements.append(
                 {
                     "order": list(perm),
-                    "prediction": _distribution(score),
+                    "avgLogProb": score["avgLogProb"],
+                    "ppl": score["ppl"],
                 }
             )
-        # Per-word polarity the browser uses to recompute bag-of-words live.
-        # Modifiers map to 0 — order-blind, the model can't attach them.
-        lexicon = {w: SENTIMENT.get(w, 0.0) for w in words}
+        natural = arrangements[0]
+        print(
+            f"  {spec['sentenceId']}: natural avgLogProb {natural['avgLogProb']} "
+            f"(ppl {natural['ppl']}), {len(arrangements)} arrangements"
+        )
+
         sentences.append(
             {
                 "sentenceId": spec["sentenceId"],
                 "prompt": spec["prompt"],
                 "words": words,
-                "lexicon": lexicon,
-                "labels": LABELS,
+                "wordVectors": word_vectors,
                 "arrangements": arrangements,
             }
         )
+
+    from .embedding import MODEL as EMB_MODEL
+
     return {
         "generator": "camp-precompute order-shuffle",
         "generatedAt": datetime.now(timezone.utc).isoformat(),
+        "station": "order-shuffle",
+        "model": qwen.MODEL,
+        "embeddingModel": EMB_MODEL,
         "note": (
-            "Bag-of-words is recomputed in-browser: sum `lexicon` over the word "
-            "multiset (order-invariant) then apply `scoreMapping` (softmax over "
-            "[-temp·s, neutralBias, temp·s]). `arrangements` holds the order-aware "
-            "model's precomputed prediction for every permutation."
+            "Recorded real-model outputs. `wordVectors` are the leading "
+            f"{ORDER_FP_DIMS} dims of each word's L2-normalised "
+            "Qwen3-Embedding vector — the browser mean-pools them (symmetric, "
+            "provably order-invariant). `arrangements` holds Qwen3-0.6B's "
+            "sequence log-prob / perplexity for every permutation — the "
+            "order-sensitive side. Same code + settings as the live server "
+            "(camp_precompute.qwen)."
         ),
-        "labels": LABELS,
-        "scoreMapping": {"temp": SCORE_TEMP, "neutralBias": NEUTRAL_BIAS},
+        "fingerprintDims": ORDER_FP_DIMS,
+        "logProbDomain": list(ORDER_LOGPROB_DOMAIN),
         "sentences": sentences,
     }
+
+
+def emb_mod_name() -> str:
+    from .embedding import MODEL
+
+    return MODEL
 
 
 def order_shuffle(out_dir: Path) -> Path:
@@ -404,7 +321,9 @@ def order_shuffle(out_dir: Path) -> Path:
 
     payload = build_order_shuffle()
     art_path = station_dir / "predictions.json"
-    art_path.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
+    art_path.write_text(
+        json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
+    )
 
     upsert_manifest_artifact(
         out_dir,
@@ -696,16 +615,22 @@ def tokenizer(out_dir: Path) -> Path:
 # ---------------------------------------------------------------------------
 # embedding station
 # ---------------------------------------------------------------------------
-# The heavy work (synthesising clustered word vectors, PCA projection, and
-# nearest-neighbour search) lives in embedding.py and runs offline. Here we just
-# invoke it and register its two artifacts in the shared manifest.
+# The heavy work (embedding the combined zh+en vocab with one multilingual
+# model, PCA projection, and nearest-neighbour search) lives in embedding.py and
+# runs offline. Here we just invoke it and register its two artifacts in the
+# shared manifest.
+
+# Wave-2 per-language manifest ids, retired when zh+en merged into one space.
+STALE_EMBEDDING_IDS = tuple(
+    f"embedding-{kind}-{lang}" for kind in ("points", "neighbors") for lang in ("zh", "en")
+)
 
 
 def embedding(out_dir: Path) -> list[Path]:
-    """Build the embedding station's per-language points/neighbors and register."""
+    """Build the embedding station's unified points/neighbors and register."""
     entries = build_embedding(out_dir)
-    # Drop the retired single-file (synthetic, English-only) manifest ids.
-    for stale_id in ("embedding-points", "embedding-neighbors"):
+    # Drop the retired per-language manifest ids (wave-2 layout).
+    for stale_id in STALE_EMBEDDING_IDS:
         remove_manifest_artifact(out_dir, stale_id)
     paths = []
     for entry in entries:
@@ -717,106 +642,57 @@ def embedding(out_dir: Path) -> list[Path]:
 
 
 # ---------------------------------------------------------------------------
-# transformer station
+# transformer station (wave 3: REAL attention + a canned mechanism schematic)
 # ---------------------------------------------------------------------------
-# The payoff station: self-attention. Every token can look at every other token
-# directly, and different heads/layers attend differently. Running a real
-# transformer is heavy → offline; the browser only replays the weights.
+# Two clearly-separated modes:
 #
-# Following embedding.py's precedent, we DON'T ship a trained model (that needs
-# torch + a corpus + training time). A randomly-initialised tiny transformer
-# would instead emit near-uniform noise — which defeats the whole lesson ("heads
-# attend differently", "attention specializes across layers"). So we synthesise a
-# STRUCTURED attention tensor with hand-designed, recognisable per-head patterns,
-# each row a real softmax distribution over keys. This is honest for the lesson:
-# the *shapes* students see (a local head, a content-word head, a first-token
-# sink; sharp early layers → diffuse later ones) are exactly the patterns real
-# transformers learn — without pretending to be trained weights.
+#   真實模型 — real per-layer/per-head attention from Qwen3-0.6B
+#   (output_attentions=True), recorded here for the preset sentences and served
+#   live for typed ones. No synthetic head labels: real heads don't carry clean
+#   roles, so the UI shows honest L{n}·H{m} indices.
+#
+#   機制示意 — the five-step Q·K→√d→softmax→ΣwV walkthrough survives as a FIXED
+#   schematic on one hand-picked sentence with tiny (dim-6) vectors, clearly
+#   marked 「示意」. Real 1024-dim Qwen vectors cannot render on screen; this
+#   keeps the mechanism lesson without pretending they do. The Q/K pair is
+#   factored (SVD) so softmax(Q·Kᵀ/√d) reproduces the schematic matrix exactly —
+#   the browser's arithmetic is genuine, the example is hand-designed.
 
-# Function words get low salience so the "content head" ignores them; content
-# words (nouns/verbs) pull attention. Kept lowercase; matched case-insensitively.
+# --- schematic (機制示意 mode only — NOT the live model) ----------------------
+
+SCHEMATIC_DIM = 6
+SCHEMATIC_TOKENS = ["the", "cat", "sat", "on", "the", "mat"]
+
+# Function words get low salience; content words pull attention. This drives
+# the schematic's hand-designed pattern (a "content head" shape — one of the
+# patterns real transformers do learn).
 TRANSFORMER_FUNCTION_WORDS = {
     "the", "a", "an", "on", "in", "into", "up", "to", "of", "and", "is", "it",
     "she", "he", "they", "with", "at", "for", "over", "then",
 }
 
-# Human-readable head roles, surfaced in the UI so students can name what they
-# see. Index i == head i. (These are the patterns _head_affinity builds.)
-TRANSFORMER_HEAD_LABELS = ["local", "content", "first-token"]
-TRANSFORMER_N_LAYERS = 3
 
-# A few short sentences; each token is a word so links read cleanly.
-TRANSFORMER_SENTENCES = [
-    {"sentenceId": "cat-mat", "text": "the cat sat on the mat"},
-    {"sentenceId": "poured-glass", "text": "she poured water into the glass"},
-    {"sentenceId": "robot-ball", "text": "the robot picked up the ball"},
-]
-
-
-def _transformer_salience(tokens: list[str]) -> np.ndarray:
-    """Content words → 1.0, function words → 0.2 (higher = more attended-to)."""
-    return np.array(
+def _schematic_logits(tokens: list[str]) -> np.ndarray:
+    """Hand-designed pre-softmax logits: every query attends to salient content
+    tokens, with a small self-attention bump. Sharp (gain 3) so the softmax
+    story reads clearly."""
+    n = len(tokens)
+    sal = np.array(
         [0.2 if t.lower() in TRANSFORMER_FUNCTION_WORDS else 1.0 for t in tokens]
     )
+    aff = np.tile(sal, (n, 1)) + 0.25 * np.eye(n)
+    return aff * 3.0
 
 
-def _head_affinity(tokens: list[str], head: int) -> np.ndarray:
-    """Raw per-head affinity matrix (n×n, higher = stronger), roughly in [0,1].
-
-    Head 0 (local):       each query attends to nearby tokens (distance decay).
-    Head 1 (content):     every query attends to salient content tokens.
-    Head 2 (first-token): every query attends to token 0 (a classic BOS sink).
-    A small self-attention bump is added to every head.
-    """
-    n = len(tokens)
-    idx = np.arange(n)
-    if head == 0:
-        dist = np.abs(idx[:, None] - idx[None, :]).astype(float)
-        aff = 1.0 - dist / max(n - 1, 1)
-    elif head == 1:
-        sal = _transformer_salience(tokens)
-        aff = np.tile(sal, (n, 1))
-    else:
-        aff = np.zeros((n, n))
-        aff[:, 0] = 1.0
-    aff = aff + 0.25 * np.eye(n)  # a little self-attention everywhere
-    return aff
-
-
-def _affinity_logits(tokens: list[str], layer: int, head: int) -> np.ndarray:
-    """Pre-softmax attention logits for one (layer, head): the head affinity with
-    a depth-dependent gain (sharp early layers → diffuse later ones)."""
-    aff = _head_affinity(tokens, head)
-    # Logit gain shrinks with depth → deeper layers flatten toward global mixing.
-    gain = 3.0 / (1.0 + 0.9 * layer)
-    return aff * gain
-
-
-def _attention_matrix(tokens: list[str], layer: int, head: int) -> list[list[float]]:
-    """Softmax the head affinity into a [q][k] distribution, sharper in early
-    layers and more diffuse (global) in later ones."""
-    logits = _affinity_logits(tokens, layer, head)
-    logits = logits - logits.max(axis=1, keepdims=True)
-    ex = np.exp(logits)
-    probs = ex / ex.sum(axis=1, keepdims=True)
-    return [[round(float(p), 4) for p in row] for row in probs]
-
-
-# The 06a "mechanism" upgrade: tiny per-token Q/K/V vectors so the browser can
-# SHOW the dot products that build the scores students then see soft-maxed. The
-# browser only does light arithmetic on them (8-dim dot products + a softmax
-# over ≤6 scores) — no model, no training.
-TRANSFORMER_QKV_DIM = 8
+def _softmax_rows(logits: np.ndarray) -> np.ndarray:
+    shifted = logits - logits.max(axis=1, keepdims=True)
+    ex = np.exp(shifted)
+    return ex / ex.sum(axis=1, keepdims=True)
 
 
 def _factor_qk(logits: np.ndarray, dim: int) -> tuple[np.ndarray, np.ndarray]:
     """Factor an n×n logit matrix into per-token Q, K (n×dim) such that
-    Q @ K.T / sqrt(dim) == logits (exactly, up to float precision).
-
-    The sentences are short (n ≤ dim), so a full-rank SVD factorisation of
-    sqrt(dim)·logits is exact: the dot products students watch in the browser
-    rebuild the SAME scores that produced the shipped attention matrices.
-    """
+    Q @ K.T / sqrt(dim) == logits (exactly, up to float precision; n ≤ dim)."""
     target = logits * math.sqrt(dim)
     u, s, vt = np.linalg.svd(target)
     r = min(dim, len(s))
@@ -829,104 +705,88 @@ def _factor_qk(logits: np.ndarray, dim: int) -> tuple[np.ndarray, np.ndarray]:
     return q, k
 
 
-def _value_vectors(tokens: list[str], layer: int, head: int, dim: int) -> np.ndarray:
-    """Small deterministic V vectors in [-1, 1]. Seeded per (token, layer, head)
-    so the same word carries the same V wherever it appears — the weighted sum
-    the browser shows is stable and reproducible."""
-    rows = []
-    for tok in tokens:
-        seed = zlib.crc32(f"{tok}|{layer}|{head}".encode("utf-8"))
-        rng = np.random.default_rng(seed)
-        rows.append(rng.uniform(-1.0, 1.0, dim))
-    return np.array(rows)
-
-
-def _head_qkv(tokens: list[str], layer: int, head: int) -> dict:
-    """Q/K/V vectors (each [token][dim]) for one (layer, head), with the Q/K
-    factorisation verified against the shipped attention matrix."""
-    dim = TRANSFORMER_QKV_DIM
-    logits = _affinity_logits(tokens, layer, head)
+def build_schematic() -> dict:
+    """The fixed 機制示意 payload: one sentence, one head, dim-6 Q/K/V, with the
+    factorisation verified against the schematic attention matrix."""
+    tokens = SCHEMATIC_TOKENS
+    dim = SCHEMATIC_DIM
+    logits = _schematic_logits(tokens)
     q, k = _factor_qk(logits, dim)
-    v = _value_vectors(tokens, layer, head, dim)
 
-    # Round for export, then verify the browser's arithmetic (rounded vectors →
-    # dot products → softmax) still reproduces the shipped matrix.
+    # Deterministic V vectors in [-1, 1], seeded per token so a repeated word
+    # carries the same V.
+    v_rows = []
+    for tok in tokens:
+        rng = np.random.default_rng(zlib.crc32(f"schematic|{tok}".encode("utf-8")))
+        v_rows.append(rng.uniform(-1.0, 1.0, dim))
+
     q = np.round(q, 4)
     k = np.round(k, 4)
-    scores = (q @ k.T) / math.sqrt(dim)
-    scores = scores - scores.max(axis=1, keepdims=True)
-    ex = np.exp(scores)
-    probs = ex / ex.sum(axis=1, keepdims=True)
-    shipped = np.array(_attention_matrix(tokens, layer, head))
-    if not np.allclose(probs, shipped, atol=5e-3):
-        raise SystemExit(
-            f"transformer: Q/K factorisation drifted from the attention matrix "
-            f"(layer={layer}, head={head}, max err={np.abs(probs - shipped).max():.4f})"
-        )
+    probs = _softmax_rows((q @ k.T) / math.sqrt(dim))
+    if not np.allclose(probs, _softmax_rows(logits), atol=5e-3):
+        raise SystemExit("transformer: schematic Q/K factorisation drifted")
 
     return {
+        "tokens": tokens,
+        "dim": dim,
         "q": [[round(float(x), 4) for x in row] for row in q],
         "k": [[round(float(x), 4) for x in row] for row in k],
-        "v": [[round(float(x), 3) for x in row] for row in v],
+        "v": [[round(float(x), 3) for x in row] for row in v_rows],
     }
 
 
-def build_transformer_sentence(sentence_id: str, tokens: list[str]) -> dict:
-    """One sentence's full attention payload: layers × (heads tensor + qkv).
+# --- real attention (真實模型 mode) --------------------------------------------
 
-    Pure function of the tokens — the artifact build AND the live server call
-    this, so a typed sentence gets exactly the patterns the shipped ones show.
-    NOTE: the Q/K factorisation is exact only while len(tokens) ≤ qkvDim (8);
-    callers must cap input length.
-    """
-    layers = [
-        {
-            # The RESULT view's tensor — unchanged shape, kept additive.
-            "heads": [
-                _attention_matrix(tokens, layer, head)
-                for head in range(len(TRANSFORMER_HEAD_LABELS))
-            ],
-            # The MECHANISM view's vectors: qkv[h].q/k/v are [token][dim],
-            # factored so softmax(Q·Kᵀ/√d) reproduces heads[h] exactly.
-            "qkv": [
-                _head_qkv(tokens, layer, head)
-                for head in range(len(TRANSFORMER_HEAD_LABELS))
-            ],
-        }
-        for layer in range(TRANSFORMER_N_LAYERS)
-    ]
-    return {
-        "sentenceId": sentence_id,
-        "tokens": tokens,
-        "layers": layers,
-    }
+# Preset sentences, recorded through Qwen. Short (≤ ~8 subword tokens) so the
+# all-layer/all-head tensor stays within the JSON size budget.
+TRANSFORMER_SENTENCES = [
+    {"sentenceId": "cat-mat", "text": "the cat sat on the mat"},
+    {"sentenceId": "water-glass", "text": "she poured water into the glass"},
+    {"sentenceId": "zh-cat-fish", "text": "小貓在廚房偷吃魚"},
+]
 
 
 def build_transformer() -> dict:
-    """Build the attention tensor payload (pure data, no I/O)."""
+    """Record real Qwen attention for the presets + the fixed schematic."""
+    from . import qwen
+    from .embedding import _select_device
+
+    device = _select_device()
+    print(f"transformer: loading {qwen.MODEL} on {device}…")
+    tok, model = qwen.load_qwen(device)
+
     sentences = []
+    n_layers = n_heads = 0
     for spec in TRANSFORMER_SENTENCES:
-        tokens = re.findall(r"[a-z]+", spec["text"].lower())
-        sentences.append(build_transformer_sentence(spec["sentenceId"], tokens))
+        att = qwen.attention_payload(tok, model, spec["text"])
+        n_layers, n_heads = att["nLayers"], att["nHeads"]
+        print(f"  {spec['sentenceId']}: tokens {att['tokens']}")
+        sentences.append(
+            {
+                "sentenceId": spec["sentenceId"],
+                "tokens": att["tokens"],
+                "layers": att["layers"],
+            }
+        )
+
     return {
         "generator": "camp-precompute transformer",
         "generatedAt": datetime.now(timezone.utc).isoformat(),
         "station": "transformer",
+        "model": qwen.MODEL,
         "note": (
-            "Self-attention weights for a few sentences. layers[l].heads[h] is a "
-            "[query][key] matrix; each row is a softmax distribution over keys. "
-            "Synthesised offline with hand-designed head patterns (local / "
-            "content-word / first-token sink), sharp in early layers and diffuse "
-            "in later ones. layers[l].qkv[h] adds tiny per-token Q/K/V vectors "
-            "(dim qkvDim) factored so softmax(Q·Kᵀ/√d) reproduces heads[h] — the "
-            "browser replays them and does only light dot-product/softmax "
-            "arithmetic, never a model forward pass."
+            f"REAL self-attention from {qwen.MODEL} (output_attentions=True, "
+            "same code + settings as the live server — see "
+            "camp_precompute.qwen). sentences[].layers[l].heads[h] is a "
+            "[query][key] matrix; rows are softmax distributions over keys "
+            "(causal: keys ≤ query). Tokens are the model's real subword "
+            "pieces. `schematic` is the SEPARATE hand-designed dim-6 example "
+            "for the 機制示意 walkthrough — clearly not the live model."
         ),
-        "layers": TRANSFORMER_N_LAYERS,
-        "heads": len(TRANSFORMER_HEAD_LABELS),
-        "headLabels": TRANSFORMER_HEAD_LABELS,
-        "qkvDim": TRANSFORMER_QKV_DIM,
+        "nLayers": n_layers,
+        "nHeads": n_heads,
         "sentences": sentences,
+        "schematic": build_schematic(),
     }
 
 
@@ -937,7 +797,13 @@ def transformer(out_dir: Path) -> Path:
 
     payload = build_transformer()
     art_path = station_dir / "attention.json"
-    art_path.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
+    # Compact write: the all-layer/all-head tensor is big; indenting would
+    # roughly triple it.
+    art_path.write_text(
+        json.dumps(payload, ensure_ascii=False, separators=(",", ":")) + "\n",
+        encoding="utf-8",
+    )
+    print(f"  wrote {art_path} ({art_path.stat().st_size / 1e6:.2f} MB)")
 
     upsert_manifest_artifact(
         out_dir,
@@ -948,11 +814,10 @@ def transformer(out_dir: Path) -> Path:
             "station": "transformer",
             "bytes": art_path.stat().st_size,
             "description": (
-                "Precomputed self-attention tensor ([layer][head][query][key]) "
-                "plus per-token Q/K/V vectors (qkv, factored to reproduce it) "
-                "for the Transformer station's step-through. Replayed "
-                "in-browser; only light dot-product/softmax arithmetic runs "
-                "there."
+                "Recorded REAL Qwen3-0.6B self-attention "
+                "([layer][head][query][key]) for the preset sentences, plus "
+                "the fixed dim-6 mechanism schematic. Replayed in-browser; "
+                "no model runs there."
             ),
         },
     )
@@ -978,7 +843,7 @@ def main(argv: list[str] | None = None) -> int:
 
     p_next = sub.add_parser(
         "next-token",
-        help="Write the Course 2 next-token bigram distribution table.",
+        help="Record real Qwen next-token distributions for the preset prompts.",
     )
     p_next.add_argument(
         "--out",
@@ -1023,8 +888,9 @@ def main(argv: list[str] | None = None) -> int:
 
     p_exp = sub.add_parser(
         "export-embedding-state",
-        help="Export the live server's embedding state (npz per language) and "
-        "verify it reproduces the shipped points/neighbors JSON.",
+        help="Export the live server's embedding state (one npz, combined "
+        "zh+en vocab) and verify it reproduces the shipped points/neighbors "
+        "JSON.",
     )
     p_exp.add_argument(
         "--out",
@@ -1046,15 +912,34 @@ def main(argv: list[str] | None = None) -> int:
         "so npz and JSON provably come from one instance.",
     )
 
+    p_train_rnn = sub.add_parser(
+        "train-rnn",
+        help="Train the small GRU language model (Alice corpus) and export its "
+        "weights npz for the rnn-viz artifact build + the live server.",
+    )
+    p_train_rnn.add_argument(
+        "--artifacts",
+        type=Path,
+        default=None,
+        help="Where to write the npz state (defaults to precompute/artifacts).",
+    )
+
     p_rnn = sub.add_parser(
         "rnn-viz",
-        help="Write the RNN Viz station's per-timestep hidden-state activations.",
+        help="Write the RNN Viz station's per-timestep hidden-state activations "
+        "from the TRAINED GRU (run train-rnn first).",
     )
     p_rnn.add_argument(
         "--out",
         type=Path,
         default=None,
         help="Output directory (defaults to apps/course2/public/data/course2).",
+    )
+    p_rnn.add_argument(
+        "--artifacts",
+        type=Path,
+        default=None,
+        help="Directory holding rnn_state.npz (defaults to precompute/artifacts).",
     )
 
     p_tf = sub.add_parser(
@@ -1111,21 +996,22 @@ def main(argv: list[str] | None = None) -> int:
         if args.write_artifacts:
             # The JSON was rewritten outside embedding(); refresh its manifest
             # entries so bytes stay accurate.
-            for lang in ("zh", "en"):
-                for kind in ("points", "neighbors"):
-                    rel = f"embedding/{kind}.{lang}.json"
-                    art = out_dir / rel
-                    if art.exists():
-                        upsert_manifest_artifact(
-                            out_dir,
-                            {
-                                "id": f"embedding-{kind}-{lang}",
-                                "kind": "json",
-                                "path": rel,
-                                "station": "embedding",
-                                "bytes": art.stat().st_size,
-                            },
-                        )
+            for stale_id in STALE_EMBEDDING_IDS:
+                remove_manifest_artifact(out_dir, stale_id)
+            for kind in ("points", "neighbors"):
+                rel = f"embedding/{kind}.json"
+                art = out_dir / rel
+                if art.exists():
+                    upsert_manifest_artifact(
+                        out_dir,
+                        {
+                            "id": f"embedding-{kind}",
+                            "kind": "json",
+                            "path": rel,
+                            "station": "embedding",
+                            "bytes": art.stat().st_size,
+                        },
+                    )
         if not ok:
             print(
                 "export-embedding-state: VERIFY FAILED — the recomputed state "
@@ -1136,9 +1022,15 @@ def main(argv: list[str] | None = None) -> int:
             return 1
         return 0
 
+    if args.command == "train-rnn":
+        artifacts_dir = args.artifacts or default_artifacts_dir()
+        train_rnn(artifacts_dir)
+        return 0
+
     if args.command == "rnn-viz":
         out_dir = args.out or default_out_dir()
-        path = rnn_viz(out_dir)
+        artifacts_dir = args.artifacts or default_artifacts_dir()
+        path = rnn_viz(out_dir, artifacts_dir)
         print(f"wrote {path}")
         print(f"updated {out_dir / 'manifest.json'}")
         return 0

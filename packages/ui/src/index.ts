@@ -19,5 +19,8 @@ export type {
 export { RunButton } from "./RunButton";
 export type { RunButtonProps } from "./RunButton";
 
+export { LiveStatus } from "./LiveStatus";
+export type { LiveState, LiveStatusProps } from "./LiveStatus";
+
 // Theme tokens live in ./theme.css and ../tailwind-preset.cjs.
 // Import them from app stylesheets / tailwind configs, not from JS.
