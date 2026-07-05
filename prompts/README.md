@@ -53,6 +53,25 @@ runtime GPU is needed. **License caveat:** `bbycroft/llm-viz` ships **no license
 (all-rights-reserved) — `06a` prefers a clean-room subset and flags "resolve
 license before any public deploy." `validate.md` has a **Step 3.5** for wave 2.
 
+## Wave 3 — real GPU models + typed input (after wave 2)
+
+Now that every station is served by a real GPU (4× V100 prod / 1× 3090 dev) and
+live inference is always on, wave 3 makes the models **real** and the interaction
+**type-anything**, while cutting UI complexity. Two theme-based prompts; **run in
+order** — R1 builds the shared GPU-status infra R2 reuses:
+
+| order | Prompt | What it does |
+|-------|--------|--------------|
+| 1 | `R1-embedding-unified-space.md` | One shared multilingual embedding space (single `Qwen3-Embedding-0.6B`, zh+en in one cloud), always-embed any typed word, drop the language toggle. Builds the shared `@camp/data` `liveInferTimed` + `@camp/ui` `LiveStatus` (latency + fallback note). |
+| 2 | `R2-real-models-live-gpu.md` | Replace the toy next-token/rnn/transformer/bag-of-words models with **real** on-device models (reusing `Qwen3-0.6B` where LM-shaped; a real trained tiny RNN otherwise), typed input everywhere, GPU latency note, simpler controls. |
+
+**Key shift wave 3 introduces:** the earlier "live == precomputed *by
+construction*" guarantee (both sides import the same deterministic function)
+becomes "presets are **recorded real model outputs**" — precompute runs the real
+model to bake the shipped artifacts; the server runs the same model + settings
+for typed input; offline fallback stays honest. The GPU note surfaces **latency +
+fallback transparency only** (no device badge, no fake spinner).
+
 **`DESIGN.md`** is the shared visual language (the course deck's palette + the
 `harrychang.me` editorial idioms). Every station follows it; session 1
 (`01-tokenizer`) does the **one-time `@camp/ui` token retune** it describes
