@@ -4,6 +4,7 @@ Response shapes are SCHEMA-COMPATIBLE with the precomputed artifacts each
 endpoint substitutes for (the frontend renders live results through the exact
 same viz path as precomputed data):
 
+- /tokenizer/encode      → real Qwen BPE pieces for the tokenizer station
 - /embedding/lookup      → one element of points.json + neighbors.json
 - /next-token/predict    → one prompt's entry list from distributions.json
 - /rnn/forward           → one element of activations.json `sequences[]`
@@ -20,6 +21,26 @@ from __future__ import annotations
 from typing import Literal, Optional
 
 from pydantic import BaseModel, Field
+
+# --- tokenizer -----------------------------------------------------------------
+
+
+class TokenizerEncodeRequest(BaseModel):
+    text: str = Field(min_length=1, max_length=500)
+
+
+class TokenPiece(BaseModel):
+    """One real Qwen BPE token: its vocab id and its decoded subword string
+    (word-initial pieces keep a leading space; there is no unk)."""
+
+    id: int
+    piece: str
+
+
+class TokenizerEncodeResponse(BaseModel):
+    model: str
+    tokens: list[TokenPiece]
+
 
 # --- embedding ---------------------------------------------------------------
 

@@ -5,21 +5,32 @@
  * carrying an id from a precomputed vocab. Flipping 字元 / 詞 / BPE shows that a
  * model reads *tokens*, not letters or words.
  *
- * A second axis — 語言 (中文 / English) — swaps the corpus/vocab. Chinese has no
- * spaces, so the three schemes genuinely diverge: each 漢字 is a char-token, a 詞
- * like「機器學習」spans several characters with no delimiter (斷詞 is a real
- * problem the browser solves with a greedy dictionary match), and BPE subwords
- * sit in between — merging frequent pairs (讀的, 不是) that the 詞典 keeps apart.
+ * There is no language switch: real tokenizers just read whatever you type, so
+ * the station does too. Mixed 中英文 works in one input. 字元/詞 auto-detect
+ * script per run — a 漢字 run has no spaces (斷詞 is a real problem the browser
+ * solves with a greedy 詞典 match), a latin run splits on whitespace — while BPE
+ * (Qwen) tokenizes the whole mixed string at once.
  *
  * Pattern follows reference.tsx: state → controls → a canvas that is a pure,
- * memoized function of that state. The ONLY non-hard-coded input is the vocab,
- * loaded via @camp/data inside an effect. Segmentation itself is light and
- * rule-based (regex + greedy lookup), so it runs in the browser (no training —
- * see CLAUDE.md).
+ * memoized function of that state. The ONLY hard-coded-free input is the vocab,
+ * loaded via @camp/data inside an effect.
+ *
+ * BPE is special: 字元/詞 stay light + rule-based in the browser, but BPE calls
+ * the live server (POST /tokenizer/encode) for the REAL Qwen3-0.6B merges/vocab
+ * — the same tokenizer the next-token / transformer stations run — instead of
+ * the toy-corpus BPE the browser can only approximate. The rule-based BPE stays
+ * as the offline fallback (server down → LiveStatus says so). This is still no
+ * training in the browser: tokenizing is light; the merges just come from a
+ * real vocab now (see CLAUDE.md).
  */
 import { useEffect, useMemo, useState } from "react";
-import { SegmentedControl, StationLayout } from "@camp/ui";
-import { loadJSON } from "@camp/data";
+import {
+  LiveStatus,
+  SegmentedControl,
+  StationLayout,
+  type LiveState,
+} from "@camp/ui";
+import { liveInferTimed, liveInferenceEnabled, loadJSON } from "@camp/data";
 
 type Scheme = "char" | "word" | "bpe";
 type Lang = "zh" | "en";
@@ -289,20 +300,106 @@ function segmentBpeZh(text: string, lv: LangVocab, unkId: number): Token[] {
   return out;
 }
 
-/** Pure segmentation: (text, scheme, lang, vocab) → chips. Memoized. */
-function segment(
-  text: string,
-  scheme: Scheme,
-  lang: Lang,
-  vocab: Vocab | null,
-): Token[] {
+/** Split text into maximal runs of one script: a 漢字 run vs everything else
+ * (latin, digits, spaces, punctuation). Each run is segmented with its script's
+ * rules, so mixed 中英文 needs no language toggle. */
+function scriptRuns(text: string): { han: boolean; text: string }[] {
+  const runs: { han: boolean; text: string }[] = [];
+  let cur = "";
+  let curHan = false;
+  for (const ch of text) {
+    const han = HAN_RE.test(ch);
+    if (cur !== "" && han !== curHan) {
+      runs.push({ han: curHan, text: cur });
+      cur = "";
+    }
+    cur += ch;
+    curHan = han;
+  }
+  if (cur) runs.push({ han: curHan, text: cur });
+  return runs;
+}
+
+/**
+ * Pure rule-based segmentation (the offline fallback; BPE prefers live Qwen).
+ * Script-aware: 漢字 runs use the zh vocab + 斷詞/merge rules, latin runs use the
+ * en vocab + whitespace/▁ rules. Groups + keys are offset per run so chips from
+ * different runs stay distinct. Memoized in the component.
+ */
+function segment(text: string, scheme: Scheme, vocab: Vocab | null): Token[] {
   if (!vocab || !text) return [];
-  const lv = vocab.languages[lang];
   const { spaceMarker, unkId } = vocab;
-  if (lang === "en") return segmentEn(text, scheme, lv, spaceMarker, unkId);
-  if (scheme === "char") return segmentCharZh(text, lv, unkId);
-  if (scheme === "word") return segmentWordZh(text, lv, unkId);
-  return segmentBpeZh(text, lv, unkId);
+  const en = vocab.languages.en;
+  const zh = vocab.languages.zh;
+
+  const out: Token[] = [];
+  let groupBase = 0;
+  scriptRuns(text).forEach((run, ri) => {
+    let toks: Token[];
+    if (run.han) {
+      toks =
+        scheme === "char"
+          ? segmentCharZh(run.text, zh, unkId)
+          : scheme === "word"
+            ? segmentWordZh(run.text, zh, unkId)
+            : segmentBpeZh(run.text, zh, unkId);
+    } else {
+      toks = segmentEn(run.text, scheme, en, spaceMarker, unkId);
+    }
+    let maxGroup = -1;
+    for (const t of toks) {
+      maxGroup = Math.max(maxGroup, t.group);
+      out.push({ ...t, group: t.group + groupBase, key: `r${ri}.${t.key}` });
+    }
+    groupBase += maxGroup + 1;
+  });
+  return out;
+}
+
+/** One real Qwen BPE token from POST /tokenizer/encode. */
+interface QwenPiece {
+  id: number;
+  /** Decoded subword; a word-initial piece keeps its leading space. */
+  piece: string;
+}
+
+interface LiveEncode {
+  model: string;
+  tokens: QwenPiece[];
+}
+
+const LEAD_WS_RE = /^\s+/;
+
+/**
+ * Map real Qwen pieces onto the same chip shape the rule-based path produces,
+ * so live and fallback render through one code path. A piece whose decode
+ * starts with whitespace opens a new source-word group (Qwen's word boundary,
+ * shown as the ▁ marker like the English rule path); continuation pieces join
+ * the previous group. `split` (the lime callout) marks a latin word Qwen broke
+ * into >1 subword; 漢字 runs merge almost every char, so lime would drown — it
+ * stays hover-only for them (mirrors segmentBpeZh). No `unk` — byte-level BPE
+ * covers everything.
+ */
+function chipsFromQwen(pieces: QwenPiece[], spaceMarker: string): Token[] {
+  // Pass 1: assign each piece to a source-word group + count group sizes.
+  const groupOf: number[] = [];
+  const size = new Map<number, number>();
+  let group = -1;
+  pieces.forEach((p, i) => {
+    if (i === 0 || LEAD_WS_RE.test(p.piece)) group++;
+    groupOf.push(group);
+    size.set(group, (size.get(group) ?? 0) + 1);
+  });
+
+  // Pass 2: build chips. Leading whitespace collapses to a single ▁ marker.
+  return pieces.map((p, i) => {
+    const g = groupOf[i] ?? 0;
+    const display = p.piece.replace(LEAD_WS_RE, spaceMarker) || spaceMarker;
+    // Latin pieces test true; 漢字 pieces don't — so a split word lights up but
+    // a merged Han run doesn't (the 合併的子詞 metric counts those instead).
+    const split = (size.get(g) ?? 1) > 1 && /[A-Za-z0-9]/.test(p.piece);
+    return { display, id: p.id, isUnk: false, split, group: g, key: `q${i}` };
+  });
 }
 
 /** Group consecutive tokens by their source segment, for spacing. */
@@ -327,45 +424,92 @@ const SCHEME_OPTS = [
   { label: "BPE", value: "bpe" as const },
 ];
 
-const LANG_OPTS = [
-  { label: "中文", value: "zh" as const },
-  { label: "English", value: "en" as const },
-];
+// Mixed 中英文 seed: 漢字 (some single, some merged like 學習/方式) plus a rare
+// latin word Qwen splits (token|ization) — one sentence that exercises every
+// scheme without a toggle, and tokenizes cleanly (no byte-fallback � chips).
+const DEFAULT_TEXT = "機器學習的 tokenization 是一種切分方式";
 
 export function TokenizerStation() {
-  // 1. STATE — language, scheme, the text, and the vocab (loaded, not hard-coded).
-  const [lang, setLang] = useState<Lang>("zh");
+  // 1. STATE — scheme, the text, and the vocab (loaded, not hard-coded). No
+  //    language toggle: the tokenizer reads whatever you type, 中英文 mixed.
   const [scheme, setScheme] = useState<Scheme>("bpe");
-  const [text, setText] = useState("");
+  const [text, setText] = useState(DEFAULT_TEXT);
   const [vocab, setVocab] = useState<Vocab | null>(null);
   const [hovered, setHovered] = useState<string | null>(null);
 
-  // 3. LOAD PRECOMPUTED VOCAB via @camp/data inside an effect. Seed the text box
-  //    from the current language's sample sentence the first time it lands.
+  // 3. LOAD PRECOMPUTED VOCAB via @camp/data inside an effect (the rule-based
+  //    fallback tables; BPE prefers live Qwen).
   useEffect(() => {
     let alive = true;
     loadJSON<Vocab>("/data/course2/tokenizer/vocab.json").then((v) => {
-      if (!alive) return;
-      setVocab(v);
-      setText((t) => (t ? t : v.languages[lang].sampleText));
+      if (alive) setVocab(v);
     });
     return () => {
       alive = false;
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Switching content language reseeds the textarea from that corpus's sample.
-  function onLangChange(next: Lang) {
-    setLang(next);
-    if (vocab) setText(vocab.languages[next].sampleText);
-  }
-
-  // 2. DERIVED CANVAS DATA — a pure, memoized function of (text, scheme, lang, vocab).
-  const tokens = useMemo(
-    () => segment(text, scheme, lang, vocab),
-    [text, scheme, lang, vocab],
+  // LIVE BPE — the real Qwen tokenizer, for custom text the toy vocab can't
+  // cover. Only BPE mode asks the server; 字元/詞 stay rule-based. On any
+  // failure (server down, disabled) `liveEnc` stays behind the current text and
+  // the rule-based BPE below shows through, so a dead server just degrades to
+  // the approximation instead of breaking the station.
+  const marker = vocab?.spaceMarker ?? "▁";
+  const bpeLive = scheme === "bpe" && liveInferenceEnabled();
+  const [liveEnc, setLiveEnc] = useState<{ sig: string; tokens: Token[] } | null>(
+    null,
   );
+  const [liveMs, setLiveMs] = useState(0);
+  const [livePending, setLivePending] = useState(false);
+  const [liveFailed, setLiveFailed] = useState(false);
+
+  useEffect(() => {
+    if (!bpeLive || !text.trim()) {
+      setLivePending(false);
+      setLiveFailed(false);
+      return;
+    }
+    let alive = true;
+    setLivePending(true);
+    setLiveFailed(false);
+    // Debounced: only ask the server once typing pauses.
+    const timer = setTimeout(() => {
+      liveInferTimed<LiveEncode>("/tokenizer/encode", { text }).then((r) => {
+        if (!alive) return;
+        setLivePending(false);
+        if (r) {
+          setLiveEnc({ sig: text, tokens: chipsFromQwen(r.data.tokens, marker) });
+          setLiveMs(r.ms);
+        } else {
+          setLiveFailed(true);
+        }
+      });
+    }, 300);
+    return () => {
+      alive = false;
+      clearTimeout(timer);
+      setLivePending(false);
+    };
+  }, [bpeLive, text, marker]);
+
+  // Live tokens win only when they belong to exactly what's on screen now.
+  const liveHit = bpeLive && liveEnc?.sig === text ? liveEnc : null;
+
+  // 2. DERIVED CANVAS DATA — a pure, memoized function of (text, scheme,
+  //    vocab), with live Qwen tokens overriding the rule-based BPE when present.
+  const fallback = useMemo(
+    () => segment(text, scheme, vocab),
+    [text, scheme, vocab],
+  );
+  const tokens = liveHit ? liveHit.tokens : fallback;
+
+  const liveState = useMemo<LiveState>(() => {
+    if (!bpeLive || !text.trim()) return { kind: "idle" };
+    if (liveHit) return { kind: "live", ms: liveMs };
+    if (livePending) return { kind: "pending" };
+    if (liveFailed) return { kind: "cached" };
+    return { kind: "idle" };
+  }, [bpeLive, text, liveHit, livePending, liveFailed, liveMs]);
   const groups = useMemo(() => byGroup(tokens), [tokens]);
   const splitWords = useMemo(
     () => new Set(tokens.filter((t) => t.split).map((t) => t.group)).size,
@@ -380,8 +524,7 @@ export function TokenizerStation() {
     [tokens],
   );
 
-  const sample = vocab ? vocab.languages[lang].sampleText : "";
-  const isZh = lang === "zh";
+  const sample = DEFAULT_TEXT;
 
   return (
     <StationLayout
@@ -389,13 +532,6 @@ export function TokenizerStation() {
       subtitle="原始文字要怎麼變成模型讀得懂的東西？"
       controls={
         <>
-          <SegmentedControl<Lang>
-            label="語言 / Language"
-            value={lang}
-            onChange={onLangChange}
-            options={LANG_OPTS}
-          />
-
           <SegmentedControl<Scheme>
             label="切分方式"
             value={scheme}
@@ -413,19 +549,17 @@ export function TokenizerStation() {
               placeholder={vocab ? sample : "載入詞彙表中…"}
               className="w-full resize-y rounded-md border border-border bg-panel p-3 text-sm text-fg placeholder:text-muted focus:border-accent focus:outline-none"
             />
-            {isZh ? (
-              <p className="mt-2 text-xs text-muted">
-                中文沒有空格，「詞」模式要靠一份詞典逐一比對來斷詞。試試在{" "}
-                <span className="font-mono text-fg">BPE</span> 下打「機器學習」：
-                它會合併成常見的子詞，跟「詞」和「字元」都不一樣。
-              </p>
-            ) : (
-              <p className="mt-2 text-xs text-muted">
-                試試在 <span className="font-mono text-fg">BPE</span> 下輸入像{" "}
-                <span className="font-mono text-fg">tokenization</span>{" "}
-                這種罕見字，它沒有完整的 token，會被拆成子詞（subword）。
-              </p>
-            )}
+            {scheme === "bpe" && liveState.kind !== "idle" ? (
+              <div className="mt-1">
+                <LiveStatus state={liveState} />
+              </div>
+            ) : null}
+            <p className="mt-2 text-xs text-muted">
+              直接輸入中英夾雜也可以。BPE 下英文的罕見字（像{" "}
+              <span className="font-mono text-fg">tokenization</span>
+              ）沒有完整 token，會被拆成子詞；中文沒有空格，常見的字則相反，會被
+              合併成一個子詞。
+            </p>
           </div>
 
           <dl className="grid grid-cols-2 gap-2 border-t border-border/30 pt-4 font-mono text-xs text-muted">
@@ -435,10 +569,10 @@ export function TokenizerStation() {
             <dd className="text-right text-fg">{groups.length}</dd>
             {scheme === "bpe" ? (
               <>
-                <dt>{isZh ? "合併的子詞" : "被拆的詞"}</dt>
-                <dd className="text-right text-accent">
-                  {isZh ? mergedSubwords : splitWords}
-                </dd>
+                <dt>被拆的詞</dt>
+                <dd className="text-right text-accent">{splitWords}</dd>
+                <dt>合併的子詞</dt>
+                <dd className="text-right text-accent">{mergedSubwords}</dd>
               </>
             ) : null}
           </dl>
@@ -455,20 +589,14 @@ export function TokenizerStation() {
       <div className="flex h-full flex-col gap-4">
         <p className="text-sm text-muted">
           每張卡片都是模型讀到的一個 token。{" "}
-          {isZh ? (
-            <span>
-              中文沒有空格，切分（tokenization）沒辦法「用空格切開」，得靠模型或
-              詞典來斷詞。
+          <span>
+            英文用{" "}
+            <span className="font-mono text-xs">
+              <span className="text-muted">{vocab?.spaceMarker ?? "▁"}</span>{" "}
+              標記詞的邊界
             </span>
-          ) : (
-            <span>
-              <span className="font-mono text-xs">
-                <span className="text-muted">{vocab?.spaceMarker ?? "▁"}</span>{" "}
-                標記詞的邊界
-              </span>
-              ，切分（tokenization）不只是「用空格切開」而已。
-            </span>
-          )}{" "}
+            ；中文沒有空格，切分（tokenization）得靠模型直接把整串切開。
+          </span>{" "}
           把游標移到卡片上可以看細節；亮綠色標記 BPE 的子詞切分。
         </p>
 

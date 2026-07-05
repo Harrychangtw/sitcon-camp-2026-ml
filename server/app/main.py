@@ -24,7 +24,7 @@ from fastapi.middleware.gzip import GZipMiddleware
 
 from .config import load_settings
 from .loader import load_models
-from .routers import embedding, next_token, order_shuffle, rnn, transformer
+from .routers import embedding, next_token, order_shuffle, rnn, tokenizer, transformer
 from .schemas import HealthResponse
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
@@ -68,6 +68,7 @@ def require_token(
 AUTH = [Depends(require_token)]
 
 app.include_router(embedding.router, dependencies=AUTH)
+app.include_router(tokenizer.router, dependencies=AUTH)
 app.include_router(next_token.router, dependencies=AUTH)
 app.include_router(rnn.router, dependencies=AUTH)
 app.include_router(transformer.router, dependencies=AUTH)

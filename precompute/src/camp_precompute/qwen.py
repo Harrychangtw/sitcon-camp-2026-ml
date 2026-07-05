@@ -37,6 +37,9 @@ NEXT_TOKEN_TOP_N = 12
 NEXT_TOKEN_MAX_TOKENS = 48
 ATTENTION_MAX_TOKENS = 24
 FLUENCY_MAX_TOKENS = 48
+# Tokenizer station shows every chip; cap the run so a paste can't produce a
+# thousand-chip wall (and to bound the response).
+TOKENIZER_MAX_TOKENS = 128
 
 
 def load_qwen(device: str):
@@ -60,6 +63,24 @@ def _decode_pieces(tok, ids: list[int]) -> list[str]:
     piece that isn't valid UTF-8 on its own decodes to the replacement char —
     also honest."""
     return [tok.decode([i]) for i in ids]
+
+
+def tokenize_pieces(
+    tok, text: str, max_tokens: int = TOKENIZER_MAX_TOKENS
+) -> list[dict]:
+    """Real Qwen BPE tokenization of arbitrary text: [{id, piece}, ...].
+
+    This is the tokenizer station's BPE mode — the REAL merges/vocab Qwen ships,
+    not the toy corpus the browser fallback approximates. ``piece`` is the
+    decoded per-token string (a word-initial token keeps its leading space, so
+    the station can draw the word boundary; a byte-level piece that isn't valid
+    UTF-8 on its own decodes to the replacement char — honest, same as
+    ``_decode_pieces``). ``add_special_tokens=False``: show only content tokens,
+    no chat scaffolding. There is no ``unk`` — byte-level BPE covers every
+    string, which is exactly the point ("stop guessing").
+    """
+    ids = tok(text, add_special_tokens=False).input_ids[:max_tokens]
+    return [{"id": int(i), "piece": tok.decode([i])} for i in ids]
 
 
 def next_token_entries(tok, model, prompt: str, top_n: int = NEXT_TOKEN_TOP_N) -> list[dict]:
