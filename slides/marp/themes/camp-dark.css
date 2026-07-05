@@ -147,6 +147,17 @@ h1 em {
   color: var(--grey);
 }
 
+/* On capsule pages ONLY, the title+subtitle group leaves the pinned title band
+   and centers vertically, so it sits level with the right-side capsule stack
+   (which section's justify-content:center already vertical-centers). Pages
+   without a .caps stack keep the default top-left anchor above. */
+section:has(.caps) h1 {
+  top: 50%;
+  bottom: auto;
+  max-height: none;
+  transform: translateY(-50%);
+}
+
 h2 {
   margin: 0 0 40px;
   font-size: 92px;
@@ -339,21 +350,35 @@ p > img:not(.emoji) {
 
 /* ---- capsule component -------------------------------------------------
  * A row = emoji · label(title+sub) · vertical divider · body text.
- * Stack of 3~5 rows; 50px gap between rows; each row is 50px inward padding
+ * Stack of 3~5 EQUAL-HEIGHT rows; 50px gap between rows; each row is 50px inward padding
  * and a 50px corner radius. Flow L→R with a uniform 50px flex gap:
  *   [144px emoji] 50 [title (Lantinghei) + grey english sub] 50 [divider] 50 [body →]
  * Body frame spans to the right edge, left-aligned, vertically centered.
  */
 .caps {
-  display: flex;
-  flex-direction: column;
-  gap: 50px;
+  display: grid;
+  /* Four shared column tracks — emoji | label | divider | body — so the divider
+     lands at the SAME x on every card. `label` is `auto`, so it hugs the widest
+     label on the page; the 50px column-gap is the 50px on each side of the
+     divider. Each .cap is a subgrid, inheriting these tracks + gutters. */
+  grid-template-columns: auto auto auto minmax(0, 1fr);
+  grid-auto-rows: 1fr;   /* every capsule equal height, matched to the tallest */
+  gap: 50px;             /* between capsules AND between the four columns */
+  /* default: half the slide, pinned to the right — left edge lands on the page
+     center axis (content is symmetric so content-center == page-center). */
+  width: 50%;
+  margin-left: auto;
+}
+/* opt back into the old full-width stack: `<div class="caps full">` */
+.caps.full {
   width: 100%;
+  margin-left: 0;
 }
 .cap {
-  display: flex;
+  display: grid;
+  grid-column: 1 / -1;              /* span all four tracks */
+  grid-template-columns: subgrid;   /* align emoji/label/divider/body to .caps */
   align-items: center;
-  gap: 50px;
   padding: 50px;
   border-radius: 50px;
   background: var(--card);
@@ -369,26 +394,23 @@ p > img:not(.emoji) {
   line-height: 1;
   transform: translateY(32px); /* nudge down to the optical center (emoji glyphs sit high) */
 }
-/* label column: FIXED width per stack (--cap-label-w on .caps, default 640px).
-   fixed width does two jobs — long English subs wrap under the title instead of
-   blowing out the row, and every row's divider lands at the same x so the stack
-   aligns vertically. Wider-title stacks (English terms) override the var. */
+/* label column: width is the shared `auto` subgrid track (see .caps) — it hugs
+   the widest title/sub on the page, and every row's divider lands at the same x
+   because they share the track. No fixed width needed. */
 .cap-label {
-  flex: 0 0 auto;
-  width: var(--cap-label-w, 640px);
   display: flex;
   flex-direction: column;
   justify-content: center;
 }
 .cap-title {
   font-family: 'Lantinghei TC', 'Noto Sans TC', sans-serif;
-  font-size: 144px;      /* 4-char title */
+  font-size: 96px;       /* capsule title */
   font-weight: 900;      /* Lantinghei TC ships Extralight/Demibold/Heavy — grab Heavy */
   line-height: 1.1;
   color: var(--white);
 }
 .cap-title.w5 {
-  font-size: 116px;      /* 5-char / long-Latin title backs off to fit the label */
+  font-size: 80px;       /* 5-char / long-Latin title backs off to fit the label */
 }
 /* English term as the title: swap the CJK display face for Artific Bold (the
    deck's HEAD font), matching h1. Compose with .w5 for long words. */
