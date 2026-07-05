@@ -43,3 +43,17 @@ Session handoffs, newest at the bottom.
 
 ### Suggested next
 - Run `prompts/R2-real-models-live-gpu.md` (reuses `liveInferTimed`/`LiveStatus` verbatim); sanity-check the other three stations' live paths now that the env fix makes them actually fire.
+
+## Handoff — Bottom-center control dock for stations
+
+### Done this session
+- Replaced the full-height right rail with a floating **bottom-center dock** in `StationLayout` (title floats top-left, 重點 collapses to a hover-reveal info badge top-right, `input` slot left / `controls` slot right); added shared `@camp/ui` controls `SuggestInput`, `BlockToggle`, `BlockSlider`, `DockControls`; migrated the embedding + next-token stations onto it with readouts thrown onto the canvas as overlays (`091c2b2`). `@camp/ui` + `@app/course2` typecheck green.
+- Aesthetic per user mockup: big borderless prompt box (top-aligned text, submit arrow, focus-empty preset chips as a vertical popover), blocky dark→lime gradient slider with slim hover-thickening handle + pop-up value + step ticks, concentric dock corner radius (`rounded-[18px]` = inner `md` + `p-3`).
+
+### Loose ends
+- Only embedding + next-token are migrated. The other stations (tokenizer, order-shuffle, rnn-viz, transformer) still pass their old vertical control stacks into `controls`, so they render cramped in the dock until migrated — see `prompts/DOCK-migrate-remaining-stations.md`.
+- Slider CSS verified only by typecheck, not in-browser: the `group-hover/blockslider:[&::-webkit-slider-thumb]` handle-thicken and the value-bubble position at range extremes should be eyeballed with `pnpm --filter @app/course2 dev`.
+- The submit arrow on live-on-type stations (both migrated ones) is cosmetic — `onSubmit` is idempotent; hide it later if it reads as dead.
+
+### Suggested next
+- Run `prompts/DOCK-migrate-remaining-stations.md` to move transformer / order-shuffle / rnn-viz / tokenizer onto the dock (transformer's sentence presets → `SuggestInput`).
