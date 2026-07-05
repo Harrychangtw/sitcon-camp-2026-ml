@@ -1,0 +1,39 @@
+# Load-balancing proxy for the 4× V100 box (see server/README.md → Concurrency).
+#
+# One entry point on PROXY_PORT (default 8300 — the port the backend tailscale
+# funnel already targets) fanned out across the four single-GPU backends on
+# 127.0.0.1:8301..8304 (camp-server@0..3 / scripts/serve-multi.sh).
+#
+# - least_conn, NOT round-robin: a /transformer/attention call costs far more
+#   than an /embedding/lookup, so balance by in-flight count.
+# - Active health checks against GET /health (unauthenticated by design): a
+#   crashed GPU worker is ejected instead of 502-ing a quarter of the class.
+# - Headers (X-Camp-Token, Content-Type, Origin) pass through untouched, so
+#   auth + CORS keep working; no `encode` directive here, so the backends'
+#   gzip bodies pass through un-recompressed.
+# - Bound to 127.0.0.1: the tailscale funnel (TLS terminator) proxies to it
+#   locally, so NOTHING listens on the public IP. If you ever expose this box
+#   without the funnel, change `bind` and put TLS on this proxy instead.
+#
+# Run: caddy run --config server/deploy/Caddyfile   (or camp-proxy.service)
+
+{
+	admin off
+	auto_https off
+}
+
+:{$PROXY_PORT:8300} {
+	bind 127.0.0.1
+
+	reverse_proxy 127.0.0.1:8301 127.0.0.1:8302 127.0.0.1:8303 127.0.0.1:8304 {
+		lb_policy least_conn
+
+		health_uri /health
+		health_interval 2s
+		health_timeout 2s
+
+		# Passive ejection too: a refused connection benches the backend
+		# briefly even between active probes.
+		fail_duration 5s
+	}
+}
