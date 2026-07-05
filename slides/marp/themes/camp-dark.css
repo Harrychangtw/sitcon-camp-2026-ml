@@ -93,17 +93,23 @@ section {
   /* geometry — MUST match ../MASTERS.md (1:1 with the Affinity artboard) */
   --margin: 100px;      /* uniform safe margin, all four edges            */
   --title-h: 400px;     /* title band: x100 y100 w3640 h400               */
-  --content-top: 560px; /* content area top: 100 + 400 + 60 gap           */
+  /* content centering region starts just under the RENDERED title (h1 line +
+     grey L2 subtitle end ~y373), not the full reserved band — so the gap
+     above the content (to the subtitle) and below it (to the footer band)
+     come out roughly equal. */
+  --content-top: 400px;
   --footer-h: 100px;    /* footer band = the bottom margin, y2060..y2160  */
 
   width: 3840px;
   height: 2160px;
   position: relative;
   overflow: hidden;
-  /* content block self-balances: vertically centered in the WHOLE slide
-     (margin-top y100 to footer y2060), not just the sub-space below the title.
-     h1 is absolute so it stays pinned in the title band regardless. */
-  padding: var(--margin) var(--margin) var(--margin);
+  /* content block self-balances: vertically centered in the space BELOW the
+     title band (content-top y560 to footer y2060). h1 is absolute so it stays
+     pinned in the title band regardless. Sparse pages (little vertical
+     content) opt back into whole-slide centering with `_class: sparse`;
+     capsule pages get it automatically (their h1 centers too). */
+  padding: var(--content-top) var(--margin) var(--margin);
   display: flex;
   flex-direction: column;
   justify-content: center;
@@ -158,6 +164,13 @@ section:has(.caps) h1 {
   transform: translateY(-50%);
 }
 
+/* whole-slide vertical centering (not just below the title band):
+   capsule pages automatically, sparse pages via `_class: sparse` */
+section:has(.caps),
+section.sparse {
+  padding-top: var(--margin);
+}
+
 h2 {
   margin: 0 0 40px;
   font-size: 92px;
@@ -181,11 +194,14 @@ h4 {
   color: var(--grey);
 }
 
-/* h6 = figure caption (markdown-native: `###### 圖說`) */
+/* h6 = figure caption (markdown-native: `###### 圖說`)
+ * The caption belongs to the figure ABOVE it, not the text below: the negative
+ * top margin pulls it up against the image's 44px paragraph margin (net gap
+ * ~24px) while the large bottom margin (72px) pushes the following text away. */
 h6 {
   display: block;
   width: 100%;
-  margin: 28px 0 0;
+  margin: -20px 0 72px;
   font-size: 48px;
   font-weight: 400;
   text-align: center;
@@ -506,35 +522,58 @@ p > img:not(.emoji) {
 }
 
 /* ---- station card ------------------------------------------------------
- * The fixed hand-off structure (CONVENTIONS.md): three labelled blocks —
- * 你要動的旋鈕 · 試試看 · 你應該會看到 — then a .checkpoint line beneath.
+ * The fixed hand-off structure (CONVENTIONS.md): a VERTICAL stack of
+ * full-width blocks — 你要動的旋鈕 · 試試看 · 你應該會看到 · 檢核點 — 50px
+ * between blocks. Each block is two columns (~1:3) split by a vertical
+ * divider: grey label vertically centered on the left, body text on the
+ * right. 檢核點 is a normal block (`<div class="st check">`, styling hook
+ * only — its divider stays grey like the rest). The station chip is
+ * anchored to the slide's top-right corner (see below), so in markdown it
+ * simply comes after the .station div.
  * Markdown: <div class="station"><div class="st"><h4>你要動的旋鈕</h4> … .
- * `.station.two` = two blocks only (rare).
  */
 .station {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  display: flex;
+  flex-direction: column;
   gap: 50px;
   width: 100%;
-  margin: 0 0 50px;
-}
-.station.two {
-  grid-template-columns: repeat(2, 1fr);
+  margin: 0;
 }
 .station .st {
+  /* label | divider | body — the 50px column-gap puts 50px on each side of
+     the divider; the 50px padding is the uniform inner margin. */
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 3px minmax(0, 3.2fr);
+  column-gap: 50px;
+  align-items: start;
   background: var(--card);
   border: 2px solid var(--grey-mid);
   border-radius: 50px;
-  padding: 56px 64px;
+  padding: 50px;
   font-size: 60px;
   line-height: 1.55;
 }
+/* the vertical divider, spanning the block's full content height */
+.station .st::before {
+  content: '';
+  grid-column: 2;
+  grid-row: 1 / span 8;
+  align-self: stretch;
+  width: 3px;
+  background: var(--grey-mid);
+}
 .station .st h4 {
-  margin: 0 0 36px;
+  grid-column: 1;
+  grid-row: 1 / span 8;
+  align-self: center;
+  margin: 0;
   font-size: 46px;
   font-weight: 400;
   letter-spacing: 0.08em;
   color: var(--grey);
+}
+.station .st > *:not(h4) {
+  grid-column: 3;
 }
 .station .st p {
   margin: 0 0 28px;
@@ -556,7 +595,18 @@ p > img:not(.emoji) {
   margin-bottom: 0;
 }
 
-/* one-line self-check, Denny-style — lime left rule on a card strip */
+/* on station pages the chip leaves the flow and pins to the top-right corner
+   of the slide, opposite the h1 in the title band */
+section:has(.station) .chip {
+  position: absolute;
+  top: var(--margin);
+  right: var(--margin);
+  margin: 0;
+  z-index: 5;
+}
+
+/* one-line self-check, Denny-style — lime left rule on a card strip
+   (legacy; station pages now use `<div class="st check">` inside .station) */
 .checkpoint {
   width: 100%;
   margin: 0 0 44px;

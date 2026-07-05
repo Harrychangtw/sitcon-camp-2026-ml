@@ -42,13 +42,22 @@ Every allowed breathing beat carries a justifying comment:
 MLP(bag) 前後輸出一模一樣；RNN 的輸出會變。
 
 </div>
-</div>
+<div class="st check">
+<h4>檢核點</h4>
 
-<div class="checkpoint">檢核點：我看到 shuffle 前後 MLP 輸出一模一樣</div>
+我看到 shuffle 前後 MLP 輸出一模一樣。
+
+</div>
+</div>
 
 <span class="chip">🛠 講師畫面／各組電腦已開好（URL 開站後補）</span>
 ```
 
+- Blocks stack vertically full-width; each `.st` is a 1:3 grid — grey `<h4>`
+  label vertically centered on the left, body right, grey vertical divider
+  between (檢核點 included — `.check` is just a hook, no special styling). The
+  chip is auto-pinned to the slide's top-right corner by the theme
+  (`section:has(.station) .chip`).
 - 旋鈕 = the ONE knob from `docs/course-spec.md`. 試試看 = 2–3 concrete inputs
   to type / toggles to flip. 你應該會看到 = the expected observation, stated
   concretely. 檢核點 = one line, first person, checkable at a glance.
