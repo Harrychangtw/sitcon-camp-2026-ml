@@ -9,7 +9,7 @@ export default defineConfig({
   server: {
     port: 5173,
     strictPort: true,
-    // Allow the tailscale funnel hostname (…​.ts.net) to reach the dev server.
+    // Allow the tailscale funnel hostname (*.ts.net) to reach the dev server.
     // A leading-dot suffix matches any subdomain, so no per-machine edit needed.
     allowedHosts: [".ts.net"],
   },

@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+/* global process, console */
 // Build a SELF-CONTAINED web bundle of the Course 2 deck for static hosting.
 //
 // Marp exports the bespoke HTML player (presenter view = notes + timer, press
