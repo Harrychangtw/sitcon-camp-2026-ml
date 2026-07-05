@@ -31,8 +31,12 @@ precompute/artifacts/
 *.log
 .env
 .env.local
+.env*.local
 .vscode/*
 !.vscode/extensions.json
+
+# Claude Code local scratch (worktrees, local settings) — never committed
+.claude/
 slides/reference
 slides/decks/png
 
