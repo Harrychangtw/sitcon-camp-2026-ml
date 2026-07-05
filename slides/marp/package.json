@@ -1,0 +1,15 @@
+{
+  "name": "@camp/slides-marp",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Marp toolchain + camp-dark theme for the Course 2 deck",
+  "scripts": {
+    "preview": "marp -w -p --config marp.config.js deck/_sample.md",
+    "pdf": "marp --config marp.config.js --allow-local-files deck/_sample.md -o out/_sample.pdf",
+    "html": "marp --config marp.config.js --allow-local-files deck/_sample.md -o out/_sample.html",
+    "png": "marp --config marp.config.js --allow-local-files deck/_sample.md --images png -o out/_sample.png"
+  },
+  "devDependencies": {
+    "@marp-team/marp-cli": "^4.2.3"
+  }
+}
