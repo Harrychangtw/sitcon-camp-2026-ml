@@ -1,0 +1,8 @@
+# font binaries are never committed (Artific is licensed; Noto/Fira are
+# re-downloadable) — see README.md "Fonts" for how to repopulate
+assets/fonts/*.ttf
+assets/fonts/*.otf
+
+# generated exports + web bundle
+out/
+web/
