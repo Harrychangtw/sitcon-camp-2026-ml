@@ -57,9 +57,13 @@ attention 這個詞留到下一張才揭曉。
 相關的字被直接連上，沒有逐站傳遞。
 
 </div>
-</div>
+<div class="st check">
+<h4>檢核點</h4>
 
-<div class="checkpoint">檢核點：我點一個字，就看到它直接連到相關的字</div>
+我點一個字，就看到它直接連到相關的字。
+
+</div>
+</div>
 
 <span class="chip">🛠 講師畫面／各組電腦已開好（URL 開站後補）</span>
 
@@ -171,25 +175,25 @@ Value（內容）。到 transformer-explainer 上看一個字的 Query 被拿去
 <span class="cap-emoji">👀</span>
 <div class="cap-label"><span class="cap-title">注意機制</span><span class="cap-sub">Attention</span></div>
 <div class="cap-div"></div>
-<div class="cap-text">每個字直接看所有字，不必逐站傳記憶。</div>
+<div class="cap-text">每個字直接看到句子裡的所有字，不必逐站傳記憶。</div>
 </div>
 <div class="cap">
 <span class="cap-emoji">📍</span>
 <div class="cap-label"><span class="cap-title w5">位置編碼</span><span class="cap-sub sm">Positional Embedding</span></div>
 <div class="cap-div"></div>
-<div class="cap-text">把「第幾個」塞回去，補上順序。</div>
+<div class="cap-text">把「第幾個」這個資訊塞回去，補上原本的順序。</div>
 </div>
 <div class="cap">
 <span class="cap-emoji">🔗</span>
 <div class="cap-label"><span class="cap-title w5">殘差連接</span><span class="cap-sub sm">Residual Connection</span></div>
 <div class="cap-div"></div>
-<div class="cap-text">給資訊一條捷徑繞過層，訓練更穩。</div>
+<div class="cap-text">給資訊一條捷徑直接繞過層，深層訓練也更穩。</div>
 </div>
 <div class="cap">
 <span class="cap-emoji">🔑</span>
 <div class="cap-label"><span class="cap-title en">Q／K／V</span><span class="cap-sub sm">Query · Key · Value</span></div>
 <div class="cap-div"></div>
-<div class="cap-text">問題對上鑰匙，決定注意力看誰。</div>
+<div class="cap-text">拿問題去對上每一把鑰匙，決定注意力該多看誰。</div>
 </div>
 </div>
 

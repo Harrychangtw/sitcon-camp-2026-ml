@@ -73,9 +73,13 @@ _🔗 Iyyer et al. 2015, Deep Unordered Composition Rivals Syntactic Methods, AC
 MLP(bag) 在 shuffle 前後輸出逐字相同；RNN 的輸出會變。
 
 </div>
-</div>
+<div class="st check">
+<h4>檢核點</h4>
 
-<div class="checkpoint">檢核點：我看到 shuffle 前後 MLP 輸出一模一樣。</div>
+我看到 shuffle 前後 MLP 輸出一模一樣。
+
+</div>
+</div>
 
 <span class="chip">🛠 講師畫面／各組電腦已開好（URL 開站後補）</span>
 

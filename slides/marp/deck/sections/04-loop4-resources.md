@@ -12,28 +12,28 @@
 
 # 三個架構，其實是三個假設 _MLP → RNN → Transformer_
 
-![h:640](../../figures/three_arch_glyphs.png)
+![h:720](../../figures/three_arch_glyphs.png)
 
 <div class="cols3">
 <div>
 
 ### MLP
 
-沒有順序假設，句子只是一袋字。
+沒有任何順序假設，句子在它眼中只是一袋字。
 
 </div>
 <div>
 
 ### RNN
 
-假設順序有意義，用記憶一路帶著走。
+假設順序有意義，用一份記憶把前文一路帶著走。
 
 </div>
 <div>
 
 ### Transformer
 
-假設每個字直接互看，再補上位置與捷徑。
+假設每個字都能直接互看，再補上位置與捷徑兩塊。
 
 </div>
 </div>

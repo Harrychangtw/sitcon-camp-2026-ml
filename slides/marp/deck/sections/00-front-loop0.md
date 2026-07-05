@@ -83,6 +83,8 @@
 
 ---
 
+<!-- _class: sparse -->
+
 # 上一堂的模型，看不懂字 _模型只吃數字，這堂的輸入卻是一句話_
 
 <div class="cols">
@@ -140,9 +142,13 @@ _模型看不懂字，得先把字變成數字。_
 一個「字」常被拆成好幾塊，切法不直覺。
 
 </div>
-</div>
+<div class="st check">
+<h4>檢核點</h4>
 
-<div class="checkpoint">檢核點：我看到同一個字，換個位置或語言就被切成不同塊</div>
+我看到同一個字，換個位置或語言就被切成不同塊。
+
+</div>
+</div>
 
 <span class="chip">🛠 講師畫面／各組電腦已開好（URL 開站後補）</span>
 
@@ -273,9 +279,13 @@ _模型看不懂字，得先把字變成數字。_
 語意相近的字，在空間裡的距離也近。
 
 </div>
-</div>
+<div class="st check">
+<h4>檢核點</h4>
 
-<div class="checkpoint">檢核點：我挑的字，最近的鄰居語意也相近</div>
+我挑的字，最近的鄰居語意也相近。
+
+</div>
+</div>
 
 <span class="chip">🛠 講師畫面／各組電腦已開好（URL 開站後補）</span>
 
@@ -353,7 +363,7 @@ _Bolukbasi et al., 2016 · arXiv 1607.06520_
 <span class="cap-emoji">⚖️</span>
 <div class="cap-label"><span class="cap-title">偏見殘留</span></div>
 <div class="cap-div"></div>
-<div class="cap-text">語料裡的偏見，也一起被學進向量。</div>
+<div class="cap-text">語料裡藏著的偏見，也會一起被學進向量裡。</div>
 </div>
 </div>
 
