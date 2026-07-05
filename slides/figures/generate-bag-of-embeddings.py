@@ -69,7 +69,14 @@ def use_deck_font():
         vf.save(out)
         font_manager.fontManager.addfont(out)
         family = font_manager.FontProperties(fname=out).get_name()
-    plt.rcParams["font.family"] = family  # Regular is the base; bold picks the 700 static
+    # append Noto Sans TC so the baked-in zh tail labels (正面 / 負面 …) render;
+    # the deck is now self-contained, so figures carry their own CJK (CONVENTIONS §Figures).
+    families = [family]
+    noto = os.path.join(OUT_DIR, "..", "marp", "assets", "fonts", "NotoSansTC-Regular.ttf")
+    if os.path.exists(noto):
+        font_manager.fontManager.addfont(noto)
+        families.append(font_manager.FontProperties(fname=noto).get_name())
+    plt.rcParams["font.family"] = families  # Artific base; bold -> 700 static; Noto for CJK
     return True
 
 # ==========================================
@@ -93,19 +100,26 @@ OUT_DIR = os.path.dirname(os.path.abspath(__file__))
 TOKENS   = ["the", "bill", "helps", "no", "one"]
 SENTENCE = "the bill helps no one"
 
-# input embedding band (the N token columns)
-X0, X1 = 0.055, 0.52
+# input embedding band (the N token columns) — packed left to leave room for the tail
+X0, X1 = 0.03, 0.285
 NCOL = len(TOKENS)
 COL_W = (X1 - X0) / NCOL
 COL_CX = [X0 + COL_W * (c + 0.5) for c in range(NCOL)]
 
 # vertical extent shared by the input matrix and the output vector
-MAT_Y0, MAT_Y1 = 0.36, 0.90
+MAT_Y0, MAT_Y1 = 0.30, 0.86
+MID_Y = (MAT_Y0 + MAT_Y1) / 2
 D = 5  # embedding dims (rows)
 
-# output (averaged) vector column, right of the mean operator
-OUT_X0, OUT_X1 = 0.79, 0.79 + COL_W
+# averaged (bag) vector column, right of the mean operator
+OUT_X0, OUT_X1 = 0.395, 0.395 + COL_W
 OUT_CX = (OUT_X0 + OUT_X1) / 2
+
+# tail (baked into the PNG now): bag vector -> MLP box -> 正面 / 負面
+MLP_X0, MLP_X1 = 0.55, 0.71
+MLP_Y0, MLP_Y1 = 0.37, 0.79
+PILL_X0, PILL_X1 = 0.795, 0.975
+PILL_H = 0.16
 
 
 def rounded_cell(ax, cx, y0, y1, w, text, *, fill=CARD, edge=BORDER,
@@ -147,9 +161,19 @@ def base_ax(figsize):
     return fig, ax
 
 
+def h_arrow(ax, x0, x1, y, label=None, *, above=True, fs=13, italic=False):
+    ax.add_patch(FancyArrowPatch(
+        (x0, y), (x1, y), arrowstyle="-|>", mutation_scale=20, lw=2.2,
+        color=GREY, zorder=2))
+    if label is not None:
+        ax.text((x0 + x1) / 2, y + (0.05 if above else -0.05), label,
+                ha="center", va="bottom" if above else "top",
+                color=GREY, fontsize=fs, style="italic" if italic else "normal")
+
+
 def build():
     use_deck_font()
-    fig, ax = base_ax((6.5, 4))
+    fig, ax = base_ax((9, 3.9))
     norm = Normalize(vmin=0.0, vmax=1.0)
 
     # dense token embeddings: D dims x NCOL tokens
@@ -158,12 +182,12 @@ def build():
     mean_vec = emb.mean(axis=1)  # the genuine bag vector — element-wise row mean
 
     # --- text stage: sentence -> tokens (bottom -> up under the matrix) ---
-    sent_y0, sent_y1 = 0.045, 0.14
-    tok_y0,  tok_y1  = 0.20, 0.29
+    sent_y0, sent_y1 = 0.03, 0.12
+    tok_y0,  tok_y1  = 0.17, 0.25
     rounded_cell(ax, (X0 + X1) / 2, sent_y0, sent_y1, X1 - X0, SENTENCE,
-                 fs=15, weight="bold")
+                 fs=14, weight="bold")
     for cx, tok in zip(COL_CX, TOKENS):
-        rounded_cell(ax, cx, tok_y0, tok_y1, COL_W * 0.84, tok, fs=13)
+        rounded_cell(ax, cx, tok_y0, tok_y1, COL_W * 0.84, tok, fs=12)
     up_arrow(ax, (X0 + X1) / 2, sent_y1 + 0.006, tok_y0 - 0.006)
     up_arrow(ax, (X0 + X1) / 2, tok_y1 + 0.006, MAT_Y0 - 0.006)
 
@@ -174,28 +198,45 @@ def build():
                     MAT_Y0, MAT_Y1, norm)
 
     # --- average stage: horizontal reduce -> one averaged vector ---
-    mid_y = (MAT_Y0 + MAT_Y1) / 2
     op_cx = (X1 + OUT_X0) / 2
-    # arrow from matrix edge -> operator -> output column
     ax.add_patch(FancyArrowPatch(
-        (X1 + 0.015, mid_y), (OUT_X0 - 0.02, mid_y),
+        (X1 + 0.012, MID_Y), (OUT_X0 - 0.014, MID_Y),
         arrowstyle="-|>", mutation_scale=20, lw=2.2, color=GREY, zorder=2))
-    ax.text(op_cx, mid_y + 0.075, "mean", ha="center", va="bottom",
+    ax.text(op_cx, MID_Y + 0.065, "mean", ha="center", va="bottom",
             color=GREY, fontsize=13, style="italic")
-    ax.text(op_cx, mid_y - 0.075, r"$\frac{1}{N}\sum$", ha="center", va="top",
+    ax.text(op_cx, MID_Y - 0.065, r"$\frac{1}{N}\sum$", ha="center", va="top",
             color=GREY, fontsize=17)
 
     # the one averaged vector — same norm, lime edge = the single accent
     draw_column(ax, mean_vec, OUT_X0, OUT_X1, MAT_Y0, MAT_Y1, norm,
                 edge=LIME, lw=1.8)
+    ax.text(OUT_CX, MAT_Y0 - 0.035, "bag", ha="center", va="top",
+            color=LIME, fontsize=12)
 
-    # bracket + label to the right of the output column (dim_bracket idiom)
-    bx = OUT_X1 + 0.025
-    ax.plot([bx, bx], [MAT_Y0, MAT_Y1], color=GREY, lw=1.2)
-    ax.plot([bx - 0.012, bx], [MAT_Y0, MAT_Y0], color=GREY, lw=1.2)
-    ax.plot([bx - 0.012, bx], [MAT_Y1, MAT_Y1], color=GREY, lw=1.2)
-    ax.text(bx + 0.018, mid_y, "one vector", ha="left", va="center",
-            color=GREY, fontsize=12, rotation=90)
+    # --- tail: bag vector -> MLP box -> 正面 / 負面 (baked into the PNG) ---
+    h_arrow(ax, OUT_X1 + 0.012, MLP_X0 - 0.012, MID_Y)
+    ax.add_patch(FancyBboxPatch(
+        (MLP_X0, MLP_Y0), MLP_X1 - MLP_X0, MLP_Y1 - MLP_Y0,
+        boxstyle="round,pad=0,rounding_size=0.02",
+        linewidth=1.6, edgecolor=GREY, facecolor=CARD, zorder=1))
+    mlp_cx = (MLP_X0 + MLP_X1) / 2
+    ax.text(mlp_cx, MID_Y + 0.045, "MLP", ha="center", va="center",
+            color=WHITE, fontsize=26, fontweight="bold")
+    ax.text(mlp_cx, MID_Y - 0.10, "上一堂原封不動", ha="center", va="center",
+            color=GREY, fontsize=12)
+
+    # output pills: 正面 / 負面 (neutral — the point is it emits a class, not which)
+    h_arrow(ax, MLP_X1 + 0.012, PILL_X0 - 0.012, MID_Y)
+    for i, lab in enumerate(("正面", "負面")):
+        pcy = MID_Y + (PILL_H * 0.62) * (1 if i == 0 else -1)
+        ax.add_patch(FancyBboxPatch(
+            (PILL_X0, pcy - PILL_H / 2), PILL_X1 - PILL_X0, PILL_H,
+            boxstyle="round,pad=0,rounding_size=0.03",
+            linewidth=1.4, edgecolor=GREY_MID, facecolor=CARD, zorder=1))
+        ax.text((PILL_X0 + PILL_X1) / 2, pcy, lab, ha="center", va="center",
+                color=WHITE, fontsize=17)
+    ax.text((PILL_X0 + PILL_X1) / 2, MID_Y + PILL_H * 1.35, "情緒",
+            ha="center", va="bottom", color=GREY, fontsize=12)
 
     fig.savefig(os.path.join(OUT_DIR, "bag_of_embeddings.png"),
                 dpi=300, transparent=True)
