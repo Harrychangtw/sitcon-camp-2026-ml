@@ -73,3 +73,17 @@ Session handoffs, newest at the bottom.
 
 ### Suggested next
 - Fix whatever the in-browser eyeball turns up (dock sizing at narrow viewports is the likeliest); then delete `prompts/DOCK-migrate-remaining-stations.md` — it's done.
+
+## Handoff — Embedding 3D hover + taxonomy drop
+
+### Done this session
+- 3D hover-to-highlight in `Scatter3D` (raycaster picks the point under the cursor, pops it to the accent, floats its label above the cursor); fixed front-dot clipping on zoom-in (per-frame near/far tracking); smaller dots; bordered dock capsule + shrunk 重點 badge moved beside the title (`45a59de`). typecheck + lint green.
+- Dropped the k-means taxonomy legend + category coloring from the embedding station: cluster names were meaningless function words, and coloring-by-language would expose the zh/en split (x≈−3.3 vs +3.3; 98% same-language nearest neighbors) and contradict the shared-space thesis (`45a59de`).
+
+### Loose ends
+- Not browser-verified this session — hover threshold (`0.12`) and dot size (`0.1`) were eyeballed in code, may want in-browser tuning in dense regions.
+- **Data-quality flag (unaddressed):** the shipped embeddings barely intermix across languages, so the station's core "貓 sits next to cat / 跨語言也成立" takeaway copy isn't actually demonstrated by the artifacts. This is a precompute/model issue, not UI.
+
+### Suggested next
+- **Add back a taxonomy** — replace the dropped k-means legend with a genuinely meaningful grouping (e.g. hand-seeded semantic categories via precompute, or a POS/domain axis) rather than centroid-nearest-word names.
+- Investigate the cross-language separation in precompute (see data-quality flag) before trusting the takeaway copy.
