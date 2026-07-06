@@ -102,10 +102,14 @@ function usePrefersReducedMotion(): boolean {
   return reduced;
 }
 
-/** softmax over the exported top-N log-probs — the only in-browser math. */
-function softmax(logits: number[]): number[] {
-  const max = Math.max(...logits);
-  const exps = logits.map((l) => Math.exp(l - max));
+/** softmax(logit / T) over the exported top-N log-probs — the only in-browser
+ * math. T reshapes the distribution: higher = flatter/more random, lower = more
+ * peaked. */
+function softmax(logits: number[], temperature = 1): number[] {
+  const t = Math.max(temperature, 1e-3);
+  const scaled = logits.map((l) => l / t);
+  const max = Math.max(...scaled);
+  const exps = scaled.map((s) => Math.exp(s - max));
   const sum = exps.reduce((a, b) => a + b, 0) || 1;
   return exps.map((e) => e / sum);
 }
@@ -200,6 +204,7 @@ export function TransformerStation() {
   const [sentenceId, setSentenceId] = useState<string | null>(null);
   const [layer, setLayer] = useState(0);
   const [head, setHead] = useState(0);
+  const [temperature, setTemperature] = useState(1);
   /** Hovered attention cell: q = query row, k = key column. */
   const [hovered, setHovered] = useState<{ q: number; k: number } | null>(null);
   const reducedMotion = usePrefersReducedMotion();
@@ -330,15 +335,16 @@ export function TransformerStation() {
     [mlpActs],
   );
 
-  // Next-token bars: softmax over the exported top-N log-probs (T = 1).
+  // Next-token bars: softmax(logit / T) over the exported top-N log-probs. The
+  // Temperature dial is the same knob as the Next Token station.
   const outputProbs = useMemo(() => {
     const entries = sentence?.output ?? [];
     if (!entries.length) return [];
-    const p = softmax(entries.map((e) => e.logit));
+    const p = softmax(entries.map((e) => e.logit), temperature);
     return entries
       .map((e, i) => ({ token: e.token, prob: p[i] ?? 0 }))
       .sort((a, b) => b.prob - a.prob);
-  }, [sentence]);
+  }, [sentence, temperature]);
   const maxProb = outputProbs[0]?.prob ?? 1;
 
   // ONE row pitch drives the whole diagram: the token chips, the embedding and
@@ -468,6 +474,16 @@ export function TransformerStation() {
             value={h}
             onChange={setHead}
             format={(v) => `H${v} / H${nHeads - 1}`}
+          />
+          <BlockSlider
+            label="Temperature"
+            info="調整最後 next-token 機率分布的平緩程度。數值越高，分布越平均、輸出越隨機有變化；越低，機率越集中在高分 token、輸出越保守穩定。"
+            min={0.1}
+            max={2}
+            step={0.1}
+            value={temperature}
+            onChange={setTemperature}
+            format={(v) => v.toFixed(1)}
           />
         </DockControls>
       }
@@ -729,7 +745,7 @@ export function TransformerStation() {
                       疊完 {nLayers} 層之後，最後一個 token 的向量 softmax
                       成下一個 token 的機率，和 Next Token 站是同一條長條。
                       這是真實的 top-{sentence.output?.length ?? 0}
-                      分布，softmax(T=1)。
+                      分布，softmax(T={temperature.toFixed(1)})。
                     </HoverTip>
                   </div>
                 ) : (
