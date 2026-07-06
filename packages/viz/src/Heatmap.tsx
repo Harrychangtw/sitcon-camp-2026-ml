@@ -46,9 +46,11 @@ export interface HeatmapProps {
    */
   topGutter?: number;
   /**
-   * Rotate the column labels by this many degrees (SVG convention: negative =
-   * counter-clockwise) so long, adjacent labels stop overlapping. Default 0
-   * (horizontal, the original layout). Pair with a taller `topGutter`.
+   * Rotate the column labels by this many degrees so long, adjacent labels stop
+   * overlapping. Labels are anchored at their cell and tilt up-and-left, so a
+   * positive value (e.g. 45) reads as a rising-to-the-cell diagonal that never
+   * overruns the right edge. Default 0 (horizontal, the original layout). Pair
+   * with a taller `topGutter`.
    */
   colLabelAngle?: number;
   /**
@@ -192,6 +194,7 @@ export function Heatmap({
           height={height}
           role="img"
           aria-label="Heatmap"
+          style={{ overflow: "visible" }}
           onMouseLeave={() => {
             setHover(null);
             onHoverCell?.(null);
@@ -207,11 +210,15 @@ export function Heatmap({
                 ? "fill-accent font-mono text-[10px] uppercase tracking-wide"
                 : "fill-muted font-mono text-[10px] uppercase tracking-wide";
             if (colLabelAngle) {
+              // Anchor each label at its cell and tilt it up-and-to-the-LEFT
+              // (into empty space above the row-label gutter), so long labels
+              // never run off the right edge; `overflow: visible` on the svg
+              // keeps them from clipping at the top edge either.
               return (
                 <text
                   key={`col-${c}`}
                   transform={`translate(${cx}, ${topGutter - 6}) rotate(${colLabelAngle})`}
-                  textAnchor="start"
+                  textAnchor="end"
                   dominantBaseline="central"
                   className={cls}
                 >
