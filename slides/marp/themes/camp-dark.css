@@ -417,7 +417,7 @@ p > img:not(.emoji) {
   font-family: 'Apple Color Emoji', sans-serif;
   font-size: 144px;
   line-height: 1;
-  transform: translateY(32px); /* nudge down to the optical center (emoji glyphs sit high) */
+  transform: translateY(24px); /* nudge down to the optical center (emoji glyphs sit high) */
 }
 /* label column: width is the shared `auto` subgrid track (see .caps) — it hugs
    the widest title/sub on the page, and every row's divider lands at the same x

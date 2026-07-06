@@ -79,7 +79,8 @@ export function EmbeddingStation() {
   // 2. DATA — the unified precomputed artifacts (zh+en in one cloud).
   const [points, setPoints] = useState<EmbeddingPoint[]>([]);
   const [neighbors, setNeighbors] = useState<NeighborMap>({});
-  const [loading, setLoading] = useState(true);
+  // Tracked to gate the initial fetch; the loaded state reads as an empty cloud.
+  const [, setLoading] = useState(true);
 
   useEffect(() => {
     let alive = true;
@@ -194,16 +195,26 @@ export function EmbeddingStation() {
     return base;
   }, [points, liveHit]);
 
-  const nearest = useMemo<Neighbor[]>(() => {
-    if (focusWord) return (neighbors[focusWord] ?? []).slice(0, k);
-    if (liveHit) return liveHit.neighbors.slice(0, k);
-    return [];
-  }, [focusWord, neighbors, liveHit, k]);
+  // Pointing at any point in the cloud previews it as if searched: the hovered
+  // word takes precedence over the typed query, so its neighbours light up and
+  // the readout panel fills. Reverts to the query the moment the cursor leaves.
+  const [hoverWord, setHoverWord] = useState<string | null>(null);
+  const shownWord = hoverWord ?? activeWord;
 
-  // The searched word + its k nearest neighbours are the only "hot" (lime) marks.
+  const nearest = useMemo<Neighbor[]>(() => {
+    if (!shownWord) return [];
+    // Shipped words carry precomputed neighbours; a live-embedded word carries
+    // its own. Both are keyed by the exact word/label.
+    if (neighbors[shownWord]) return neighbors[shownWord].slice(0, k);
+    if (liveHit && liveHit.point.word === shownWord)
+      return liveHit.neighbors.slice(0, k);
+    return [];
+  }, [shownWord, neighbors, liveHit, k]);
+
+  // The focused word + its k nearest neighbours are the only "hot" (lime) marks.
   const highlight = useMemo(
-    () => (activeWord ? [activeWord, ...nearest.map((n) => n.word)] : []),
-    [activeWord, nearest],
+    () => (shownWord ? [shownWord, ...nearest.map((n) => n.word)] : []),
+    [shownWord, nearest],
   );
 
   return (
@@ -266,6 +277,8 @@ export function EmbeddingStation() {
               data={scatterData}
               colorBy={false}
               highlight={highlight}
+              focus={shownWord ?? undefined}
+              onHover={setHoverWord}
               fill
             />
           ) : (
@@ -273,6 +286,8 @@ export function EmbeddingStation() {
               data={scatterData}
               colorBy={false}
               highlight={highlight}
+              focus={shownWord ?? undefined}
+              onHover={setHoverWord}
               fill
             />
           )}
@@ -282,10 +297,10 @@ export function EmbeddingStation() {
         {/* Readout thrown outside the dock: the neighbour list (the
             "距離 ≈ 相似度" beat), floating top-right when a word is focused. */}
         <div className="absolute right-3 top-4 z-20 w-60 max-w-[70vw]">
-          {activeWord ? (
-            <div className="rounded-md border border-border bg-panel/90 p-3 shadow-md backdrop-blur">
+          {shownWord ? (
+            <div className="rounded-md border border-border bg-panel p-3 shadow-md">
               <span className="font-mono text-xs text-accent">
-                {activeWord} · 最近的 {nearest.length} 個
+                {shownWord} · 最近的 {nearest.length} 個
               </span>
               <ol className="mt-2 flex flex-col gap-1">
                 {nearest.map((n, i) => (

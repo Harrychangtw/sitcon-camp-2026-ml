@@ -22,16 +22,22 @@ export interface Scatter3DProps {
   /** Color points by `category`. Default true. */
   colorBy?: boolean;
   /**
-   * Labels to spotlight in the focus accent (lime); the rest are dimmed toward
-   * the background. Precedence: highlight > category > greyscale base.
+   * Labels to spotlight as the neighbour set (white); the rest are dimmed toward
+   * the background. Precedence: focus > highlight > category > greyscale base.
    */
   highlight?: string[];
+  /** The single "query" label, burned in the primary lime accent so it stands
+   * apart from its `highlight` neighbours. Hovering a point counts as focus too. */
+  focus?: string;
   /** Pixel height; width is responsive. Default 360. Ignored when `fill`. */
   height?: number;
   /** Fill the parent's height instead of using `height` (parent must size it). */
   fill?: boolean;
   /** Slowly auto-rotate the camera. Default false. */
   autoRotate?: boolean;
+  /** Fires with the hovered point's `label` (or null on leave). Lets the host
+   * treat the point under the cursor as a query — highlight its neighbours, etc. */
+  onHover?: (label: string | null) => void;
 }
 
 // three.js is loaded lazily, so we can't name its types at module scope. This
@@ -77,6 +83,7 @@ function paintColors(
   highlight: string[] | undefined,
   colors: ThemeColors,
   hoverLabel?: string | null,
+  focus?: string | null,
 ) {
   const { THREE, geometry } = engine;
   const hot = new Set(highlight ?? []);
@@ -91,14 +98,18 @@ function paintColors(
   for (let i = 0; i < data.length; i++) {
     const d = data[i];
     if (!d) continue;
-    // The point under the cursor pops to the focus accent too, so hovering
-    // reads even for a dimmed background point when a search is active.
-    const isHot =
-      (hasHighlight && d.label != null && hot.has(d.label)) ||
-      (hoverLabel != null && d.label === hoverLabel);
+    // The query point (searched OR hovered) burns lime; its neighbours stay
+    // white, so the two roles never read as one undifferentiated blob.
+    const isFocus =
+      d.label != null &&
+      ((focus != null && d.label === focus) ||
+        (hoverLabel != null && d.label === hoverLabel));
+    const isNeighbor = hasHighlight && d.label != null && hot.has(d.label);
     let rgb: RGB;
-    if (isHot) {
+    if (isFocus) {
       rgb = colors.accent;
+    } else if (isNeighbor) {
+      rgb = colors.fg;
     } else {
       const base: RGB = colorBy
         ? catColors.get(d.category ?? "•") ?? colors.muted
@@ -129,11 +140,17 @@ export function Scatter3D({
   data,
   colorBy = true,
   highlight,
+  focus,
   height = 360,
   fill = false,
   autoRotate = false,
+  onHover,
 }: Scatter3DProps) {
   const { ref: containerRef, size } = useResizeObserver<HTMLDivElement>();
+  // Kept in a ref so the GL setup effect (keyed on `data`) doesn't rebuild when
+  // the callback identity changes.
+  const onHoverRef = useRef(onHover);
+  onHoverRef.current = onHover;
   // A separate div owns the imperatively-appended <canvas>, so React never
   // reconciles the GL node against its own children (the hover tooltip).
   const mountRef = useRef<HTMLDivElement>(null);
@@ -273,7 +290,7 @@ export function Scatter3D({
 
       // Initial paint + size using the container's live dimensions (fill mode
       // reads the real box height; fixed mode gets `height` back via clientHeight).
-      paintColors(engine, data, colorBy, highlight, latestColors.current);
+      paintColors(engine, data, colorBy, highlight, latestColors.current, null, focus);
       const w = container.clientWidth || 1;
       const hpx = container.clientHeight || height;
       renderer.setSize(w, hpx, false);
@@ -290,8 +307,28 @@ export function Scatter3D({
       const ndc = new THREE.Vector2();
       const dom = renderer.domElement;
       let lastLabel: string | null = null;
+      // While orbiting/panning, the camera moves under a static cursor, so
+      // picking would re-hit a different point every frame — flooding the
+      // host with onHover changes (rapid flicker). Suspend picking for the
+      // drag's duration and drop whatever was hovered when it started.
+      let dragging = false;
+      const onDragStart = () => {
+        dragging = true;
+        if (lastLabel !== null) {
+          lastLabel = null;
+          onHoverRef.current?.(null);
+        }
+        dom.style.cursor = "";
+        setHover(null);
+      };
+      const onDragEnd = () => {
+        dragging = false;
+      };
+      controls.addEventListener("start", onDragStart);
+      controls.addEventListener("end", onDragEnd);
 
       const onPointerMove = (e: PointerEvent) => {
+        if (dragging) return;
         const r = dom.getBoundingClientRect();
         ndc.x = ((e.clientX - r.left) / r.width) * 2 - 1;
         ndc.y = -((e.clientY - r.top) / r.height) * 2 + 1;
@@ -304,11 +341,15 @@ export function Scatter3D({
         });
         if (hit && hit.index != null) {
           const label = data[hit.index]!.label!;
+          // Notify the host only when the point changes (position updates every
+          // move, but the "query" is the same until a different point is hit).
+          if (label !== lastLabel) onHoverRef.current?.(label);
           lastLabel = label;
           dom.style.cursor = "pointer";
           setHover({ label, x: e.clientX - r.left, y: e.clientY - r.top });
         } else if (lastLabel !== null) {
           lastLabel = null;
+          onHoverRef.current?.(null);
           dom.style.cursor = "";
           setHover(null);
         }
@@ -316,6 +357,7 @@ export function Scatter3D({
       const onPointerLeave = () => {
         if (lastLabel === null) return;
         lastLabel = null;
+        onHoverRef.current?.(null);
         dom.style.cursor = "";
         setHover(null);
       };
@@ -324,6 +366,8 @@ export function Scatter3D({
       detachHover = () => {
         dom.removeEventListener("pointermove", onPointerMove);
         dom.removeEventListener("pointerleave", onPointerLeave);
+        controls.removeEventListener("start", onDragStart);
+        controls.removeEventListener("end", onDragEnd);
       };
 
       const loop = () => {
@@ -370,8 +414,8 @@ export function Scatter3D({
   useEffect(() => {
     const engine = engineRef.current;
     if (!engine) return;
-    paintColors(engine, data, colorBy, highlight, colors, hoverLabel);
-  }, [data, colorBy, highlight, colors, hoverLabel]);
+    paintColors(engine, data, colorBy, highlight, colors, hoverLabel, focus);
+  }, [data, colorBy, highlight, colors, hoverLabel, focus]);
 
   // Auto-rotate toggles without rebuilding the context.
   useEffect(() => {

@@ -23,11 +23,14 @@ export interface Scatter2DProps {
   /** Color points by their `category` field. Default true. */
   colorBy?: boolean;
   /**
-   * Labels to spotlight in the focus accent (lime); everything else is dimmed.
-   * When empty/omitted, no point is "hot". Precedence: highlight > category >
-   * greyscale base.
+   * Labels to spotlight as the neighbour set (white); everything else is dimmed.
+   * When empty/omitted, no point is "hot". Precedence: focus > highlight >
+   * category > greyscale base.
    */
   highlight?: string[];
+  /** The single "query" label, drawn in the primary lime accent so it stands
+   * apart from its `highlight` neighbours. */
+  focus?: string;
   /** Pixel height; width is responsive to the container. Default 360. Ignored when `fill`. */
   height?: number;
   /** Fill the parent's height instead of using `height` (parent must size it). */
@@ -38,6 +41,9 @@ export interface Scatter2DProps {
    * signature; the lasso interaction itself is not implemented yet.
    */
   onSelect?: (selected: ScatterPoint[]) => void;
+  /** Fires with the hovered point's `label` (or null on leave). Lets the host
+   * treat the point under the cursor as a query — highlight its neighbours, etc. */
+  onHover?: (label: string | null) => void;
 }
 
 const MARGIN = { top: 16, right: 16, bottom: 24, left: 32 };
@@ -63,9 +69,11 @@ export function Scatter2D({
   data,
   colorBy = true,
   highlight,
+  focus,
   height = 360,
   fill = false,
   onSelect,
+  onHover,
 }: Scatter2DProps) {
   const { ref, size } = useResizeObserver<HTMLDivElement>();
   const [hover, setHover] = useState<number | null>(null);
@@ -96,10 +104,12 @@ export function Scatter2D({
 
   const hovered = hover !== null ? data[hover] : undefined;
 
-  // Fill + opacity for a point, honoring highlight > category > grey precedence.
+  // Fill + opacity for a point, honoring focus > highlight > category > grey.
   function styleFor(d: ScatterPoint): { fill: RGB; opacity: number } {
-    const isHot = hasHighlight && d.label != null && highlightSet.has(d.label);
-    if (isHot) return { fill: colors.accent, opacity: 1 };
+    if (d.label != null && d.label === focus)
+      return { fill: colors.accent, opacity: 1 };
+    const isNeighbor = hasHighlight && d.label != null && highlightSet.has(d.label);
+    if (isNeighbor) return { fill: colors.fg, opacity: 1 };
     const base: RGB = colorBy
       ? catColors.get(d.category ?? "•") ?? colors.muted
       : colors.muted;
@@ -116,7 +126,8 @@ export function Scatter2D({
       {width > 0 && h > 0 ? (
         <svg width={width} height={h} role="img" aria-label="2D scatter plot">
           {data.map((d, i) => {
-            const isHot =
+            const isFocus = d.label != null && d.label === focus;
+            const isNeighbor =
               hasHighlight && d.label != null && highlightSet.has(d.label);
             const { fill, opacity } = styleFor(d);
             return (
@@ -124,13 +135,19 @@ export function Scatter2D({
                 key={i}
                 cx={xScale(d.x)}
                 cy={yScale(d.y)}
-                r={hover === i ? 6 : isHot ? 5 : 4}
+                r={isFocus ? 7 : hover === i ? 6 : isNeighbor ? 5 : 4}
                 fill={rgbCss(fill)}
                 fillOpacity={opacity}
                 className="stroke-bg"
                 strokeWidth={1}
-                onMouseEnter={() => setHover(i)}
-                onMouseLeave={() => setHover(null)}
+                onMouseEnter={() => {
+                  setHover(i);
+                  onHover?.(d.label ?? null);
+                }}
+                onMouseLeave={() => {
+                  setHover(null);
+                  onHover?.(null);
+                }}
               />
             );
           })}

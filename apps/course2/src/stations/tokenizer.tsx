@@ -404,6 +404,36 @@ function chipsFromQwen(pieces: QwenPiece[], spaceMarker: string): Token[] {
   });
 }
 
+/**
+ * Split real Qwen pieces into paragraphs at newline tokens, then map each
+ * paragraph to chips. A piece whose decode contains a newline is a paragraph
+ * break: it opens a new block and is not itself rendered (any non-newline tail
+ * starts the next block). Keeps the live path on the same Token[][] shape as the
+ * rule-based fallback, so the canvas renders both through one code path.
+ */
+function paragraphsFromQwen(
+  pieces: QwenPiece[],
+  spaceMarker: string,
+): Token[][] {
+  const blocks: QwenPiece[][] = [];
+  let cur: QwenPiece[] = [];
+  const flush = () => {
+    if (cur.length) blocks.push(cur);
+    cur = [];
+  };
+  for (const p of pieces) {
+    if (/\n/.test(p.piece)) {
+      flush();
+      const tail = p.piece.replace(/^\s+/, "");
+      if (tail) cur.push({ ...p, piece: tail });
+      continue;
+    }
+    cur.push(p);
+  }
+  flush();
+  return blocks.map((b) => chipsFromQwen(b, spaceMarker));
+}
+
 /** Group consecutive tokens by their source segment, for spacing. */
 function byGroup(tokens: Token[]): Token[][] {
   const groups: Token[][] = [];
@@ -420,11 +450,45 @@ function byGroup(tokens: Token[]): Token[][] {
   return groups;
 }
 
+/**
+ * How many grid cells a chip spans. Chips snap to a fixed-width column grid so
+ * rows line up top-to-bottom; a short token fills one cell, a long BPE piece (or
+ * a multi-字 Han merge) widens to two or three. Width is estimated from the
+ * monospace glyph run — Han glyphs are full-width, the id sits in a smaller
+ * font — against the ~56px base cell (see grid-template-columns in the render).
+ */
+function slotSpan(t: Token): number {
+  const dispPx = [...t.display].reduce(
+    (w, ch) => w + (HAN_RE.test(ch) ? 16 : 9.6),
+    0,
+  );
+  const idPx = String(t.isUnk ? "unk" : t.id).length * 6;
+  const contentPx = Math.max(dispPx, idPx);
+  // Base cell ≈ 56px, gap ≈ 6px, chip padding ≈ 16px → n cells hold 62n−22 px.
+  return Math.max(1, Math.ceil((contentPx + 24) / 62));
+}
+
 const SCHEME_OPTS = [
   { label: "字元", value: "char" as const },
   { label: "詞", value: "word" as const },
   { label: "BPE", value: "bpe" as const },
 ];
+
+// A muted categorical palette for token blocks, in the OpenAI-tokenizer idiom:
+// each token is a filled colored span so boundaries read at a glance. It extends
+// the deck's lime/cyan/purple with harmonizing greens/reds/golds, all darkened
+// so white glyphs stay legible on the near-black ground. Cycled by token
+// position — the color carries NO meaning beyond "this is one token".
+const TOKEN_COLORS = [
+  "#3f6f52", // green
+  "#2f6470", // teal
+  "#7a4a54", // muted rose
+  "#5a4d84", // purple
+  "#7a6234", // gold
+  "#3a5578", // slate blue
+  "#6a4a6e", // plum
+  "#4a6a44", // olive
+] as const;
 
 // Mixed 中英文 seed: 漢字 (some single, some merged like 學習/方式) plus a rare
 // latin word Qwen splits (token|ization) — one sentence that exercises every
@@ -446,7 +510,6 @@ export function TokenizerStation() {
   const [scheme, setScheme] = useState<Scheme>("bpe");
   const [text, setText] = useState(DEFAULT_TEXT);
   const [vocab, setVocab] = useState<Vocab | null>(null);
-  const [hovered, setHovered] = useState<string | null>(null);
 
   // 3. LOAD PRECOMPUTED VOCAB via @camp/data inside an effect (the rule-based
   //    fallback tables; BPE prefers live Qwen).
@@ -467,9 +530,10 @@ export function TokenizerStation() {
   // the approximation instead of breaking the station.
   const marker = vocab?.spaceMarker ?? "▁";
   const bpeLive = scheme === "bpe" && liveInferenceEnabled();
-  const [liveEnc, setLiveEnc] = useState<{ sig: string; tokens: Token[] } | null>(
-    null,
-  );
+  const [liveEnc, setLiveEnc] = useState<{
+    sig: string;
+    paragraphs: Token[][];
+  } | null>(null);
   const [liveMs, setLiveMs] = useState(0);
   const [livePending, setLivePending] = useState(false);
   const [liveFailed, setLiveFailed] = useState(false);
@@ -489,7 +553,10 @@ export function TokenizerStation() {
         if (!alive) return;
         setLivePending(false);
         if (r) {
-          setLiveEnc({ sig: text, tokens: chipsFromQwen(r.data.tokens, marker) });
+          setLiveEnc({
+            sig: text,
+            paragraphs: paragraphsFromQwen(r.data.tokens, marker),
+          });
           setLiveMs(r.ms);
         } else {
           setLiveFailed(true);
@@ -506,13 +573,33 @@ export function TokenizerStation() {
   // Live tokens win only when they belong to exactly what's on screen now.
   const liveHit = bpeLive && liveEnc?.sig === text ? liveEnc : null;
 
-  // 2. DERIVED CANVAS DATA — a pure, memoized function of (text, scheme,
-  //    vocab), with live Qwen tokens overriding the rule-based BPE when present.
-  const fallback = useMemo(
-    () => segment(text, scheme, vocab),
-    [text, scheme, vocab],
-  );
-  const tokens = liveHit ? liveHit.tokens : fallback;
+  // 2. DERIVED CANVAS DATA — tokens grouped into paragraphs so the canvas reads
+  //    top-to-bottom like a document. The source text is split on blank lines
+  //    (rule-based path) or at Qwen's newline tokens (live path); either way we
+  //    land on one Token[][] shape — one inner array per paragraph — with live
+  //    Qwen overriding the rule-based BPE when present.
+  const fallbackParas = useMemo(() => {
+    if (!vocab || !text.trim()) return [];
+    return text
+      .split(/\n+/)
+      .map((p) => p.trim())
+      .filter((p) => p.length > 0)
+      .map((p) => segment(p, scheme, vocab));
+  }, [text, scheme, vocab]);
+  const paragraphs = liveHit ? liveHit.paragraphs : fallbackParas;
+  const tokens = useMemo(() => paragraphs.flat(), [paragraphs]);
+
+  // Running palette offset per paragraph so the categorical colors flow
+  // continuously across paragraph breaks instead of restarting each block.
+  const colorOffsets = useMemo(() => {
+    const offs: number[] = [];
+    let acc = 0;
+    for (const p of paragraphs) {
+      offs.push(acc);
+      acc += p.length;
+    }
+    return offs;
+  }, [paragraphs]);
 
   const liveState = useMemo<LiveState>(() => {
     if (!bpeLive || !text.trim()) return { kind: "idle" };
@@ -521,10 +608,19 @@ export function TokenizerStation() {
     if (liveFailed) return { kind: "cached" };
     return { kind: "idle" };
   }, [bpeLive, text, liveHit, livePending, liveFailed, liveMs]);
-  const groups = useMemo(() => byGroup(tokens), [tokens]);
+  // 分段數 / 被拆的詞 aggregate per paragraph (group ids restart each block).
+  const groupCount = useMemo(
+    () => paragraphs.reduce((n, p) => n + byGroup(p).length, 0),
+    [paragraphs],
+  );
   const splitWords = useMemo(
-    () => new Set(tokens.filter((t) => t.split).map((t) => t.group)).size,
-    [tokens],
+    () =>
+      paragraphs.reduce(
+        (n, p) =>
+          n + new Set(p.filter((t) => t.split).map((t) => t.group)).size,
+        0,
+      ),
+    [paragraphs],
   );
   // zh has no persistent "split" flag; count the multi-character subwords BPE
   // merged instead, so the BPE panel still reports a quantitative payoff.
@@ -541,6 +637,7 @@ export function TokenizerStation() {
     <StationLayout
       title="Tokenizer"
       subtitle="原始文字要怎麼變成模型讀得懂的東西？"
+      fullBleed
       input={
         <SuggestInput
           value={text}
@@ -569,14 +666,15 @@ export function TokenizerStation() {
         </span>
       }
     >
-      <div className="relative flex h-full flex-col gap-4">
-        {/* Readout thrown outside the dock: the token counts, floating top-right. */}
-        <div className="absolute right-0 top-0 z-20 w-44 rounded-md border border-border bg-panel/90 p-3 shadow-md backdrop-blur">
+      <div className="relative h-full w-full">
+        {/* Readout thrown outside the dock: the token counts, docked to the top
+            edge, just left of the 重點 badge. */}
+        <div className="absolute right-4 top-4 z-20 w-44 rounded-md border border-border bg-panel p-3 shadow-md">
           <dl className="grid grid-cols-2 gap-2 font-mono text-xs text-muted">
             <dt>token 數</dt>
             <dd className="text-right text-fg">{tokens.length}</dd>
             <dt>分段數</dt>
-            <dd className="text-right text-fg">{groups.length}</dd>
+            <dd className="text-right text-fg">{groupCount}</dd>
             {scheme === "bpe" ? (
               <>
                 <dt>被拆的詞</dt>
@@ -588,69 +686,79 @@ export function TokenizerStation() {
           </dl>
         </div>
 
-        <p className="max-w-3xl text-sm text-muted">
-          每張卡片都是模型讀到的一個 token。{" "}
-          <span>
-            英文用{" "}
-            <span className="font-mono text-xs">
-              <span className="text-muted">{vocab?.spaceMarker ?? "▁"}</span>{" "}
-              標記詞的邊界
-            </span>
-            ；中文沒有空格，切分（tokenization）得靠模型直接把整串切開。
+        {/* <p className="max-w-3xl text-sm text-muted">
+          每個色塊都是模型讀到的一個 token，下方的數字是它的{" "}
+          <span className="font-mono text-accent">id</span>。 英文用{" "}
+          <span className="font-mono text-xs text-muted">
+            {vocab?.spaceMarker ?? "▁"}
           </span>{" "}
-          把游標移到卡片上可以看細節；亮綠色標記 BPE 的子詞切分。
-        </p>
+          標記詞的邊界；中文沒有空格，切分（tokenization）得靠模型直接把整串切開。
+        </p> */}
 
-        {!vocab ? (
-          <p className="font-mono text-xs text-muted">載入詞彙表中…</p>
-        ) : tokens.length === 0 ? (
-          <p className="font-mono text-xs text-muted">在下方輸入一些文字。</p>
-        ) : (
-          <div className="flex flex-wrap items-start gap-x-4 gap-y-3">
-            {groups.map((group, gi) => (
-              <div key={gi} className="flex flex-wrap items-start gap-1">
-                {group.map((t) => {
-                  const isHot = hovered === t.key;
-                  const base =
-                    "flex min-w-[2.25rem] flex-col items-center rounded-md border px-2 py-1.5 transition-colors";
-                  const tone = isHot
-                    ? "border-accent bg-accent text-accent-fg"
-                    : t.split
-                      ? "border-accent bg-bg text-accent"
-                      : "border-border bg-panel text-fg hover:border-muted";
-                  const idTone = isHot
-                    ? "text-accent-fg/80"
-                    : t.split
-                      ? "text-accent/70"
-                      : "text-muted";
-                  // Drop letter-spacing on Han runs; keep mono ids tracked.
-                  const glyphTracking = HAN_RE.test(t.display)
-                    ? "tracking-normal"
-                    : "";
-                  return (
-                    <div
-                      key={t.key}
-                      onMouseEnter={() => setHovered(t.key)}
-                      onMouseLeave={() => setHovered(null)}
-                      className={`${base} ${tone}`}
-                    >
-                      <span
-                        className={`whitespace-pre font-mono text-sm leading-none ${glyphTracking}`}
+        {/* Tokens fill the whole canvas, centered. Padding clears the floating
+            islands (top) and the bottom dock. Overflow scrolls; short inputs sit
+            centered, wrapping ones left-align for clean rows going down. */}
+        <div className="absolute inset-0 overflow-auto px-8 pt-16 pb-28">
+          {!vocab || paragraphs.length === 0 ? (
+            <div className="flex min-h-full items-center justify-center">
+              <p className="font-mono text-xs text-muted">
+                {!vocab ? "載入詞彙表中…" : "在下方輸入一些文字。"}
+              </p>
+            </div>
+          ) : (
+            // One wrapping block per paragraph, stacked in a centered reading
+            // column. Rows within a paragraph get a tight gap; paragraphs are
+            // separated by a much larger gap so the text reads top-to-bottom.
+            <div className="mx-auto flex min-h-full max-w-5xl flex-col items-start justify-center gap-y-8">
+              {paragraphs.map((para, pi) => (
+                <div
+                  key={pi}
+                  className="grid w-full grid-cols-[repeat(auto-fill,minmax(3.5rem,1fr))] gap-x-1.5 gap-y-2.5"
+                >
+                  {para.map((t, i) => {
+                    const color =
+                      TOKEN_COLORS[
+                        ((colorOffsets[pi] ?? 0) + i) % TOKEN_COLORS.length
+                      ];
+                    // Drop letter-spacing on Han runs; keep mono ids tracked.
+                    const glyphTracking = HAN_RE.test(t.display)
+                      ? "tracking-normal"
+                      : "";
+                    return (
+                      <div
+                        key={`${pi}.${t.key}`}
+                        style={{
+                          gridColumn: `span ${slotSpan(t)}`,
+                          ...(t.isUnk ? null : { backgroundColor: color }),
+                        }}
+                        className={`flex flex-col items-center rounded-md px-2 py-1.5 ${
+                          t.isUnk
+                            ? "border border-dashed border-warning bg-panel"
+                            : ""
+                        }`}
                       >
-                        {t.display}
-                      </span>
-                      <span
-                        className={`mt-1 font-mono text-[0.625rem] uppercase tracking-wide leading-none ${idTone}`}
-                      >
-                        {t.isUnk ? "unk" : t.id}
-                      </span>
-                    </div>
-                  );
-                })}
-              </div>
-            ))}
-          </div>
-        )}
+                        <span
+                          className={`whitespace-pre font-mono text-base leading-none ${
+                            t.isUnk ? "text-warning" : "text-white"
+                          } ${glyphTracking}`}
+                        >
+                          {t.display}
+                        </span>
+                        <span
+                          className={`mt-1.5 font-mono text-[0.625rem] leading-none ${
+                            t.isUnk ? "text-warning/80" : "text-white/70"
+                          }`}
+                        >
+                          {t.isUnk ? "unk" : t.id}
+                        </span>
+                      </div>
+                    );
+                  })}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
       </div>
     </StationLayout>
   );

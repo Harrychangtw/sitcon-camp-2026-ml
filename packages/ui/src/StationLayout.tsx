@@ -142,7 +142,7 @@ export function StationLayout({
       {/* Bottom-center dock: input (left) · controls (right). */}
       {input || controls ? (
         <div className="pointer-events-none absolute inset-x-0 bottom-4 z-30 flex justify-center px-4">
-          <div className="pointer-events-auto flex max-w-full items-stretch gap-4 rounded-[18px] border border-border bg-panel/90 p-3 shadow-lg backdrop-blur">
+          <div className="pointer-events-auto flex max-w-full items-stretch gap-4 rounded-[18px] border border-border bg-panel p-3 shadow-lg">
             {input ? (
               <div className="flex shrink-0 items-stretch">{input}</div>
             ) : null}
