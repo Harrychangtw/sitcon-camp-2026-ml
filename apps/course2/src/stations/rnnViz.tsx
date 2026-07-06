@@ -266,7 +266,7 @@ export function RnnVizStation() {
                       <div
                         key={`head-${c}`}
                         title={tok}
-                        className={`flex h-6 items-end justify-center truncate px-0.5 font-mono text-[10px] leading-none ${
+                        className={`flex h-6 items-end justify-center truncate px-0.5 font-mono text-[10px] uppercase leading-none tracking-wide ${
                           active
                             ? "text-accent"
                             : reached
