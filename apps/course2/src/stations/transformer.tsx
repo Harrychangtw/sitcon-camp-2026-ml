@@ -25,6 +25,7 @@ import {
   BlockSlider,
   DockControls,
   LiveStatus,
+  LoadingTimer,
   StationLayout,
   SuggestInput,
   type LiveState,
@@ -576,7 +577,7 @@ export function TransformerStation() {
           </div>
         ) : !data || !sentence ? (
           <div className="flex h-full items-center justify-center">
-            <p className="font-mono text-xs text-muted">pipeline 資料載入中…</p>
+            <LoadingTimer label="pipeline 資料載入中" />
           </div>
         ) : (
           /* The pipeline: one horizontally-scrollable, left-to-right row. */

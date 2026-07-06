@@ -3,9 +3,12 @@
  *
  * Purely presentational: the station owns the state machine (it knows when a
  * request is in flight and when it fell back to the shipped artifact); this
- * component only renders the four states. Latency + fallback transparency
- * only — no device badge, no spinner theatrics.
+ * component only renders the states. Latency + fallback transparency only — no
+ * device badge, no spinner theatrics. While a request is pending it runs a
+ * count-up stopwatch (0.000 s upward) so the wait reads as live work.
  */
+
+import { useStopwatch } from "./useStopwatch";
 
 export type LiveState =
   | { kind: "idle" }
@@ -20,6 +23,9 @@ export interface LiveStatusProps {
 }
 
 export function LiveStatus({ state, className }: LiveStatusProps) {
+  // Stopwatch that ticks up from 0 while a request is in flight.
+  const elapsedMs = useStopwatch(state.kind === "pending");
+
   if (state.kind === "idle") return null;
 
   let tone: string;
@@ -27,7 +33,8 @@ export function LiveStatus({ state, className }: LiveStatusProps) {
   switch (state.kind) {
     case "pending":
       tone = "text-muted";
-      copy = "GPU 計算中…";
+      // Seconds to the thousandth, counting up: 0.000 s, 0.001 s, …
+      copy = `GPU · ${(elapsedMs / 1000).toFixed(3)} s`;
       break;
     case "live":
       tone = "text-accent";

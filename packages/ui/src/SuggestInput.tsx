@@ -52,9 +52,9 @@ export interface SuggestInputProps {
    */
   capReached?: boolean;
   /**
-   * Grow vertically with long text (default). Set false for fields whose value
-   * is conceptually one line (e.g. a next-token prompt) — the box keeps its
-   * height and the text scrolls horizontally instead.
+   * Keep a fixed height and scroll horizontally for long text (default). Set
+   * true to grow vertically with the content (capped, then scrolls) for fields
+   * that are naturally multi-line.
    */
   multiline?: boolean;
   /** Width utility for the field; defaults to a comfortable dock width. */
@@ -64,9 +64,9 @@ export interface SuggestInputProps {
 /**
  * A text field whose prebuilt examples surface as selectable chips the moment it
  * gains focus while empty, then get out of the way once the student types. Built
- * for the bottom dock, so the chip tray opens UPWARD. The field grows vertically
- * with long text (capped, then scrolls). Layout-only + local focus state; the
- * value itself is owned by the station.
+ * for the bottom dock, so the chip tray opens UPWARD. The field keeps a fixed
+ * height and scrolls for long text (opt into vertical growth with `multiline`).
+ * Layout-only + local focus state; the value itself is owned by the station.
  */
 export function SuggestInput({
   value,
@@ -81,7 +81,7 @@ export function SuggestInput({
   maxLength,
   capLabel,
   capReached,
-  multiline = true,
+  multiline = false,
   className,
 }: SuggestInputProps) {
   const [focused, setFocused] = useState(false);

@@ -31,6 +31,7 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import {
   LiveStatus,
+  LoadingTimer,
   StationLayout,
   SuggestInput,
   type LiveState,
@@ -635,8 +636,8 @@ export function OrderShuffleStation() {
           </div>
         </div>
       ) : !payload || words.length === 0 ? (
-        <div className="flex h-full items-center justify-center text-sm text-muted">
-          載入預測結果中…
+        <div className="flex h-full items-center justify-center">
+          <LoadingTimer label="載入預測結果中" />
         </div>
       ) : (
         // Scroll wrapper: vertically centered; horizontally centered when the
