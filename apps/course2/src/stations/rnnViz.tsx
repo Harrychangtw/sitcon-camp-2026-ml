@@ -183,6 +183,7 @@ export function RnnVizStation() {
         <DockControls>
           <BlockSlider
             label="拖曳"
+            info="拖曳看 RNN 讀到第幾個 token 時的狀態。往後拖，觀察早期 token 的影響怎麼被逐漸沖淡。"
             min={0}
             max={lastStep}
             step={1}

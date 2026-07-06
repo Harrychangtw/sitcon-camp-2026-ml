@@ -329,6 +329,7 @@ export function TransformerStation() {
         <DockControls>
           <BlockToggle<Mode>
             label="模式"
+            info="切換觀看方式。「真實模型」顯示 Qwen3-0.6B 對你句子算出的真實注意力；「機制示意」用一個固定的小例子，拆解注意力是怎麼一步步算出來的。"
             value={mode}
             onChange={setMode}
             options={[
@@ -341,6 +342,7 @@ export function TransformerStation() {
             <>
               <BlockSlider
                 label="Layer"
+                info="選看第幾層的注意力。淺層多半關注鄰近、表面的關係，越深的層才逐漸組合出比較抽象的語意。"
                 min={0}
                 max={nLayers - 1}
                 step={1}
@@ -350,6 +352,7 @@ export function TransformerStation() {
               />
               <BlockSlider
                 label="Head"
+                info="選同一層裡的哪一個注意力頭。每個 head 各自學到不同的關注模式，看的重點不一樣。"
                 min={0}
                 max={nHeads - 1}
                 step={1}
@@ -362,6 +365,7 @@ export function TransformerStation() {
             <>
               <BlockSlider
                 label="步驟"
+                info="逐步播放注意力的計算流程：Q·K 算相似度，除以 √d 縮放，softmax 轉成權重，再加權求和。"
                 min={0}
                 max={LAST_STEP}
                 step={1}
@@ -394,7 +398,7 @@ export function TransformerStation() {
         <span>
           attention 不是魔法：Q·K 內積 → ÷√d → softmax → 加權求和 V，四步而已。
           每個 token 一跳就能看到整個句子，這就是 Transformer 拆掉 RNN 那道牆的方式。
-          真實模型裡沒有乾淨的「這個 head 做什麼」標籤——28 層 × 16 個 head
+          真實模型裡沒有乾淨的「這個 head 做什麼」標籤，28 層 × 16 個 head
           的分工是訓練自己長出來的，自己去翻。
         </span>
       }
@@ -450,7 +454,7 @@ export function TransformerStation() {
               <p className="text-xs text-muted">
                 這些 token 是模型真實的 subword（「␣」表示 token
                 自帶空格）。注意力只指向<span className="font-mono">左邊</span>
-                ——生成模型讀到第 n 個 token 時，右邊的還不存在（causal
+                ，生成模型讀到第 n 個 token 時，右邊的還不存在（causal
                 attention）。很多 head 會把大量權重堆在第一個 token 上（attention
                 sink），也是真實模型的常態。
               </p>
@@ -711,7 +715,7 @@ export function TransformerStation() {
                     </span>{" "}
                     在這個 head 的輸出向量：它一步就混入了整句話裡它最關注的資訊，
                     不必像 RNN 一樣把狀態沿著鏈條傳。切回「真實模型」，
-                    Qwen 的 28 層 × 16 個 head 做的就是這件事——只是 d 是 1024。
+                    Qwen 的 28 層 × 16 個 head 做的就是這件事，只是 d 是 1024。
                   </>
                 )}
               </p>

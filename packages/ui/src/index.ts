@@ -25,6 +25,9 @@ export type { SuggestInputProps, SuggestPreset } from "./SuggestInput";
 export { DockControls } from "./DockControls";
 export type { DockControlsProps } from "./DockControls";
 
+export { InfoLabel } from "./InfoLabel";
+export type { InfoLabelProps } from "./InfoLabel";
+
 export { BlockToggle } from "./BlockToggle";
 export type { BlockToggleProps, BlockToggleOption } from "./BlockToggle";
 

@@ -652,6 +652,7 @@ export function TokenizerStation() {
         <DockControls>
           <BlockToggle<Scheme>
             label="切分方式"
+            info="選擇把文字切成 token 的方法。不同切法會把同一句話拆成不同數量、不同邊界的 token。"
             value={scheme}
             onChange={setScheme}
             options={SCHEME_OPTS}

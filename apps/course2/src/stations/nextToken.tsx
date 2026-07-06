@@ -209,6 +209,7 @@ export function NextTokenStation() {
         <DockControls>
           <BlockToggle<Decoding>
             label="解碼方式"
+            info="決定怎麼從機率分布挑下一個 token。「取樣」依機率隨機抽，同樣的輸入每次可能不一樣；「貪婪」永遠選機率最高的那個，穩定但容易重複。"
             value={decoding}
             onChange={setDecoding}
             options={[
@@ -218,6 +219,7 @@ export function NextTokenStation() {
           />
           <BlockSlider
             label="Temperature"
+            info="調整機率分布的平緩程度。數值越高，分布越平均、輸出越隨機有變化；越低，機率越集中在高分 token、輸出越保守穩定。"
             min={0.1}
             max={2}
             step={0.1}
@@ -228,6 +230,7 @@ export function NextTokenStation() {
           />
           <BlockSlider
             label="Top-k"
+            info="只從機率最高的前 k 個 token 裡抽樣，其餘直接排除。k 越小選擇越受限、越安全；k 越大越開放、越多元。"
             min={1}
             max={dist?.topN ?? 12}
             step={1}
@@ -243,7 +246,7 @@ export function NextTokenStation() {
           一個訓練好的 next token 預測器，加上一個 temperature 旋鈕，就是完整的
           生成迴圈。這裡的每一條長條都是真的：GPU 上的{" "}
           <span className="font-mono">Qwen3-0.6B</span>{" "}
-          對你打的字算出來的分布。注意它預測的是 token，不是單字——「␣」表示
+          對你打的字算出來的分布。注意它預測的是 token，不是單字，「␣」表示
           token 自帶空格。
         </span>
       }

@@ -236,6 +236,7 @@ export function EmbeddingStation() {
         <DockControls>
           <BlockToggle<Dim>
             label="投影"
+            info="把高維詞向量壓到 2D 或 3D 來看。維度越高保留越多結構，但也越難一眼看懂。"
             value={dim}
             onChange={setDim}
             options={[
@@ -245,6 +246,7 @@ export function EmbeddingStation() {
           />
           <BlockSlider
             label="Top K"
+            info="顯示與查詢詞距離最近的前 k 個鄰居。k 越大看到越多相關詞，也越容易混進比較遠的詞。"
             min={1}
             max={MAX_K}
             step={1}
@@ -261,10 +263,10 @@ export function EmbeddingStation() {
           <span className="font-mono text-accent">貓</span>，旁邊是 貓咪、
           <span className="font-mono">cat</span>、
           <span className="font-mono">kitten</span>
-          ——模型從沒看過任何翻譯對照表，只是它們出現的語境相似。語意也不是一個乾淨的點：搜尋{" "}
+          ，模型從沒看過任何翻譯對照表，只是它們出現的語境相似。語意也不是一個乾淨的點：搜尋{" "}
           <span className="font-mono text-accent">蘋果</span> 或{" "}
           <span className="font-mono">apple</span>
-          ，水果和手機公司兩種意思的鄰居混在一起。詞彙雲外的詞也能玩——隨便打一個詞，GPU
+          ，水果和手機公司兩種意思的鄰居混在一起。詞彙雲外的詞也能玩，隨便打一個詞，GPU
           會用同一個模型即時算出它的位置，掉進同一朵雲。
         </span>
       }

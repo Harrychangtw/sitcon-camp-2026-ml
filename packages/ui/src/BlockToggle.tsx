@@ -1,3 +1,5 @@
+import { InfoLabel } from "./InfoLabel";
+
 export interface BlockToggleOption<T extends string> {
   label: string;
   value: T;
@@ -5,6 +7,8 @@ export interface BlockToggleOption<T extends string> {
 
 export interface BlockToggleProps<T extends string> {
   label: string;
+  /** Optional hover tooltip on the label (e.g. what this control does). */
+  info?: string;
   value: T;
   options: ReadonlyArray<BlockToggleOption<T>>;
   onChange: (value: T) => void;
@@ -18,13 +22,14 @@ export interface BlockToggleProps<T extends string> {
  */
 export function BlockToggle<T extends string>({
   label,
+  info,
   value,
   options,
   onChange,
 }: BlockToggleProps<T>) {
   return (
     <>
-      <span className="text-sm font-medium">{label}</span>
+      <InfoLabel label={label} info={info} />
       <div className="flex rounded-md bg-bg p-0.5">
         {options.map((opt) => (
           <button

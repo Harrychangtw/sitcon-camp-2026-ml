@@ -1,5 +1,9 @@
+import { InfoLabel } from "./InfoLabel";
+
 export interface BlockSliderProps {
   label: string;
+  /** Optional hover tooltip on the label (e.g. what this control does). */
+  info?: string;
   value: number;
   min: number;
   max: number;
@@ -23,6 +27,7 @@ export interface BlockSliderProps {
  */
 export function BlockSlider({
   label,
+  info,
   value,
   min,
   max,
@@ -39,9 +44,7 @@ export function BlockSlider({
   const tickCount = steps > 0 && steps <= 40 ? steps + 1 : 0;
   return (
     <>
-      <span className={`text-sm font-medium ${disabled ? "text-muted" : ""}`}>
-        {label}
-      </span>
+      <InfoLabel label={label} info={info} disabled={disabled} />
       <div
         className={`group/blockslider relative flex h-7 items-center ${
           disabled ? "opacity-50" : ""
