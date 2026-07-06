@@ -120,9 +120,11 @@ export function NextTokenStation() {
     setLiveFailed(false);
     if (!trimmed || presetEntries) return;
     let alive = true;
-    setLivePending(true);
-    // Debounced: only ask the server once typing pauses.
+    // Debounced: only ask the server once typing pauses. The pending stopwatch
+    // starts when the request actually fires (not during the debounce), so its
+    // count matches the round-trip the final report shows.
     const timer = setTimeout(() => {
+      setLivePending(true);
       liveInferTimed<LivePredict>("/next-token/predict", { prompt: trimmed }).then(
         (r) => {
           if (!alive) return;

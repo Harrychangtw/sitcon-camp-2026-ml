@@ -33,8 +33,8 @@ export function LiveStatus({ state, className }: LiveStatusProps) {
   switch (state.kind) {
     case "pending":
       tone = "text-muted";
-      // Seconds to the thousandth, counting up: 0.000 s, 0.001 s, …
-      copy = `GPU · ${(elapsedMs / 1000).toFixed(3)} s`;
+      // Seconds to the hundredth, counting up: 0.00 s, 0.01 s, …
+      copy = `GPU · ${(elapsedMs / 1000).toFixed(2)} s`;
       break;
     case "live":
       tone = "text-accent";

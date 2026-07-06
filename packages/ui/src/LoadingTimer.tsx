@@ -16,7 +16,7 @@ export function LoadingTimer({ label, className }: LoadingTimerProps) {
   const elapsedMs = useStopwatch(true);
   return (
     <p className={className ?? "font-mono text-xs text-muted"}>
-      {label} · {(elapsedMs / 1000).toFixed(3)} s
+      {label} · {(elapsedMs / 1000).toFixed(2)} s
     </p>
   );
 }

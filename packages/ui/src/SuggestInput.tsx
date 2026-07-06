@@ -57,6 +57,12 @@ export interface SuggestInputProps {
    * that are naturally multi-line.
    */
   multiline?: boolean;
+  /**
+   * "Bloom on focus": at rest the field sits at a compact width; on focus it
+   * animates out to (near) full dock width, and retracts again on blur. Ignored
+   * when `className` sets an explicit width.
+   */
+  expandOnFocus?: boolean;
   /** Width utility for the field; defaults to a comfortable dock width. */
   className?: string;
 }
@@ -82,6 +88,7 @@ export function SuggestInput({
   capLabel,
   capReached,
   multiline = false,
+  expandOnFocus = false,
   className,
 }: SuggestInputProps) {
   const [focused, setFocused] = useState(false);
@@ -109,7 +116,15 @@ export function SuggestInput({
   return (
     // Fills the dock's height (respecting its padding); the box IS the field,
     // with the arrow + status floated inside its bottom band.
-    <div className={`relative h-full ${className ?? "w-72 max-w-[75vw]"}`}>
+    <div
+      className={`relative h-full transition-[width] duration-200 ${
+        expandOnFocus
+          ? focused
+            ? "w-[40rem] max-w-[72vw]"
+            : "w-60 max-w-[72vw]"
+          : className ?? "w-72 max-w-[75vw]"
+      }`}
+    >
       {/* Cap hint — only once the limit is reached. Floats ABOVE the whole dock
           (the `mb` clears the dock's p-3 + border so it sits over the panel's
           top edge, not inside it). The field is non-empty at the cap, so the
@@ -157,8 +172,11 @@ export function SuggestInput({
               }
             }}
             placeholder={placeholder}
-            // max-h = 2 lines of text-sm (2×1.25rem) + pt-3 + pb-8, then scrolls.
-            className="max-h-[5.25rem] w-full flex-none resize-none overflow-y-auto bg-transparent px-3.5 pb-8 pt-3 text-sm text-fg placeholder:text-muted focus:outline-none"
+            // Collapsed to ~1 line at rest (matching the dock's initial height);
+            // on focus it can grow up to 3× that (10.5rem) before it scrolls.
+            className={`w-full flex-none resize-none overflow-y-auto bg-transparent px-3.5 pb-8 pt-3 text-sm text-fg placeholder:text-muted transition-[max-height] duration-150 focus:outline-none ${
+              focused ? "max-h-[10.5rem]" : "max-h-[3.5rem]"
+            }`}
           />
         ) : (
           <input
