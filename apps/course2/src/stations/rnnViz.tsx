@@ -14,7 +14,7 @@
  * weights on the live GPU server. The browser NEVER runs the RNN — it replays
  * JSON; the displayed state is a pure function of (sequence, step).
  */
-import { useEffect, useMemo, useState } from "react";
+import { Fragment, useEffect, useMemo, useState } from "react";
 import {
   BlockSlider,
   DockControls,
@@ -23,7 +23,7 @@ import {
   SuggestInput,
   type LiveState,
 } from "@camp/ui";
-import { Heatmap } from "@camp/viz";
+import { mix, rgbCss, useThemeColors } from "@camp/viz";
 import { liveInferTimed, loadJSON } from "@camp/data";
 
 interface RnnSequence {
@@ -147,31 +147,25 @@ export function RnnVizStation() {
     setStep(0);
   }, [sequenceId]);
 
-  // 3. DERIVED CANVAS DATA — a pure function of (seq, step).
-  // Rows = hidden dims, columns = timesteps; column labels are the tokens
-  // consumed at each step. Only steps up to the current one are revealed, so the
-  // state visibly accumulates left-to-right.
-  const { matrix, colLabels, rowLabels } = useMemo(() => {
-    if (!seq || !data) return { matrix: [] as number[][], colLabels: [], rowLabels: [] };
-    const h = data.hiddenSize;
-    const cols = seq.hidden.slice(0, step + 1);
-    const rowsOut: number[][] = [];
-    for (let d = 0; d < h; d++) {
-      rowsOut.push(cols.map((col) => col[d] ?? 0));
-    }
-    return {
-      matrix: rowsOut,
-      colLabels: seq.tokens.slice(0, step + 1),
-      rowLabels: Array.from({ length: h }, (_, d) => `h${String(d).padStart(2, "0")}`),
-    };
-  }, [seq, data, step]);
-
-  const influenceNow = seq ? seq.influence[step] ?? 0 : 0;
+  // 3. DERIVED CANVAS DATA — colors are a pure function of the theme. The table
+  //    itself renders straight from (seq, step) below: every token sits on the
+  //    horizontal axis, but a column the slider hasn't reached yet stays empty.
+  //    Diverging fill mirrors @camp/viz Heatmap: grey at 0 → lime (+) / purple
+  //    (−), domain fixed at ±1 (tanh range).
+  const theme = useThemeColors();
+  const zeroColor = useMemo(() => mix(theme.bg, theme.muted, 0.35), [theme]);
+  const hiddenColor = (v: number) => {
+    const t = Math.max(-1, Math.min(1, v));
+    const c =
+      t >= 0 ? mix(zeroColor, theme.accent, t) : mix(zeroColor, theme.accent3, -t);
+    return rgbCss(c);
+  };
 
   return (
     <StationLayout
       title="RNN 視覺化"
       subtitle="處理順序的一種想法：沿著序列傳遞一個隱藏狀態（hidden state）。"
+      fullBleed
       input={
         <SuggestInput
           value={customText}
@@ -208,86 +202,145 @@ export function RnnVizStation() {
         </span>
       }
     >
-      <div className="flex h-full flex-col gap-5">
+      <div className="relative h-full w-full">
         {error ? (
-          <p className="text-sm text-warning">
-            無法載入啟動值（{error}）。請執行{" "}
-            <code className="font-mono">uv run camp-precompute rnn-viz</code>。
-          </p>
+          <div className="flex h-full items-center justify-center">
+            <p className="max-w-md text-center text-sm text-warning">
+              無法載入啟動值（{error}）。請執行{" "}
+              <code className="font-mono">uv run camp-precompute rnn-viz</code>。
+            </p>
+          </div>
         ) : !seq || !data ? (
-          <p className="text-sm text-muted">載入啟動值中…</p>
+          <div className="flex h-full items-center justify-center">
+            <p className="font-mono text-xs text-muted">載入啟動值中…</p>
+          </div>
         ) : (
-          <>
-            {/* The sequence as tokens; the token just consumed is the lime mark. */}
-            <div>
-              <div className="mb-1 font-mono text-xs text-muted">
-                序列 · 正在讀第 {String(step + 1).padStart(2, "0")} 個 token
-              </div>
-              <div className="flex flex-wrap gap-1.5">
-                {seq.tokens.map((tok, i) => {
-                  const consumed = i <= step;
-                  const active = i === step;
-                  return (
-                    <span
-                      key={`${tok}-${i}`}
-                      className={`rounded-md border px-2 py-1 font-mono text-xs transition-colors ${
-                        active
-                          ? "border-accent text-accent"
-                          : consumed
-                            ? "border-border text-fg"
-                            : "border-border/40 text-muted"
-                      }`}
-                    >
-                      {tok}
-                    </span>
-                  );
-                })}
-              </div>
-            </div>
-
-            {/* Hidden state: rows = dims, cols = steps. Diverging (signed tanh
-                values), active step marked in lime. */}
-            <div className="min-h-0 flex-1">
-              <div className="mb-1 font-mono text-xs text-muted">
-                隱藏狀態 · {data.hiddenSize} 維 × {step + 1} 步
-              </div>
-              <Heatmap
-                matrix={matrix}
-                rowLabels={rowLabels}
-                colLabels={colLabels}
-                min={-1}
-                max={1}
-                diverging
-                highlightMax={false}
-                highlightCol={step}
-                height={360}
-              />
-            </div>
-
-            {/* The wall, made concrete: influence of the FIRST token, now. */}
-            <div>
-              <div className="mb-1 flex items-baseline justify-between">
-                <span className="font-mono text-xs text-muted">
-                  第 01 個 token（&ldquo;{seq.tokens[0]}&rdquo;）對狀態的影響
-                </span>
-                <span className="font-mono text-xs text-accent">
-                  {(influenceNow * 100).toFixed(1)}%
-                </span>
-              </div>
-              <div className="relative h-2 w-full overflow-hidden rounded-sm bg-panel">
+          // The table IS the page: every token on the horizontal axis, hidden
+          // dims down the rows, the per-step reference strength merged in as the
+          // last row. Columns the slider hasn't reached stay empty (dashed
+          // outline), so the state fills in left-to-right. Centered by default;
+          // once the sequence overflows it scrolls horizontally while the left
+          // label gutter stays frozen (sticky) so the labels never scroll out of
+          // view.
+          <div className="absolute inset-0 overflow-auto pt-16 pb-28">
+            <div className="flex min-h-full flex-col justify-center px-8">
+              <div className="overflow-x-auto">
                 <div
-                  className="h-full rounded-sm bg-accent transition-[width] duration-300"
-                  style={{ width: `${Math.max(influenceNow, 0) * 100}%` }}
-                />
+                  className="mx-auto grid gap-0.5"
+                  style={{
+                    gridTemplateColumns: `4.5rem repeat(${steps}, 2.5rem)`,
+                    width: "max-content",
+                  }}
+                >
+                  {/* Header: frozen gutter + every token. Active step in lime,
+                      tokens the slider hasn't reached yet are dimmed. */}
+                  <div className="sticky left-0 z-10 h-6 border-r border-border/40 bg-bg" />
+                  {seq.tokens.map((tok, c) => {
+                    const active = c === step;
+                    const reached = c <= step;
+                    return (
+                      <div
+                        key={`head-${c}`}
+                        title={tok}
+                        className={`flex h-6 items-end justify-center truncate px-0.5 font-mono text-[10px] leading-none ${
+                          active
+                            ? "text-accent"
+                            : reached
+                              ? "text-fg"
+                              : "text-muted/40"
+                        }`}
+                      >
+                        {tok}
+                      </div>
+                    );
+                  })}
+
+                  {/* Hidden state: one row per dim, diverging fill. Reached cells
+                      carry color; unreached ones are an empty dashed slot. Row
+                      label sits in the frozen gutter. */}
+                  {Array.from({ length: data.hiddenSize }).map((_, d) => (
+                    <Fragment key={`dim-${d}`}>
+                      <div className="sticky left-0 z-10 flex h-3.5 items-center border-r border-border/40 bg-bg pr-2 font-mono text-[9px] leading-none text-muted">
+                        {`h${String(d).padStart(2, "0")}`}
+                      </div>
+                      {seq.tokens.map((_, c) => {
+                        const reached = c <= step;
+                        const active = c === step;
+                        const v = seq.hidden[c]?.[d] ?? 0;
+                        return (
+                          <div
+                            key={`cell-${d}-${c}`}
+                            title={reached ? v.toFixed(2) : undefined}
+                            className={`h-3.5 rounded-[2px] ${
+                              reached
+                                ? ""
+                                : "border border-dashed border-border/30"
+                            } ${active ? "ring-1 ring-inset ring-accent" : ""}`}
+                            style={
+                              reached
+                                ? { backgroundColor: hiddenColor(v) }
+                                : undefined
+                            }
+                          />
+                        );
+                      })}
+                    </Fragment>
+                  ))}
+
+                  {/* Separator between the hidden block and the reference row. */}
+                  <div
+                    className="mt-1 h-px border-t border-border/40"
+                    style={{ gridColumn: "1 / -1" }}
+                  />
+
+                  {/* Reference row: at the current step (about to predict the
+                      next token), how much the model still references each earlier
+                      token. Derived from the recorded fingerprint-vs-distance
+                      curve — token c's strength at step q is influence[q - c], so
+                      the most recent token reads full and the first token fades as
+                      generation advances. Frozen label + hover tooltip. */}
+                  <div className="group sticky left-0 z-20 mt-1 flex h-4 items-center border-r border-border/40 bg-bg">
+                    <span className="cursor-help font-mono text-[9px] leading-none text-accent underline decoration-dotted underline-offset-2">
+                      影響
+                    </span>
+                    <div className="pointer-events-none absolute bottom-full left-0 z-40 mb-1.5 w-max max-w-xs rounded-md border border-border bg-panel px-3 py-2 text-xs leading-relaxed text-fg opacity-0 shadow-md transition-opacity duration-150 group-hover:opacity-100">
+                      生成下一個 token 時，模型對每個先前 token 的參考強度。越接近現在的位置參考越強，
+                      第一個 token（&ldquo;{seq.tokens[0]}&rdquo;）隨著生成往後推進逐漸被沖淡，
+                      這正是 RNN 撞到的長距離依賴牆。
+                    </div>
+                  </div>
+                  {seq.tokens.map((_, c) => {
+                    const reached = c <= step;
+                    const active = c === step;
+                    // Reference strength = fingerprint remaining after (step − c)
+                    // more tokens; the current token (distance 0) reads full.
+                    const ref = reached ? seq.influence[step - c] ?? 0 : 0;
+                    return (
+                      <div
+                        key={`ref-${c}`}
+                        title={reached ? `${(ref * 100).toFixed(0)}%` : undefined}
+                        className={`mt-1 h-4 rounded-[2px] ${
+                          reached
+                            ? ""
+                            : "border border-dashed border-border/30"
+                        } ${active ? "ring-1 ring-inset ring-accent" : ""}`}
+                        style={
+                          reached
+                            ? {
+                                backgroundColor: rgbCss(
+                                  theme.accent,
+                                  0.12 + 0.88 * Math.max(ref, 0),
+                                ),
+                              }
+                            : undefined
+                        }
+                      />
+                    );
+                  })}
+                </div>
               </div>
-              <p className="mt-2 text-sm text-muted">
-                隨著餵入越多 token，第一個 token 在隱藏狀態上的痕跡會被沖淡，
-                這正是 RNN 在長距離依賴上撞到的牆。這是一個真的在《愛麗絲夢遊仙境》
-                上訓練過的小 GRU（hidden = {data.hiddenSize}）——不在它字彙表裡的詞會
-                變成 <span className="font-mono">&lt;unk&gt;</span>，但一樣會推動狀態。
-              </p>
             </div>
-          </>
+          </div>
         )}
       </div>
     </StationLayout>

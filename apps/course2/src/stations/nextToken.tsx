@@ -24,7 +24,6 @@ import {
   SuggestInput,
   type LiveState,
 } from "@camp/ui";
-import { Heatmap } from "@camp/viz";
 import { liveInferTimed, loadJSON } from "@camp/data";
 
 interface TokenLogit {
@@ -191,15 +190,11 @@ export function NextTokenStation() {
   const argmaxToken = probs.length ? probs[0]!.token : null;
   const maxProb = probs.length ? probs[0]!.prob : 1;
 
-  // Heatmap consumes the SAME probabilities as a 1×N row (proves the reused
-  // primitive; station 05 feeds it multi-row hidden states).
-  const heatMatrix = useMemo(() => [probs.map((p) => p.prob)], [probs]);
-  const heatCols = useMemo(() => probs.map((p) => displayToken(p.token)), [probs]);
-
   return (
     <StationLayout
       title="Next Token"
       subtitle="所有語言任務其實都一樣：預測 next token。"
+      fullBleed
       input={
         <SuggestInput
           value={prompt}
@@ -253,92 +248,73 @@ export function NextTokenStation() {
         </span>
       }
     >
-      <div className="flex h-full flex-col gap-5">
+      <div className="relative h-full w-full">
         {error ? (
-          <p className="text-sm text-warning">
-            無法載入機率分布（{error}）。請執行{" "}
-            <code className="font-mono">uv run camp-precompute next-token</code>。
-          </p>
+          <div className="flex h-full items-center justify-center">
+            <p className="max-w-md text-center text-sm text-warning">
+              無法載入機率分布（{error}）。請執行{" "}
+              <code className="font-mono">uv run camp-precompute next-token</code>。
+            </p>
+          </div>
         ) : !dist ? (
-          <p className="text-sm text-muted">載入機率分布中…</p>
+          <div className="flex h-full items-center justify-center">
+            <p className="font-mono text-xs text-muted">載入機率分布中…</p>
+          </div>
         ) : (
-          <>
-            <div>
-              <div className="mb-1 font-mono text-xs uppercase tracking-wide text-muted">
-                P(next token)
-                {stale && basePrompt ? (
-                  <span className="text-warning">
-                    {" "}
-                    · 顯示「{basePrompt}」的結果
-                  </span>
-                ) : null}
+          // The bar field is the whole page: vertically centered, capped to a
+          // readable column, clear of the top island and bottom dock. Minimal
+          // header labels name what each column is; no caption, no heatmap.
+          <div className="absolute inset-0 overflow-auto px-8 pt-16 pb-28">
+            <div className="mx-auto flex min-h-full max-w-xl flex-col justify-center">
+              {/* Column headers — light, mono, aligned to the row structure. */}
+              <div className="mb-3 flex items-center gap-3">
+                <span className="w-24 shrink-0 text-left font-mono text-[10px] uppercase tracking-wide text-muted">
+                  token
+                </span>
+                <div className="flex-1">
+                  {stale && basePrompt ? (
+                    <span className="font-mono text-[10px] text-warning">
+                      顯示「{basePrompt}」的結果
+                    </span>
+                  ) : null}
+                </div>
+                <span className="w-12 shrink-0 text-right font-mono text-[10px] uppercase tracking-wide text-muted">
+                  機率
+                </span>
               </div>
-              <p className="text-sm text-muted">
-                {decoding === "greedy" ? (
-                  <>
-                    貪婪解碼永遠取 argmax：{" "}
-                    <span className="font-mono text-accent">
-                      {argmaxToken ? displayToken(argmaxToken) : ""}
-                    </span>
-                    。
-                  </>
-                ) : (
-                  <>
-                    取樣會依這些長條的比例來抽。調高{" "}
-                    <span className="font-mono">temperature</span> 會讓分布變平，
-                    調低會變尖；<span className="font-mono">top-k</span>{" "}
-                    只保留機率最高的前 {topK} 個。
-                  </>
-                )}
-              </p>
-            </div>
 
-            {/* Bar field: thin bars, single lime hue, magnitude via width +
-                opacity; the argmax is the one mark in full lime. */}
-            <div className="flex flex-col gap-1.5">
-              {probs.map((p) => {
-                const isArgmax = p.token === argmaxToken;
-                return (
-                  <div key={p.token} className="flex items-center gap-3">
-                    <span
-                      className={`w-24 shrink-0 truncate text-right font-mono text-xs ${
-                        isArgmax ? "text-accent" : "text-muted"
-                      }`}
-                    >
-                      {displayToken(p.token)}
-                    </span>
-                    <div className="relative h-4 flex-1 overflow-hidden rounded-sm bg-panel">
-                      <div
-                        className="h-full rounded-sm bg-accent transition-[width,opacity] duration-300"
-                        style={{
-                          width: `${(p.prob / (maxProb || 1)) * 100}%`,
-                          opacity: isArgmax ? 1 : 0.35 + 0.5 * p.prob,
-                        }}
-                      />
+              {/* Bar field: thin bars, single lime hue, magnitude via width +
+                  opacity; the argmax is the one mark in full lime. */}
+              <div className="flex flex-col gap-1.5">
+                {probs.map((p) => {
+                  const isArgmax = p.token === argmaxToken;
+                  return (
+                    <div key={p.token} className="flex items-center gap-3">
+                      <span
+                        className={`w-24 shrink-0 truncate text-left font-mono text-xs ${
+                          isArgmax ? "text-accent" : "text-muted"
+                        }`}
+                      >
+                        {displayToken(p.token)}
+                      </span>
+                      <div className="relative h-4 flex-1 overflow-hidden rounded-sm bg-panel">
+                        <div
+                          className="h-full rounded-sm bg-accent transition-[width,opacity] duration-300"
+                          style={{
+                            width: `${(p.prob / (maxProb || 1)) * 100}%`,
+                            opacity: isArgmax ? 1 : 0.35 + 0.5 * p.prob,
+                          }}
+                        />
+                      </div>
+                      <span className="w-12 shrink-0 text-right font-mono text-[10px] text-muted">
+                        {(p.prob * 100).toFixed(1)}%
+                      </span>
                     </div>
-                    <span className="w-12 shrink-0 text-right font-mono text-[10px] text-muted">
-                      {(p.prob * 100).toFixed(1)}%
-                    </span>
-                  </div>
-                );
-              })}
-            </div>
-
-            {/* The reused @camp/viz Heatmap, fed the same probabilities as a
-                1×N row. Station 05 feeds it multi-row hidden states. */}
-            <div>
-              <div className="mb-1 font-mono text-xs text-muted">
-                Heatmap · 同一列
+                  );
+                })}
               </div>
-              <Heatmap
-                matrix={heatMatrix}
-                colLabels={heatCols}
-                rowLabels={["p"]}
-                min={0}
-                height={72}
-              />
             </div>
-          </>
+          </div>
         )}
       </div>
     </StationLayout>
