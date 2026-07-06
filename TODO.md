@@ -1,5 +1,6 @@
 - [ ] Add taxonomy with color labeling (color label can reference tokenizer pallette) to the embedding 3d vizaulization. so when nothing is hovered, the panel on the top right would show the taxonomy color labeling legend. When hoevered, it shows the top closest neighbors.
-- [ ] Add hover info tooltip to interactive sliders or toggles like tempature, top-k, top-p, etc. 
+- [x] Add hover info tooltip to items in order shuffle station, namely 順暢度 and perplexity. no emdashes
 - [ ] Add input length cap to all stations to avoid OOM errors. 
 - [ ] Increase text size or just the panel size for next token or even overall stations (e.g., label hove)
 - [ ] RNN 影響 row: make it faithful in precompute instead of the current frontend approximation. Today the per-step reference strength is derived in rnnViz.tsx as influence[step - c] (reusing the recorded token-0 fingerprint-vs-distance curve as a decay model, assuming decay depends only on distance). A truer version computes a real per-(query-step, key-token) ablation matrix in `run_sequence` (rnn.py): for each token k, zero its input, re-forward, take the L2 divergence of the hidden state at every step q >= k. Export influence as number[][] (per-step arrays), update the server RnnForwardResponse schema + the frontend interface, and regenerate activations.json (needs `train-rnn` to produce the npz first).
+- [ ] Add loading indicator for things like the embedding states in the order shuffling station
