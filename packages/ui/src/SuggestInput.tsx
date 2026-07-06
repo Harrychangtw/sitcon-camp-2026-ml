@@ -31,6 +31,23 @@ export interface SuggestInputProps {
   /** Accessible label for the raw input. */
   ariaLabel?: string;
   /**
+   * Hard character cap. Enforced natively on the field (typing/paste can't
+   * exceed it) so the backend's length-cap 422 never fires. Once the value hits
+   * the cap, a hint floats above the whole dock to say why input stopped.
+   */
+  maxLength?: number;
+  /**
+   * The hint copy shown above the dock when the cap is reached. Defaults to
+   * "最多 N 字" from `maxLength`; set it for count-based caps the field can't
+   * express as characters (e.g. "最多 12 個詞"), paired with `capReached`.
+   */
+  capLabel?: string;
+  /**
+   * For count-based caps: the cap has been hit/exceeded → show the hint. (For a
+   * plain `maxLength`, "reached" is detected from the value length instead.)
+   */
+  capReached?: boolean;
+  /**
    * Grow vertically with long text (default). Set false for fields whose value
    * is conceptually one line (e.g. a next-token prompt) — the box keeps its
    * height and the text scrolls horizontally instead.
@@ -57,11 +74,23 @@ export function SuggestInput({
   status,
   actions,
   ariaLabel,
+  maxLength,
+  capLabel,
+  capReached,
   multiline = true,
   className,
 }: SuggestInputProps) {
   const [focused, setFocused] = useState(false);
   const showPresets = focused && value.trim() === "" && presets.length > 0;
+
+  // Cap hint above the box. `capLabel` (a count-based cap the station enforces)
+  // wins; otherwise `maxLength` auto-labels itself and detects "at cap" from the
+  // value length. Warning tone once the cap is reached.
+  const capText = capLabel ?? (maxLength != null ? `最多 ${maxLength} 字` : null);
+  const atCap =
+    capLabel != null
+      ? Boolean(capReached)
+      : maxLength != null && value.length >= maxLength;
 
   // Auto-grow: size the textarea to its content (the className's max-h caps
   // it, after which it scrolls).
@@ -77,6 +106,29 @@ export function SuggestInput({
     // Fills the dock's height (respecting its padding); the box IS the field,
     // with the arrow + status floated inside its bottom band.
     <div className={`relative h-full ${className ?? "w-72 max-w-[75vw]"}`}>
+      {/* Cap hint — only once the limit is reached. Floats ABOVE the whole dock
+          (the `mb` clears the dock's p-3 + border so it sits over the panel's
+          top edge, not inside it). The field is non-empty at the cap, so the
+          preset tray is closed and can't collide. */}
+      {capText && atCap ? (
+        <div className="pointer-events-none absolute bottom-full left-1 z-20 mb-[1.125rem] flex items-center gap-1 whitespace-nowrap font-mono text-[11px] leading-none text-warning">
+          <svg
+            viewBox="0 0 24 24"
+            className="h-3 w-3 flex-none"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth={2}
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            aria-hidden="true"
+          >
+            <circle cx="12" cy="12" r="10" />
+            <line x1="12" y1="16" x2="12" y2="12" />
+            <line x1="12" y1="8" x2="12.01" y2="8" />
+          </svg>
+          <span>{capText}</span>
+        </div>
+      ) : null}
       {/* The box fills the dock height. The input sits at the TOP (text starts
           top-left); the arrow + status are pinned to the bottom band. */}
       <div className="relative flex h-full min-h-[3.5rem] flex-col rounded-md bg-bg focus-within:ring-2 focus-within:ring-accent/50">
@@ -85,6 +137,7 @@ export function SuggestInput({
             ref={fieldRef}
             rows={1}
             value={value}
+            maxLength={maxLength}
             aria-label={ariaLabel}
             spellCheck={false}
             onChange={(e) => onChange(e.target.value)}
@@ -107,6 +160,7 @@ export function SuggestInput({
           <input
             type="text"
             value={value}
+            maxLength={maxLength}
             aria-label={ariaLabel}
             spellCheck={false}
             onChange={(e) => onChange(e.target.value)}

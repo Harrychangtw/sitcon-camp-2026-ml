@@ -112,18 +112,19 @@ export function EmbeddingStation() {
     return q && wordSet.has(q) ? q : null;
   }, [query, wordSet]);
 
-  // ALWAYS-EMBED — a typed word outside the shipped vocab is the normal case,
-  // not an error: the live server embeds it with the SAME model and it drops
-  // into the same cloud. On any failure `liveInferTimed` yields null and the
-  // shipped cloud simply stays as-is (LiveStatus says so honestly).
+  // ALWAYS-EMBED: anything outside the shipped vocab is the normal case, not an
+  // error. The live server embeds it with the SAME model and it drops into the
+  // same cloud. On any failure `liveInferTimed` yields null and the shipped
+  // cloud simply stays as-is (LiveStatus says so honestly).
   //
-  // The station (and the server) work ONE word at a time: /embedding/lookup
-  // rejects whitespace with a 422. Honor that contract client-side so a typed
-  // phrase ("apple store") never fires a lookup the server is bound to reject —
-  // it's treated like a half-typed word (idle), not an offline failure.
+  // Phrases are allowed too: the embedding model reads a short sentence as one
+  // vector, so a pasted phrase lands as a single point near the words closest to
+  // its overall meaning. The 64-char cap on the input (and the server schema)
+  // bounds the cost; the server no longer rejects whitespace. Gating on
+  // whitespace here only swallowed pasted input silently, which read as broken.
   const missingWord = useMemo(() => {
     const q = query.trim().toLowerCase();
-    if (!q || /\s/.test(q)) return null;
+    if (!q) return null;
     return points.length > 0 && !wordSet.has(q) ? q : null;
   }, [query, points, wordSet]);
 
@@ -228,6 +229,7 @@ export function EmbeddingStation() {
           onChange={setQuery}
           ariaLabel="搜尋詞"
           placeholder="搜尋一個詞…貓、cat、蘋果"
+          maxLength={64}
           presets={PRESETS}
           status={<LiveStatus state={liveState} />}
         />

@@ -300,6 +300,15 @@ export function OrderShuffleStation() {
     return { kind: "idle" };
   }, [isCustom, livePending, liveMatches, liveMs, liveFailed]);
 
+  // Keep the last real fluency on screen while a live request is in flight, so
+  // the meter's bars stay mounted and simply animate to the new value when the
+  // result lands — no collapse to a "GPU 計算中…" line, no layout shift. The
+  // pending state is signalled instead by a sweeping bar on the panel's top edge.
+  const isPending = liveState.kind === "pending";
+  const lastFluencyRef = useRef<{ avgLogProb: number; ppl: number } | null>(null);
+  if (fluency) lastFluencyRef.current = fluency;
+  const shownFluency = fluency ?? (isPending ? lastFluencyRef.current : null);
+
   // BAG-OF-WORDS side: mean pool over the word multiset. The cache is keyed by
   // WORD (not position), so `order` cannot influence the result — invariance
   // by construction, and the strip visibly does not move on shuffle.
@@ -360,8 +369,8 @@ export function OrderShuffleStation() {
 
   // Fluency bar position from the shared display domain.
   const [loLp, hiLp] = payload?.logProbDomain ?? [-11, -2];
-  const fluencyPct = fluency
-    ? Math.max(0, Math.min(1, (fluency.avgLogProb - loLp) / (hiLp - loLp)))
+  const fluencyPct = shownFluency
+    ? Math.max(0, Math.min(1, (shownFluency.avgLogProb - loLp) / (hiLp - loLp)))
     : 0;
 
   // --- order-wire geometry ---
@@ -567,17 +576,14 @@ export function OrderShuffleStation() {
           ariaLabel="輸入句子"
           placeholder="自己打一句…會拆成詞塊"
           className="min-h-20 w-96 max-w-[80vw]"
+          maxLength={200}
+          capLabel={`最多 ${MAX_CHIPS} 個詞`}
+          capReached={customNote !== null}
           presets={(payload?.sentences ?? []).map((s) => {
             const text = joinChips(s.words);
             return { label: text, value: text };
           })}
-          status={
-            customNote ? (
-              <span className="font-mono text-xs text-warning">{customNote}</span>
-            ) : (
-              <LiveStatus state={liveState} />
-            )
-          }
+          status={<LiveStatus state={liveState} />}
           actions={
             <>
               <button
@@ -771,24 +777,40 @@ export function OrderShuffleStation() {
                       怎麼排都一樣
                     </span>
                   </div>
-                  {fingerprint ? (
-                    <VectorStrip
-                      values={fingerprint}
-                      maxAbs={stripMax}
-                      cellSize={12}
-                      ariaLabel="Bag-of-words mean-pooled fingerprint"
-                    />
-                  ) : (
-                    <span className="text-xs text-muted">
-                      {isCustom ? "拿不到這些詞的向量（伺服器離線？）。" : "…"}
-                    </span>
-                  )}
+                  {/* Fixed-height slot so the strip ↔ message swap (custom words
+                      still fetching their vectors) doesn't nudge the panel. */}
+                  <div className="flex min-h-4 items-center">
+                    {fingerprint ? (
+                      <VectorStrip
+                        values={fingerprint}
+                        maxAbs={stripMax}
+                        cellSize={12}
+                        ariaLabel="Bag-of-words mean-pooled fingerprint"
+                      />
+                    ) : (
+                      <span className="text-xs text-muted">
+                        {isCustom ? "拿不到這些詞的向量（伺服器離線？）。" : "…"}
+                      </span>
+                    )}
+                  </div>
                 </div>
 
                 <div
                   ref={meterRef}
-                  className="flex flex-col gap-2 rounded-2xl border border-accent/40 bg-panel px-4 py-3"
+                  className="relative flex flex-col gap-2 overflow-hidden rounded-2xl border border-accent/40 bg-panel px-4 py-3"
                 >
+                  {/* Top-edge loading signal: an indeterminate sweep while the
+                      live GPU score is in flight. Sits on the panel's top border
+                      (clipped to the rounded corners) so it never nudges layout —
+                      the bars below stay put and refresh when the result lands. */}
+                  {isPending ? (
+                    <span
+                      className="pointer-events-none absolute inset-x-0 top-0 h-0.5 overflow-hidden"
+                      aria-hidden="true"
+                    >
+                      <span className="block h-full w-1/4 animate-indeterminate rounded-full bg-accent" />
+                    </span>
+                  ) : null}
                   <div className="flex items-baseline justify-between gap-8">
                     <span className="font-mono text-[10px] uppercase tracking-wide text-muted">
                       順序感知 · {payload.model.split("/").pop()}
@@ -797,50 +819,53 @@ export function OrderShuffleStation() {
                       會跟著順序變
                     </span>
                   </div>
-                  {fluency ? (
-                    <>
-                      <div className="flex flex-col gap-1">
-                        <div className="flex items-baseline justify-between font-mono text-[11px]">
-                          <span className="text-fg">通順度</span>
-                          <span className="text-accent">
-                            {fluency.avgLogProb.toFixed(2)}
-                          </span>
+                  {/* Fixed-height slot: bars whenever we have (or are fetching) a
+                      score, message otherwise — both occupy the same height so
+                      the panel never grows or shrinks. */}
+                  <div className="flex min-h-[3.75rem] flex-col justify-center gap-2">
+                    {shownFluency || isPending ? (
+                      <>
+                        <div className="flex flex-col gap-1">
+                          <div className="flex items-baseline justify-between font-mono text-[11px]">
+                            <span className="text-fg">通順度</span>
+                            <span className="text-accent">
+                              {shownFluency ? shownFluency.avgLogProb.toFixed(2) : "—"}
+                            </span>
+                          </div>
+                          <div className="h-2 w-full overflow-hidden rounded-md bg-fg/10">
+                            <div
+                              className="h-full rounded-md bg-accent motion-safe:transition-[width] motion-safe:duration-500"
+                              style={{ width: `${fluencyPct * 100}%` }}
+                            />
+                          </div>
                         </div>
-                        <div className="h-2 w-full overflow-hidden rounded-md bg-fg/10">
-                          <div
-                            className="h-full rounded-md bg-accent motion-safe:transition-[width] motion-safe:duration-500"
-                            style={{ width: `${fluencyPct * 100}%` }}
-                          />
+                        {/* 困惑度: lower = more fluent, so this bar fills as the
+                            sentence gets WORSE — the visual opposite of 通順度.
+                            ln(ppl) == -avgLogProb, so on the log scale the ppl bar
+                            is exactly 1 - fluencyPct. */}
+                        <div className="flex flex-col gap-1">
+                          <div className="flex items-baseline justify-between font-mono text-[11px]">
+                            <span className="text-fg">困惑度 ppl</span>
+                            <span className="text-fg">
+                              {shownFluency ? shownFluency.ppl.toLocaleString() : "—"}
+                            </span>
+                          </div>
+                          <div className="h-2 w-full overflow-hidden rounded-md bg-fg/10">
+                            <div
+                              className="h-full rounded-md bg-accent3 motion-safe:transition-[width] motion-safe:duration-500"
+                              style={{ width: `${shownFluency ? (1 - fluencyPct) * 100 : 0}%` }}
+                            />
+                          </div>
                         </div>
-                      </div>
-                      {/* 困惑度: lower = more fluent, so this bar fills as the
-                          sentence gets WORSE — the visual opposite of 通順度.
-                          ln(ppl) == -avgLogProb, so on the log scale the ppl bar
-                          is exactly 1 - fluencyPct. */}
-                      <div className="flex flex-col gap-1">
-                        <div className="flex items-baseline justify-between font-mono text-[11px]">
-                          <span className="text-fg">困惑度 ppl</span>
-                          <span className="text-fg">
-                            {fluency.ppl.toLocaleString()}
-                          </span>
-                        </div>
-                        <div className="h-2 w-full overflow-hidden rounded-md bg-fg/10">
-                          <div
-                            className="h-full rounded-md bg-accent3 motion-safe:transition-[width] motion-safe:duration-500"
-                            style={{ width: `${(1 - fluencyPct) * 100}%` }}
-                          />
-                        </div>
-                      </div>
-                    </>
-                  ) : (
-                    <span className="text-xs text-muted">
-                      {livePending
-                        ? "GPU 計算中…"
-                        : isCustom
+                      </>
+                    ) : (
+                      <span className="text-xs text-muted">
+                        {isCustom
                           ? "拿不到即時分數（伺服器離線？）。"
                           : "這個排列沒有預先算好的分數。"}
-                    </span>
-                  )}
+                      </span>
+                    )}
+                  </div>
                 </div>
               </div>
             </div>

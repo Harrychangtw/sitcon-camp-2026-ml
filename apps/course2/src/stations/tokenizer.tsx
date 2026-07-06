@@ -644,6 +644,7 @@ export function TokenizerStation() {
           onChange={setText}
           ariaLabel="輸入文字"
           placeholder={vocab ? sample : "載入詞彙表中…"}
+          maxLength={500}
           presets={PRESETS}
           status={<LiveStatus state={liveState} />}
         />

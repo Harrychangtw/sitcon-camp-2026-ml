@@ -43,6 +43,14 @@ interface Activations {
 
 const DATA_URL = "/data/course2/rnn-viz/activations.json";
 
+// Mirror the server's cap (server/app/routers/rnn.py): the forward pass rejects
+// >24 tokens (or a token >30 chars) with a 422. We tokenize with the SAME regex
+// the server uses — lowercase a–z runs or single Han chars — so we can cap the
+// request before it's sent and surface the limit in the field.
+const MAX_RNN_TOKENS = 24;
+const RNN_TOKEN_MAX_LEN = 30;
+const RNN_TOKEN_RE = /[a-z]+|[一-鿿]/g;
+
 export function RnnVizStation() {
   // 1. STATE
   const [data, setData] = useState<Activations | null>(null);
@@ -92,6 +100,14 @@ export function RnnVizStation() {
 
   const trimmedText = customText.trim();
 
+  // Tokenize exactly as the server does, then cap — so the request can never
+  // exceed the 24-token limit (which would 422 and silently fall back).
+  const rnnTokens = useMemo(
+    () => trimmedText.toLowerCase().match(RNN_TOKEN_RE) ?? [],
+    [trimmedText],
+  );
+  const overCap = rnnTokens.length > MAX_RNN_TOKENS;
+
   useEffect(() => {
     setLiveFailed(false);
     if (!trimmedText) return;
@@ -100,11 +116,15 @@ export function RnnVizStation() {
       setSequenceId(presetId);
       return;
     }
+    const capped = rnnTokens
+      .slice(0, MAX_RNN_TOKENS)
+      .filter((t) => t.length <= RNN_TOKEN_MAX_LEN);
+    if (capped.length === 0) return;
     let alive = true;
     setLivePending(true);
     // Debounced: only forward once typing pauses.
     const timer = setTimeout(() => {
-      liveInferTimed<RnnSequence>("/rnn/forward", { text: trimmedText }).then(
+      liveInferTimed<RnnSequence>("/rnn/forward", { tokens: capped }).then(
         (r) => {
           if (!alive) return;
           setLivePending(false);
@@ -124,7 +144,7 @@ export function RnnVizStation() {
       clearTimeout(timer);
       setLivePending(false);
     };
-  }, [trimmedText, presetIdByText]);
+  }, [trimmedText, rnnTokens, presetIdByText]);
 
   const seq = useMemo(
     () => sequences.find((s) => s.sequenceId === sequenceId) ?? null,
@@ -172,6 +192,9 @@ export function RnnVizStation() {
           onChange={setCustomText}
           ariaLabel="輸入句子"
           placeholder="自己打一句…GPU 跑訓練好的 RNN"
+          maxLength={300}
+          capLabel={`最多 ${MAX_RNN_TOKENS} 個 token`}
+          capReached={overCap}
           presets={(data?.sequences ?? []).map((s) => {
             const text = s.tokens.join(" ");
             return { label: s.label || text, value: text };

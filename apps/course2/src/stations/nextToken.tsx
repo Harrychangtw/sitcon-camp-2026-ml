@@ -201,6 +201,7 @@ export function NextTokenStation() {
           onChange={setPrompt}
           ariaLabel="輸入文字"
           placeholder="輸入一段文字…GPU 即時算"
+          maxLength={500}
           presets={(dist?.suggestions ?? []).map((s) => ({ label: s, value: s }))}
           status={<LiveStatus state={liveState} />}
         />

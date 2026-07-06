@@ -1,6 +1,8 @@
 - [ ] Add taxonomy with color labeling (color label can reference tokenizer pallette) to the embedding 3d vizaulization. so when nothing is hovered, the panel on the top right would show the taxonomy color labeling legend. When hoevered, it shows the top closest neighbors.
 - [x] Add hover info tooltip to items in order shuffle station, namely 順暢度 and perplexity. no emdashes
-- [ ] Add input length cap to all stations to avoid OOM errors. 
+- [x] Add input length cap to all stations to avoid OOM errors. 
 - [ ] Increase text size or just the panel size for next token or even overall stations (e.g., label hove)
 - [ ] RNN 影響 row: make it faithful in precompute instead of the current frontend approximation. Today the per-step reference strength is derived in rnnViz.tsx as influence[step - c] (reusing the recorded token-0 fingerprint-vs-distance curve as a decay model, assuming decay depends only on distance). A truer version computes a real per-(query-step, key-token) ablation matrix in `run_sequence` (rnn.py): for each token k, zero its input, re-forward, take the L2 divergence of the hidden state at every step q >= k. Export influence as number[][] (per-step arrays), update the server RnnForwardResponse schema + the frontend interface, and regenerate activations.json (needs `train-rnn` to produce the npz first).
-- [ ] Add loading indicator for things like the embedding states in the order shuffling station
+- [ ] Add loading singal on the top bar. for the order shuffle station and more specifically 順序感知 · Qwen3-0.6B會跟著順序變, instead of showing GPU 計算中, which causes layout shift. just wait for the results and it will refresh the bar (so the bar moves. also resolve the layout shift issues on this page.
+
+- [x] If the backend thores 422  do to length cap. make sure the length cap is already enforced and communicated clearly in the front end. Check every station. the from end should show the input cap on the

@@ -33,11 +33,13 @@ def lookup(req: EmbeddingLookupRequest, request: Request) -> EmbeddingLookupResp
     emb = store.embedding
 
     # Same normalisation as the station's search box (query.trim().toLowerCase()).
+    # Phrases are allowed: the model reads a short sentence as one vector and it
+    # lands near the words closest to its meaning. The 64-char cap (schema
+    # max_length + the input's maxLength) bounds the cost, so whitespace no
+    # longer needs rejecting.
     word = req.word.strip().lower()
     if not word:
-        raise HTTPException(status_code=422, detail="word is empty")
-    if any(ch.isspace() for ch in word):
-        raise HTTPException(status_code=422, detail="one word at a time (no spaces)")
+        raise HTTPException(status_code=422, detail="input is empty")
 
     shipped = emb.points.get(word)
     if shipped is not None:
