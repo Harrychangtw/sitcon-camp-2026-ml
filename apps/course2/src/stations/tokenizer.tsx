@@ -637,7 +637,6 @@ export function TokenizerStation() {
           placeholder={vocab ? sample : "載入詞彙表中…"}
           maxLength={500}
           multiline
-          expandOnFocus
           presets={PRESETS}
           status={<LiveStatus state={liveState} />}
         />
