@@ -33,6 +33,7 @@ import {
   type LiveState,
 } from "@camp/ui";
 import { liveInferTimed, liveInferenceEnabled, loadJSON } from "@camp/data";
+import { CATEGORY_COLORS } from "../palette";
 
 type Scheme = "char" | "word" | "bpe";
 type Lang = "zh" | "en";
@@ -474,21 +475,9 @@ const SCHEME_OPTS = [
   { label: "BPE", value: "bpe" as const },
 ];
 
-// A muted categorical palette for token blocks, in the OpenAI-tokenizer idiom:
-// each token is a filled colored span so boundaries read at a glance. It extends
-// the deck's lime/cyan/purple with harmonizing greens/reds/golds, all darkened
-// so white glyphs stay legible on the near-black ground. Cycled by token
-// position — the color carries NO meaning beyond "this is one token".
-const TOKEN_COLORS = [
-  "#3f6f52", // green
-  "#2f6470", // teal
-  "#7a4a54", // muted rose
-  "#5a4d84", // purple
-  "#7a6234", // gold
-  "#3a5578", // slate blue
-  "#6a4a6e", // plum
-  "#4a6a44", // olive
-] as const;
+// Cycled by token position — the color carries NO meaning beyond "this is one
+// token". Shared with the embedding taxonomy legend (see ../palette).
+const TOKEN_COLORS = CATEGORY_COLORS;
 
 // Mixed 中英文 seed: 漢字 (some single, some merged like 學習/方式) plus a rare
 // latin word Qwen splits (token|ization) — one sentence that exercises every

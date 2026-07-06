@@ -3,6 +3,7 @@ import { extent, scaleLinear } from "d3";
 import { useResizeObserver } from "./useResizeObserver";
 import {
   categoryColorMap,
+  hexCategoryColorMap,
   rgbCss,
   useThemeColors,
   type RGB,
@@ -22,6 +23,10 @@ export interface Scatter2DProps {
   data: ScatterPoint[];
   /** Color points by their `category` field. Default true. */
   colorBy?: boolean;
+  /** Explicit `category → #hex` palette. When given (and `colorBy`), points are
+   * colored from it instead of the theme's categorical ramp, so a host-rendered
+   * legend can match the plot exactly. Unmapped categories fall back to muted. */
+  categoryColors?: Record<string, string>;
   /**
    * Labels to spotlight as the neighbour set (white); everything else is dimmed.
    * When empty/omitted, no point is "hot". Precedence: focus > highlight >
@@ -68,6 +73,7 @@ function domainOf(values: number[]): [number, number] {
 export function Scatter2D({
   data,
   colorBy = true,
+  categoryColors,
   highlight,
   focus,
   height = 360,
@@ -97,10 +103,14 @@ export function Scatter2D({
     const yScale = scaleLinear()
       .domain(domainOf(data.map((d) => d.y)))
       .range([h - MARGIN.bottom, MARGIN.top]);
-    const categories = Array.from(new Set(data.map((d) => d.category ?? "•")));
-    const catColors = categoryColorMap(colors, categories);
+    const catColors = categoryColors
+      ? hexCategoryColorMap(colors, categoryColors)
+      : categoryColorMap(
+          colors,
+          Array.from(new Set(data.map((d) => d.category ?? "•"))),
+        );
     return { xScale, yScale, catColors };
-  }, [data, width, h, colors]);
+  }, [data, width, h, colors, categoryColors]);
 
   const hovered = hover !== null ? data[hover] : undefined;
 

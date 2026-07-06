@@ -28,6 +28,8 @@ export {
   readThemeColors,
   categoryPalette,
   categoryColorMap,
+  hexCategoryColorMap,
+  hexToRgb,
   rgbCss,
   mix,
 } from "./theme";

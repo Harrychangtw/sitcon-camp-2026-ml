@@ -45,3 +45,6 @@ slides/decks/png
 *.af~lock~
 # Cloned reference apps for planning (not ours; MIT — see LICENSE inside)
 .reference/
+
+# Puppeteer/headless-Chrome binary downloaded for in-browser diagnosis (261M) — never committed
+chrome-headless-shell/

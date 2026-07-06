@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { useResizeObserver } from "./useResizeObserver";
 import {
   categoryColorMap,
+  hexCategoryColorMap,
   mix,
   useThemeColors,
   type RGB,
@@ -21,6 +22,10 @@ export interface Scatter3DProps {
   data: Scatter3DPoint[];
   /** Color points by `category`. Default true. */
   colorBy?: boolean;
+  /** Explicit `category → #hex` palette. When given (and `colorBy`), points are
+   * colored from it instead of the theme's categorical ramp, so a host-rendered
+   * legend can match the cloud exactly. Unmapped categories fall back to muted. */
+  categoryColors?: Record<string, string>;
   /**
    * Labels to spotlight as the neighbour set (white); the rest are dimmed toward
    * the background. Precedence: focus > highlight > category > greyscale base.
@@ -84,12 +89,17 @@ function paintColors(
   colors: ThemeColors,
   hoverLabel?: string | null,
   focus?: string | null,
+  categoryColors?: Record<string, string>,
 ) {
   const { THREE, geometry } = engine;
   const hot = new Set(highlight ?? []);
   const hasHighlight = hot.size > 0;
-  const categories = Array.from(new Set(data.map((d) => d.category ?? "•")));
-  const catColors = categoryColorMap(colors, categories);
+  const catColors = categoryColors
+    ? hexCategoryColorMap(colors, categoryColors)
+    : categoryColorMap(
+        colors,
+        Array.from(new Set(data.map((d) => d.category ?? "•"))),
+      );
 
   const attr = geometry.getAttribute("color");
   const arr = attr.array as Float32Array;
@@ -139,6 +149,7 @@ function paintColors(
 export function Scatter3D({
   data,
   colorBy = true,
+  categoryColors,
   highlight,
   focus,
   height = 360,
@@ -290,7 +301,16 @@ export function Scatter3D({
 
       // Initial paint + size using the container's live dimensions (fill mode
       // reads the real box height; fixed mode gets `height` back via clientHeight).
-      paintColors(engine, data, colorBy, highlight, latestColors.current, null, focus);
+      paintColors(
+        engine,
+        data,
+        colorBy,
+        highlight,
+        latestColors.current,
+        null,
+        focus,
+        categoryColors,
+      );
       const w = container.clientWidth || 1;
       const hpx = container.clientHeight || height;
       renderer.setSize(w, hpx, false);
@@ -414,8 +434,17 @@ export function Scatter3D({
   useEffect(() => {
     const engine = engineRef.current;
     if (!engine) return;
-    paintColors(engine, data, colorBy, highlight, colors, hoverLabel, focus);
-  }, [data, colorBy, highlight, colors, hoverLabel, focus]);
+    paintColors(
+      engine,
+      data,
+      colorBy,
+      highlight,
+      colors,
+      hoverLabel,
+      focus,
+      categoryColors,
+    );
+  }, [data, colorBy, highlight, colors, hoverLabel, focus, categoryColors]);
 
   // Auto-rotate toggles without rebuilding the context.
   useEffect(() => {

@@ -24,6 +24,7 @@ import {
 } from "@camp/ui";
 import { Scatter2D, Scatter3D, type Scatter3DPoint } from "@camp/viz";
 import { liveInferTimed, loadJSON } from "@camp/data";
+import { CATEGORY_COLORS } from "../palette";
 
 type Dim = "2d" | "3d";
 
@@ -56,6 +57,23 @@ interface LiveLookup {
 }
 
 const MAX_K = 15; // must match precompute TOP_K
+
+// Human-readable names for the precomputed semantic clusters. The artifact
+// labels each cluster by the word nearest its centroid (並且, on, about…), which
+// is opaque; these describe what the cluster's words actually have in common,
+// derived by reading each cluster's members ranked by centrality. Keyed by the
+// cluster id (the centroid word in points.json). A cluster with no entry falls
+// back to showing its raw id, so a re-clustered artifact degrades, not breaks.
+const CLUSTER_LABELS: Record<string, string> = {
+  並且: "時間過渡與指示詞",
+  之中: "書面虛詞與方位詞",
+  作為: "機構業務關聯詞",
+  天下: "人群與日常生活",
+  國家: "國家與區域地名",
+  am: "英文國家歷史詞彙",
+  on: "英文文法虛詞",
+  about: "英文一般事務詞彙",
+};
 
 // Prebuilt examples surfaced in the search field when it's focused and empty —
 // bilingual on purpose (the whole point is one shared space across languages).
@@ -104,6 +122,30 @@ export function EmbeddingStation() {
     () => new Map(points.map((p) => [p.word, p.lang ?? null])),
     [points],
   );
+
+  // TAXONOMY — the model's own semantic clusters (precomputed k-means, each
+  // named by the word nearest its centroid). One shared palette color per
+  // cluster, assigned by cluster size (largest first) so the mapping is stable
+  // across loads. The SAME `categoryColors` record drives both the point cloud
+  // and the legend below, so a swatch always matches its dots exactly.
+  const taxonomy = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const p of points) counts.set(p.category, (counts.get(p.category) ?? 0) + 1);
+    return [...counts.entries()]
+      .sort((a, b) => b[1] - a[1] || (a[0] < b[0] ? -1 : 1))
+      .map(([category, count], i) => ({
+        category,
+        count,
+        label: CLUSTER_LABELS[category] ?? category,
+        color: CATEGORY_COLORS[i % CATEGORY_COLORS.length]!,
+      }));
+  }, [points]);
+
+  const categoryColors = useMemo(() => {
+    const rec: Record<string, string> = {};
+    for (const t of taxonomy) rec[t.category] = t.color;
+    return rec;
+  }, [taxonomy]);
 
   // In-vocab fast path: the word is already a point — highlight it without a
   // round-trip.
@@ -184,6 +226,7 @@ export function EmbeddingStation() {
       y: p.y,
       z: p.z,
       label: p.word,
+      category: p.category,
     }));
     if (liveHit) {
       base.push({
@@ -191,6 +234,7 @@ export function EmbeddingStation() {
         y: liveHit.point.y,
         z: liveHit.point.z,
         label: liveHit.point.word,
+        category: liveHit.point.category,
       });
     }
     return base;
@@ -279,7 +323,7 @@ export function EmbeddingStation() {
           {dim === "3d" ? (
             <Scatter3D
               data={scatterData}
-              colorBy={false}
+              categoryColors={categoryColors}
               highlight={highlight}
               focus={shownWord ?? undefined}
               onHover={setHoverWord}
@@ -288,7 +332,7 @@ export function EmbeddingStation() {
           ) : (
             <Scatter2D
               data={scatterData}
-              colorBy={false}
+              categoryColors={categoryColors}
               highlight={highlight}
               focus={shownWord ?? undefined}
               onHover={setHoverWord}
@@ -298,8 +342,10 @@ export function EmbeddingStation() {
         </div>
 
 
-        {/* Readout thrown outside the dock: the neighbour list (the
-            "距離 ≈ 相似度" beat), floating top-right when a word is focused. */}
+        {/* Readout thrown outside the dock, floating top-right. Two modes: with
+            a word focused (searched OR hovered) it's the neighbour list (the
+            "距離 ≈ 相似度" beat); idle, it's the taxonomy legend that decodes the
+            point colors — the model's own semantic clusters. */}
         <div className="absolute right-3 top-4 z-20 w-60 max-w-[70vw]">
           {shownWord ? (
             <div className="rounded-md border border-border bg-panel p-3 shadow-md">
@@ -329,7 +375,32 @@ export function EmbeddingStation() {
                 ))}
               </ol>
             </div>
-          ) : null}
+          ) : (
+            <div className="rounded-md border border-border bg-panel p-3 shadow-md">
+              <span className="font-mono text-xs text-accent">
+                語意分群 · {taxonomy.length} 類
+              </span>
+              <ul className="mt-2 flex flex-col gap-1.5">
+                {taxonomy.map((t) => (
+                  <li
+                    key={t.category}
+                    className="flex items-center gap-2 font-mono text-xs"
+                  >
+                    <span
+                      className="h-3 w-3 shrink-0 rounded-sm"
+                      style={{ backgroundColor: t.color }}
+                    />
+                    <span className="truncate text-fg">{t.label}</span>
+                    <span className="ml-auto text-muted">{t.count}</span>
+                  </li>
+                ))}
+              </ul>
+              <p className="mt-2 text-[0.625rem] leading-snug text-muted">
+                顏色是模型自己分出的 {taxonomy.length}{" "}
+                個語意群，標籤是照每群實際的詞補上的說明。把游標移到任一點，看它最近的鄰居。
+              </p>
+            </div>
+          )}
         </div>
       </div>
     </StationLayout>

@@ -77,6 +77,30 @@ export function useThemeColors(): ThemeColors {
   return colors;
 }
 
+/** Parse a `#rrggbb` (or `#rgb`) hex string to an RGB triple; null if invalid.
+ * Lets a host pass an explicit category→hex palette that the viz renders exactly
+ * (so an external legend can match the points pixel-for-pixel). */
+export function hexToRgb(hex: string): RGB | null {
+  let h = hex.trim().replace(/^#/, "");
+  if (h.length === 3) h = h[0]! + h[0]! + h[1]! + h[1]! + h[2]! + h[2]!;
+  if (h.length !== 6 || /[^0-9a-fA-F]/.test(h)) return null;
+  const n = parseInt(h, 16);
+  return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
+}
+
+/** Build a category→RGB map from an explicit `#hex` palette (host-supplied),
+ * falling back to `muted` for any unparseable entry. */
+export function hexCategoryColorMap(
+  colors: ThemeColors,
+  categoryColors: Record<string, string>,
+): Map<string, RGB> {
+  const map = new Map<string, RGB>();
+  for (const [cat, hex] of Object.entries(categoryColors)) {
+    map.set(cat, hexToRgb(hex) ?? colors.muted);
+  }
+  return map;
+}
+
 /** CSS `rgb(...)` string, optionally with alpha. */
 export function rgbCss(c: RGB, alpha = 1): string {
   return alpha >= 1
