@@ -150,7 +150,7 @@ export function SuggestInput({
             // (10.5rem) on focus regardless of how much text is in it, and
             // retracts on blur. Content taller than the open box scrolls.
             className={`w-full flex-none resize-none overflow-y-auto bg-transparent px-3.5 pb-8 pt-3 text-sm text-fg placeholder:text-muted transition-[height] duration-200 focus:outline-none ${
-              focused ? "h-[10.5rem]" : "h-[3.5rem]"
+              focused ? "h-[12rem]" : "h-[4rem]"
             }`}
           />
         ) : (
