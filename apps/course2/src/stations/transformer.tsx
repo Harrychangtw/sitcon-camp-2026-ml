@@ -30,7 +30,7 @@ import {
   type LiveState,
 } from "@camp/ui";
 import { Heatmap, VectorStrip } from "@camp/viz";
-import { liveInferTimed, loadJSON } from "@camp/data";
+import { liveInferOutcome, loadJSON } from "@camp/data";
 
 interface TokenLogit {
   token: string;
@@ -62,6 +62,10 @@ interface PipelineSentence {
   sentenceId: string;
   /** Real subword pieces (a leading space is part of the token). */
   tokens: string[];
+  /** The verbatim source text, when known (typed input). Preferred over
+   * joining `tokens` for display: a CJK char split into byte-fallback pieces
+   * (數 → two ? tokens) rejoins into replacement chars, but `text` is exact. */
+  text?: string;
   tokenIds?: number[];
   /** layers[l].heads[h] is a [query][key] matrix (causal). */
   layers: { heads: number[][][] }[];
@@ -138,6 +142,16 @@ const SUBHEAD_H = 20;
  * blank space so their row 0 lines up with the matrix's query row 0. */
 const COL_LABEL_GUTTER = 56;
 
+/** Height of a column's shared top zone (sub-header + key-label gutter) above
+ * its first token row. Row i's vertical center is TOP_OFFSET + i·rowH + rowH/2,
+ * identical in every token-aligned column — the anchor the arrow overlay uses. */
+const TOP_OFFSET = SUBHEAD_H + COL_LABEL_GUTTER;
+
+/** The Heatmap's internal inter-cell gap (px); also the amount the matrix's cell
+ * rows sit above the plain token rows (cellH = rowH − GAP), corrected with a
+ * matching top nudge so every column's row i lands on one line. */
+const HEATMAP_GAP = 2;
+
 /** Upward nudge (px) is applied as a bottom SPACER rather than a transform: a
  * spacer of 2×nudge under the content shifts it up by `nudge` when the column
  * is `safe center`-ed, yet collapses out of the way (top-aligning) once the
@@ -196,6 +210,55 @@ function HoverTip({ children }: { children: ReactNode }) {
   );
 }
 
+/** A concise white arrow drawn in a token-aligned column's left gutter, linking
+ * the two cross-highlighted rows — from the query capsule to the key capsule —
+ * so "this token attends to that token" reads off the matrix, on the embedding
+ * and MLP strips too. Rendered only while a matrix cell is hovered (q ≠ k);
+ * absolutely positioned so it never disturbs row layout. */
+function CapsuleConnector({
+  q,
+  k,
+  rowH,
+  height,
+}: {
+  q: number;
+  k: number;
+  rowH: number;
+  height: number;
+}) {
+  if (q === k) return null;
+  const yQ = TOP_OFFSET + q * rowH + rowH / 2;
+  const yK = TOP_OFFSET + k * rowH + rowH / 2;
+  const x = 7;
+  const dir = yK < yQ ? -1 : 1; // travel direction from query → key
+  const tipY = yK - dir * 5; // stop the shaft short of the key capsule
+  return (
+    <svg
+      aria-hidden
+      width={16}
+      height={height}
+      className="pointer-events-none absolute left-0 top-0 z-30 overflow-visible"
+    >
+      <line
+        x1={x}
+        y1={yQ + dir * 4}
+        x2={x}
+        y2={tipY}
+        className="stroke-white"
+        strokeWidth={1.25}
+        strokeLinecap="round"
+      />
+      <path
+        d={`M ${x - 3} ${tipY - dir * 3} L ${x} ${tipY + dir * 2} L ${x + 3} ${tipY - dir * 3}`}
+        className="fill-none stroke-white"
+        strokeWidth={1.25}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
 export function TransformerStation() {
   // 1. STATE — everything rendered is a pure function of
   //    (data, sentence, layer, head, hovered).
@@ -233,6 +296,9 @@ export function TransformerStation() {
   const [liveMs, setLiveMs] = useState(0);
   const [livePending, setLivePending] = useState(false);
   const [liveFailed, setLiveFailed] = useState(false);
+  // Server reached but rejected THIS sentence (over the token cap) — distinct
+  // from `liveFailed` (offline), so the status can say "shorten it" not "offline".
+  const [liveRejected, setLiveRejected] = useState(false);
   const [liveShown, setLiveShown] = useState(false);
 
   const sentences = useMemo<PipelineSentence[]>(() => {
@@ -244,13 +310,16 @@ export function TransformerStation() {
     if (!text || livePending) return;
     setLivePending(true);
     setLiveFailed(false);
-    const r = await liveInferTimed<LivePipeline>("/transformer/attention", { text });
+    setLiveRejected(false);
+    const r = await liveInferOutcome<LivePipeline>("/transformer/attention", { text });
     setLivePending(false);
-    if (!r) {
-      setLiveFailed(true);
+    if (!r.ok) {
+      // 4xx → too long / bad input (actionable); anything else → offline.
+      if (r.reason === "rejected") setLiveRejected(true);
+      else setLiveFailed(true);
       return;
     }
-    setCustomSentence(r.data);
+    setCustomSentence({ ...r.data, text });
     setLiveMs(r.ms);
     setLiveShown(true);
     setSentenceId(r.data.sentenceId);
@@ -286,10 +355,11 @@ export function TransformerStation() {
 
   const liveState = useMemo<LiveState>(() => {
     if (livePending) return { kind: "pending" };
+    if (liveRejected) return { kind: "rejected" };
     if (liveFailed) return { kind: "cached" };
     if (liveShown && showingLive) return { kind: "live", ms: liveMs };
     return { kind: "idle" };
-  }, [livePending, liveFailed, liveShown, showingLive, liveMs]);
+  }, [livePending, liveRejected, liveFailed, liveShown, showingLive, liveMs]);
 
   // A new sentence has different tokens — reset the hover.
   useEffect(() => {
@@ -357,7 +427,6 @@ export function TransformerStation() {
   // internal 2px inter-cell gap; leftGutter 72 (row labels) + 8 padding, and the
   // top gutter holds the rotated key labels. Fixed width → intrinsic column size
   // inside the horizontally-scrolling row (Heatmap is responsive to its box).
-  const HEATMAP_GAP = 2;
   const matrixW = 72 + 8 + (n * rowH - HEATMAP_GAP);
   const matrixH = COL_LABEL_GUTTER + 8 + (n * rowH - HEATMAP_GAP);
 
@@ -422,7 +491,7 @@ export function TransformerStation() {
   const topZone = (subhead?: ReactNode) => (
     <>
       <div
-        className="flex items-end font-mono text-[10px] uppercase tracking-wide text-muted"
+        className="flex items-end whitespace-nowrap font-mono text-[10px] uppercase leading-none tracking-wide text-muted"
         style={{ height: SUBHEAD_H }}
       >
         {subhead}
@@ -443,9 +512,10 @@ export function TransformerStation() {
           onSubmit={submitText}
           ariaLabel="輸入句子"
           placeholder="自己打一句…GPU 跑整條 pipeline"
-          // The GPU server rejects very long prompts (422); cap the input well
-          // under that so a typed sentence always makes it through the pipeline.
-          maxLength={100}
+          // Coarse char guard; the real limit is the server's 50 real-token cap
+          // (can't be counted client-side). Over it → 422 → the status shows a
+          // "too long" hint. Sized so ~50 English tokens usually fit.
+          maxLength={280}
           presets={(data?.sentences ?? []).map((s) => {
             const text = s.tokens.join("").trim();
             return { label: text, value: text };
@@ -515,7 +585,10 @@ export function TransformerStation() {
               {/* 01 — 輸入 */}
               <Column index="01" title="輸入">
                 <div className="max-w-[200px] rounded-md border border-border/60 bg-panel px-4 py-3 text-sm leading-relaxed text-fg">
-                  {tokens.join("")}
+                  {/* Verbatim source when known — joining tokens would surface
+                      byte-fallback pieces (數 → two ? tokens) as replacement
+                      chars; only the tokenizer column should show that split. */}
+                  {sentence.text ?? tokens.join("")}
                 </div>
                 {/* bottom spacer → nudges the input box up by INPUT_NUDGE */}
                 <div aria-hidden style={{ height: INPUT_NUDGE * 2 }} />
@@ -550,17 +623,21 @@ export function TransformerStation() {
               <Column index="03" title="Embedding">
                 {embVectors ? (
                   <>
-                  <div className="flex flex-col" style={{ height: railH }}>
+                  <div className="relative flex flex-col" style={{ height: railH }}>
                     {topZone()}
                     {embVectors.map((vec, i) => {
                       const role = roleOf(i);
                       return (
                         <div
                           key={`emb-${i}`}
-                          className="group relative flex items-center"
+                          className="group relative flex items-center pl-4"
                           style={{ height: rowH }}
                         >
-                          <div className={role ? "rounded-sm ring-1 ring-white" : ""}>
+                          {/* flex (not block) so the highlight hugs the 10px
+                              strip instead of the taller inline line-box. */}
+                          <div
+                            className={`flex ${role ? "rounded-sm ring-1 ring-white" : ""}`}
+                          >
                             <VectorStrip
                               values={vec}
                               maxAbs={embMaxAbs}
@@ -579,6 +656,14 @@ export function TransformerStation() {
                         </div>
                       );
                     })}
+                    {hovered ? (
+                      <CapsuleConnector
+                        q={hovered.q}
+                        k={hovered.k}
+                        rowH={rowH}
+                        height={railH}
+                      />
+                    ) : null}
                   </div>
                   {/* bottom spacer → shared GROUP_NUDGE for the aligned columns */}
                   <div aria-hidden style={{ height: GROUP_NUDGE * 2 }} />
@@ -608,12 +693,15 @@ export function TransformerStation() {
                   {/* attention matrix：列 = query，欄 = key */}
                   <div className="relative flex flex-col" style={{ height: railH }}>
                     <div
-                      className="flex items-end font-mono text-[10px] uppercase tracking-wide text-muted"
+                      className="flex items-end whitespace-nowrap font-mono text-[10px] uppercase leading-none tracking-wide text-muted"
                       style={{ height: SUBHEAD_H }}
                     >
                       self-attention · 列 = query · 欄 = key
                     </div>
-                    <div style={{ width: matrixW }}>
+                    {/* +GAP/2 nudge: the Heatmap's cellH is rowH−GAP, so its
+                        cell rows would sit 1px above the plain token rows; this
+                        lands matrix row i on the same line as every column. */}
+                    <div style={{ width: matrixW, marginTop: HEATMAP_GAP / 2 }}>
                       <Heatmap
                         matrix={matrix}
                         rowLabels={displayTokens}
@@ -672,13 +760,15 @@ export function TransformerStation() {
                             return (
                               <div
                                 key={`mlp-${i}`}
-                                className="flex items-center"
+                                className="flex items-center pl-4"
                                 style={{ height: rowH }}
                               >
+                                {/* flex hugs the 10px strip so the highlight
+                                    stays a slim capsule (not the tall line-box). */}
                                 <div
-                                  className={
+                                  className={`flex ${
                                     role ? "rounded-sm ring-1 ring-white" : ""
-                                  }
+                                  }`}
                                 >
                                   <VectorStrip
                                     values={vec}
@@ -691,6 +781,14 @@ export function TransformerStation() {
                             );
                           })}
                         </div>
+                        {hovered ? (
+                          <CapsuleConnector
+                            q={hovered.q}
+                            k={hovered.k}
+                            rowH={rowH}
+                            height={railH}
+                          />
+                        ) : null}
                         <HoverTip>
                           attention 把整句的資訊混進每個 token 之後，MLP
                           再對每個 token 各自做一次非線性變換。這是 L{l} 真實的

@@ -20,7 +20,11 @@ export interface SuggestInputProps {
   presets?: ReadonlyArray<SuggestPreset>;
   /** Small heading above the chip tray. */
   presetLabel?: string;
-  /** Optional status line rendered under the field (e.g. a `<LiveStatus />`). */
+  /**
+   * Optional status line (e.g. a `<LiveStatus />`) pinned to the box's bottom
+   * band. A gradient scrim fades the input text out behind it, so a long value
+   * never overlaps the status line.
+   */
   status?: ReactNode;
   /**
    * Optional action buttons rendered in the submit-arrow position (the box's
@@ -174,6 +178,11 @@ export function SuggestInput({
             className="w-full flex-none bg-transparent px-3.5 pb-8 pt-3 text-sm text-fg placeholder:text-muted focus:outline-none"
           />
         )}
+
+        {/* Scrim: fade the input text into the box bg over the bottom band, so a
+            long (scrolled) value never bleeds through the status line / arrow.
+            Solid bg at the very bottom, transparent by the top of the band. */}
+        <div className="pointer-events-none absolute inset-x-0 bottom-0 h-10 rounded-b-md bg-gradient-to-t from-bg via-bg to-transparent" />
 
         {status ? (
           <div

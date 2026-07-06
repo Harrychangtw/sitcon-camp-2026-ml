@@ -42,7 +42,7 @@ MLP_SHOWN_DIMS = 24
 # what conditions the next token); attention input is rejected beyond the cap
 # because the station has to DRAW every token pair.
 NEXT_TOKEN_MAX_TOKENS = 48
-ATTENTION_MAX_TOKENS = 24
+ATTENTION_MAX_TOKENS = 50
 FLUENCY_MAX_TOKENS = 48
 # Tokenizer station shows every chip; cap the run so a paste can't produce a
 # thousand-chip wall (and to bound the response).

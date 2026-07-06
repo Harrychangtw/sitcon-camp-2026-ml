@@ -3,4 +3,4 @@
 - [x] Add input length cap to all stations to avoid OOM errors. 
 - [ ] Increase text size or just the panel size for next token or even overall stations (e.g., label hoveR)
 - [x] If the backend thores 422  do to length cap. make sure the length cap is already enforced and communicated clearly in the front end. Check every station. the from end should show the input cap on the
-- [ ] The current next token prediction
+- [ ] The current next token prediction 

@@ -11,7 +11,8 @@ export type LiveState =
   | { kind: "idle" }
   | { kind: "pending" }
   | { kind: "live"; ms: number }
-  | { kind: "cached" }; // server unreachable → showing shipped artifact
+  | { kind: "cached" } // server unreachable → showing shipped artifact
+  | { kind: "rejected" }; // server reached but rejected THIS input (e.g. too long)
 
 export interface LiveStatusProps {
   state: LiveState;
@@ -35,6 +36,10 @@ export function LiveStatus({ state, className }: LiveStatusProps) {
     case "cached":
       tone = "text-warning";
       copy = "離線 · 顯示預先計算的結果";
+      break;
+    case "rejected":
+      tone = "text-warning";
+      copy = "句子太長 · 請縮短後再試";
       break;
   }
 

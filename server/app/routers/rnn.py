@@ -10,6 +10,7 @@ exactly the shipped values. Words outside the training vocab map to <unk>
 from __future__ import annotations
 
 import hashlib
+import logging
 import re
 
 from fastapi import APIRouter, HTTPException, Request
@@ -19,9 +20,13 @@ from camp_precompute.rnn import HIDDEN_SIZE, run_sequence
 from ..loader import ModelStore
 from ..schemas import RnnForwardRequest, RnnForwardResponse
 
+log = logging.getLogger("camp.rnn")
+
 router = APIRouter(prefix="/rnn", tags=["rnn"])
 
-MAX_TOKENS = 24
+# Matches the frontend cap (rnnViz.tsx MAX_RNN_TOKENS) — keep the two in sync so
+# the field never sends a request the server will 422.
+MAX_TOKENS = 50
 MAX_TOKEN_LEN = 30
 
 # Lowercase words, or single Han characters (so zh input steps char-by-char —
@@ -43,10 +48,12 @@ def forward(req: RnnForwardRequest, request: Request) -> RnnForwardResponse:
     if not tokens:
         raise HTTPException(status_code=422, detail="no tokens found in input")
     if len(tokens) > MAX_TOKENS:
+        log.info("rnn/forward rejected: %d tokens > max %d", len(tokens), MAX_TOKENS)
         raise HTTPException(
-            status_code=422, detail=f"too many tokens (max {MAX_TOKENS})"
+            status_code=422, detail=f"too many tokens ({len(tokens)} > max {MAX_TOKENS})"
         )
     if any(len(t) > MAX_TOKEN_LEN for t in tokens):
+        log.info("rnn/forward rejected: token > %d chars", MAX_TOKEN_LEN)
         raise HTTPException(
             status_code=422, detail=f"token too long (max {MAX_TOKEN_LEN} chars)"
         )
