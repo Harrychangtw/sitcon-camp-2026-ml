@@ -330,6 +330,15 @@ export function OrderShuffleStation() {
     [order, words, vectorCache],
   );
 
+  // Width one VectorStrip occupies (cellSize 12 + 1px gap per cell). All strips
+  // share the embedding dim, so reserving this on the fingerprint slot keeps the
+  // results block from collapsing — and re-centering the whole row — when a typed
+  // sentence's fingerprint is still loading (or the server is offline).
+  const stripWidthPx = useMemo(() => {
+    const dim = fingerprint?.length ?? tokenRows.find((r) => r.vec)?.vec?.length;
+    return dim ? dim * 12 + (dim - 1) : undefined;
+  }, [fingerprint, tokenRows]);
+
   // One shared color scale across every strip (per-token + the averaged one) so
   // the "same magnitude, same color" reading holds across the whole diagram.
   const stripMax = useMemo(() => {
@@ -713,11 +722,14 @@ export function OrderShuffleStation() {
                       >
                         {/* token card: word left, drag handle (id slot) right */}
                         <div className="flex w-36 cursor-grab items-center justify-between gap-2 rounded-md border border-border bg-panel px-3 py-2 transition-colors hover:border-fg active:cursor-grabbing">
-                          <span className="font-sans text-base text-fg">
+                          <span
+                            className="min-w-0 flex-1 truncate font-sans text-base text-fg"
+                            title={row.word}
+                          >
                             {row.word}
                           </span>
                           <span
-                            className="font-mono text-xs text-muted/60"
+                            className="shrink-0 font-mono text-xs text-muted/60"
                             aria-hidden="true"
                           >
                             ⠿
@@ -777,9 +789,13 @@ export function OrderShuffleStation() {
                       怎麼排都一樣
                     </span>
                   </div>
-                  {/* Fixed-height slot so the strip ↔ message swap (custom words
-                      still fetching their vectors) doesn't nudge the panel. */}
-                  <div className="flex min-h-4 items-center">
+                  {/* Fixed-height AND -width slot so the strip ↔ message swap
+                      (custom words still fetching their vectors) doesn't nudge
+                      the panel or re-center the whole row. */}
+                  <div
+                    className="flex min-h-4 items-center"
+                    style={{ minWidth: stripWidthPx }}
+                  >
                     {fingerprint ? (
                       <VectorStrip
                         values={fingerprint}
