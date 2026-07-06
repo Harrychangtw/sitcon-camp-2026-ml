@@ -132,27 +132,29 @@ const SUBHEAD_H = 20;
 /** Top gutter (px) inside the attention matrix that holds the rotated key-token
  * labels. The tokenizer / embedding / MLP columns reserve the SAME gutter as
  * blank space so their row 0 lines up with the matrix's query row 0. */
-const COL_LABEL_GUTTER = 52;
+const COL_LABEL_GUTTER = 56;
 
-/** The tokenizer / embedding / qwen columns are nudged up by this much from
- * their centered position (input + next-token stay put), applied as one shared
- * transform so the three columns keep their row alignment. */
-const GROUP_NUDGE = "translateY(-32px)";
+/** Upward nudge (px) is applied as a bottom SPACER rather than a transform: a
+ * spacer of 2×nudge under the content shifts it up by `nudge` when the column
+ * is `safe center`-ed, yet collapses out of the way (top-aligning) once the
+ * content is taller than the viewport — so tall sentences never ride up over
+ * the column header. The tokenizer / embedding / qwen columns share one value
+ * so they stay row-aligned; the input column gets its own smaller nudge. */
+const GROUP_NUDGE = 32;
+const INPUT_NUDGE = 12;
 
 /** One labeled pipeline column. All columns stretch to the row's height so the
- * 01–05 index headers share one top line. `align="start"` top-anchors the
- * content (used by the token-aligned columns so their rows share one grid);
- * "center" (default) vertically centers it (the input + next-token columns).
- * Honesty footnotes live inside each step's hover tooltip, not on an axis. */
+ * 01–05 index headers share one top line. Content uses `safe center`: centered
+ * while it fits, but top-anchored the moment it is taller than the column, so a
+ * long sentence's rows never ride up and overlap the header. Honesty footnotes
+ * live inside each step's hover tooltip, not on an axis. */
 function Column({
   index,
   title,
-  align = "center",
   children,
 }: {
   index: string;
   title: ReactNode;
-  align?: "center" | "start";
   children: ReactNode;
 }) {
   return (
@@ -162,9 +164,8 @@ function Column({
         {title}
       </div>
       <div
-        className={`flex flex-1 flex-col ${
-          align === "start" ? "justify-start" : "justify-center"
-        }`}
+        className="flex flex-1 flex-col justify-center"
+        style={{ justifyContent: "safe center" }}
       >
         {children}
       </div>
@@ -436,7 +437,9 @@ export function TransformerStation() {
           onSubmit={submitText}
           ariaLabel="輸入句子"
           placeholder="自己打一句…GPU 跑整條 pipeline"
-          maxLength={200}
+          // The GPU server rejects very long prompts (422); cap the input well
+          // under that so a typed sentence always makes it through the pipeline.
+          maxLength={100}
           presets={(data?.sentences ?? []).map((s) => {
             const text = s.tokens.join("").trim();
             return { label: text, value: text };
@@ -498,16 +501,15 @@ export function TransformerStation() {
                 <div className="max-w-[200px] rounded-md border border-border/60 bg-panel px-4 py-3 text-sm leading-relaxed text-fg">
                   {tokens.join("")}
                 </div>
+                {/* bottom spacer → nudges the input box up by INPUT_NUDGE */}
+                <div aria-hidden style={{ height: INPUT_NUDGE * 2 }} />
               </Column>
 
               <Arrow />
 
               {/* 02 — tokenizer（tokenizer 站的色塊 chips） */}
               <Column index="02" title="Tokenizer">
-                <div
-                  className="flex flex-col"
-                  style={{ height: railH, transform: GROUP_NUDGE }}
-                >
+                <div className="flex flex-col" style={{ height: railH }}>
                   {topZone()}
                   {tokens.map((_, i) =>
                     <div key={`tok-${i}`}>
@@ -522,6 +524,8 @@ export function TransformerStation() {
                     </div>,
                   )}
                 </div>
+                {/* bottom spacer → shared GROUP_NUDGE for the aligned columns */}
+                <div aria-hidden style={{ height: GROUP_NUDGE * 2 }} />
               </Column>
 
               <Arrow />
@@ -529,10 +533,8 @@ export function TransformerStation() {
               {/* 03 — embedding（embedding 站的向量條） */}
               <Column index="03" title="Embedding">
                 {embVectors ? (
-                  <div
-                    className="flex flex-col"
-                    style={{ height: railH, transform: GROUP_NUDGE }}
-                  >
+                  <>
+                  <div className="flex flex-col" style={{ height: railH }}>
                     {topZone()}
                     {embVectors.map((vec, i) => {
                       const role = roleOf(i);
@@ -562,6 +564,9 @@ export function TransformerStation() {
                       );
                     })}
                   </div>
+                  {/* bottom spacer → shared GROUP_NUDGE for the aligned columns */}
+                  <div aria-hidden style={{ height: GROUP_NUDGE * 2 }} />
+                  </>
                 ) : (
                   <p className="max-w-[180px] text-xs text-muted">
                     這句只有 attention 記錄（伺服器未回傳 embedding）。
@@ -583,7 +588,7 @@ export function TransformerStation() {
                   </>
                 }
               >
-                <div className="flex items-start gap-5" style={{ transform: GROUP_NUDGE }}>
+                <div className="flex items-start gap-5">
                   {/* attention matrix：列 = query，欄 = key */}
                   <div className="relative flex flex-col" style={{ height: railH }}>
                     <div
@@ -602,7 +607,7 @@ export function TransformerStation() {
                         highlightMax={false}
                         height={matrixH}
                         topGutter={COL_LABEL_GUTTER}
-                        colLabelAngle={-45}
+                        colLabelAngle={45}
                         onHoverCell={(c) =>
                           setHovered(
                             c && c.col <= c.row ? { q: c.row, k: c.col } : null,
@@ -684,6 +689,8 @@ export function TransformerStation() {
                     )}
                   </div>
                 </div>
+                {/* bottom spacer → shared GROUP_NUDGE for the aligned columns */}
+                <div aria-hidden style={{ height: GROUP_NUDGE * 2 }} />
               </Column>
 
               <Arrow />
