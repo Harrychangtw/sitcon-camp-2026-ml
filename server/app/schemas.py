@@ -22,6 +22,24 @@ from typing import Literal, Optional
 
 from pydantic import BaseModel, Field
 
+# --- auth ----------------------------------------------------------------------
+
+
+class AuthRequest(BaseModel):
+    """The shared class password, posted to /auth to mint a session cookie."""
+
+    password: str = Field(min_length=1, max_length=200)
+
+
+class AuthResponse(BaseModel):
+    """Success body for /auth. Carries no secret — the session rides in an
+    HttpOnly cookie the browser sends automatically; this just tells the login
+    screen how long the client-side "logged in" hint is good for."""
+
+    ok: Literal[True]
+    expiresInSeconds: int
+
+
 # --- tokenizer -----------------------------------------------------------------
 
 
@@ -221,6 +239,11 @@ class OrderBagResponse(BaseModel):
 
 class HealthResponse(BaseModel):
     status: Literal["ok"]
-    device: str
-    gpu: Optional[str]
-    models: list[str]
+    # Coarse device family ("cuda" / "cpu" / "mps") — safe to expose publicly.
+    device_kind: str
+    # Detailed fields are populated ONLY when ENABLE_DOCS is set (see main.py):
+    # the exact "cuda:0" id, the card model string, and the loaded-model list
+    # would otherwise fingerprint the box to any unauthenticated caller.
+    device: Optional[str] = None
+    gpu: Optional[str] = None
+    models: list[str] = []

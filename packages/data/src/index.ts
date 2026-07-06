@@ -18,5 +18,6 @@ export {
   liveInferOutcome,
   liveInferenceEnabled,
   liveInferenceUrl,
+  setUnauthorizedHandler,
 } from "./liveInfer";
 export type { LiveResult, LiveOutcome, LiveFailReason } from "./liveInfer";

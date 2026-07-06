@@ -28,8 +28,12 @@
 	reverse_proxy 127.0.0.1:8301 127.0.0.1:8302 127.0.0.1:8303 127.0.0.1:8304 {
 		lb_policy least_conn
 
+		# Ping /health infrequently — a healthy 0.6B worker never flaps, and
+		# passive ejection (fail_duration below) catches a crash between probes,
+		# so a slow 10s active probe keeps the endpoint quiet without risking a
+		# quarter of the class 502-ing on a dead worker.
 		health_uri /health
-		health_interval 2s
+		health_interval 10s
 		health_timeout 2s
 
 		# Passive ejection too: a refused connection benches the backend

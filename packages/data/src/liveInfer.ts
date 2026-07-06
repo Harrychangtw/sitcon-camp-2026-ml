@@ -26,7 +26,20 @@
 
 interface LiveEnv {
   VITE_LIVE_INFERENCE_URL?: string;
-  VITE_LIVE_INFERENCE_TOKEN?: string;
+}
+
+/**
+ * Called when a live call comes back 401 (no valid session). The app registers
+ * a handler that re-shows the password screen; liveInfer itself still returns a
+ * graceful failure so the station falls back to precomputed JSON in the
+ * meantime. No secret is involved — auth is a server-set HttpOnly cookie.
+ */
+type UnauthorizedHandler = () => void;
+let onUnauthorized: UnauthorizedHandler | null = null;
+
+/** Register (or clear, with `null`) the 401 handler. */
+export function setUnauthorizedHandler(fn: UnauthorizedHandler | null): void {
+  onUnauthorized = fn;
 }
 
 /** Vite injects `import.meta.env`; outside Vite (or during SSR in the shell
@@ -142,23 +155,36 @@ export async function liveInferOutcome<T>(
   const timer = setTimeout(() => controller.abort(), timeoutMs);
   const start = performance.now();
   try {
-    const headers: Record<string, string> = {
-      "Content-Type": "application/json",
-    };
-    const token = liveEnv().VITE_LIVE_INFERENCE_TOKEN?.trim();
-    if (token) headers["X-Camp-Token"] = token;
-
     const res = await fetch(`${base}${path}`, {
       method: "POST",
-      headers,
+      headers: { "Content-Type": "application/json" },
+      // Send the HttpOnly session cookie minted by /auth. No client secret is
+      // read or set here — the bundle carries no token.
+      credentials: "include",
       body: JSON.stringify(body),
       signal: controller.signal,
     });
     if (!res.ok) {
       const detail = await readErrorDetail(res);
-      // 4xx = the server ran and rejected this input (bad request / over cap);
-      // 5xx = the server itself is unhealthy → treat as offline and fall back.
-      const reason: LiveFailReason = res.status < 500 ? "rejected" : "offline";
+      // A 401 means the session is missing/expired — not this input's fault.
+      // Signal the app to re-show the login screen, and classify as "offline"
+      // so the station shows "offline · showing precomputed", never a
+      // misleading "too long" while the student is really just logged out.
+      if (res.status === 401) onUnauthorized?.();
+      // Classify the rest for the caller's status line:
+      // - a normal 4xx = the server ran and rejected THIS input (bad request /
+      //   over the token cap) → "rejected" (station tells the student to
+      //   shorten their input).
+      // - 429 (the backend's rate / concurrency limit) and 503 are CAPACITY
+      //   conditions — the input is fine, the GPU is just busy — so they must
+      //   read as "offline" (→ "offline · showing precomputed"), NOT a
+      //   misleading "too long".
+      // - 401 (logged out) and 5xx (unhealthy server) → "offline".
+      const capacity = res.status === 429 || res.status === 503;
+      const reason: LiveFailReason =
+        res.status < 500 && res.status !== 401 && !capacity
+          ? "rejected"
+          : "offline";
       console.warn(
         `[liveInfer] ${path} → ${res.status} (${reason})${detail ? `: ${detail}` : ""}`,
       );

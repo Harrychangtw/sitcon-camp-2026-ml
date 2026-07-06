@@ -20,7 +20,8 @@ transformer — using it for the RNN lesson would defeat the lesson).
 
 | Route | Mirrors artifact | Notes |
 | --- | --- | --- |
-| `GET /health` | — | No auth. `{status, device, gpu, models}` (models includes the loaded Qwen name). |
+| `GET /health` | — | No auth (Caddy least_conn health-checks it). Public body is coarse — `{status, device_kind}`. The exact card name + loaded-model list are exposed only when `ENABLE_DOCS=1`, so a passer-by can't fingerprint the box. |
+| `POST /auth` | — | No auth (this is how you get it). `{password}` → constant-time compare with `CAMP_PASSWORD`; on match sets an HttpOnly + Secure + SameSite session cookie (`{ok, expiresInSeconds}` body carries no secret), else `401`. Rate-limited. |
 | `POST /embedding/lookup` | one word of `points.json` + `neighbors.json` | `{word}` → `{inVocab, point, neighbors, suggestions}`. One shared zh+en space (`Qwen/Qwen3-Embedding-0.6B`). In-vocab words return the shipped values verbatim; novel words are embedded live with the same multilingual model + PCA/cluster params. |
 | `POST /next-token/predict` | one prompt of `distributions.json prompts{}` | `{prompt}` → `{prompt, model, topN, entries}` — real Qwen top-N log-probs over the full vocab; tokens are real subword pieces. Long prompts are truncated to the last 48 tokens, not rejected. |
 | `POST /rnn/forward` | one element of `activations.json sequences[]` | `{text}` or `{tokens}` → `{sequenceId, label, tokens, hiddenSize, hidden, influence}` from the **trained** GRU (`rnn_state.npz`). Out-of-vocab words map to `<unk>`. Max 24 tokens. |
@@ -28,9 +29,38 @@ transformer — using it for the RNN lesson would defeat the lesson).
 | `POST /order-shuffle/score` | one element of `predictions.json arrangements[]` | `{tokens}` → `{tokens, text, avgLogProb, ppl}` — Qwen sequence log-prob of the ordered arrangement (the order-SENSITIVE side). |
 | `POST /order-shuffle/bag` | a slice of `predictions.json wordVectors` | `{words}` → `{vectors, fingerprintDims}` — per-word embedding fingerprints; the browser mean-pools them (the order-INVARIANT side). The request takes a word *set*, so reordering can't even change it. |
 
-All inference routes require the `X-Camp-Token` header (shared secret from
-`CAMP_TOKEN`). CORS is restricted to `ALLOWED_ORIGINS`. Input lengths are
-capped; bad input gets a 4xx with a clear message, never a stack trace.
+All inference routes require a valid **session cookie**, minted by `POST /auth`
+from the shared `CAMP_PASSWORD` (see "Auth" below). CORS is restricted to
+`ALLOWED_ORIGINS` and runs with `allow_credentials=True` so the cookie rides
+along. Input lengths are capped; bad input gets a 4xx with a clear message,
+never a stack trace.
+
+**Auth (password → session cookie).** There is **no secret in the client
+bundle**. A student types the shared class password (spoken aloud) into the
+login popup, which `POST`s it to `/auth`; the server constant-time-compares it
+with `CAMP_PASSWORD` and, on a match, sets a short-lived **HttpOnly + Secure +
+SameSite** session cookie (`app/auth.py`). The cookie is a stateless
+`"<expiry>.<hmac>"` signed with `CAMP_TOKEN` — a strong, **server-only** secret
+shared across replicas via `.env`, so any replica behind the LB verifies a
+cookie any other minted, and a restart doesn't log the class out. The frontend
+sends inference calls with `credentials: "include"`; on a `401` it re-shows the
+login popup, and if the server is unreachable it falls back to precomputed JSON
+(so a dead backend never traps the class). Rotate the password daily — see
+"Rotating the class password" below.
+
+**Abuse guards.** A student who knows the password can still drive the GPU, so
+to bound the blast radius every inference route runs behind a **global
+concurrency cap** (`app/limits.py`)
+— the real protection, since it's source-independent: at most
+`MAX_CONCURRENT_INFER` requests run per process regardless of who calls, and
+`lm_lock` already serialises the CUDA forward to one at a time per card, so the
+GPU can't be pegged — plus a deliberately **forgiving** last-resort rate limit.
+Over either limit the route returns `429`, which the frontend treats as offline
+and falls back to precomputed JSON. Both are env-tunable (see `.env.example`);
+defaults are sized for a ~40-student class and are per process (~4× box-wide
+under the four-replica deploy). Behind the Tailscale funnel the client's real IP
+is not reliably forwarded, so the rate limit collapses to a global per-process
+bucket; the concurrency cap is what matters there.
 
 ## How live == precomputed is guaranteed
 
@@ -190,9 +220,13 @@ cp .env.example .env
 python3 -c "import secrets; print(secrets.token_urlsafe(32))"   # → CAMP_TOKEN
 ```
 
-Edit `.env`: set `CAMP_TOKEN`, set `ALLOWED_ORIGINS` to the deployed course2
-origin (plus `http://localhost:5173` for dev), pick `PORT`, leave
-`DEVICE=auto`. **Nothing else changes between the 3090 and the V100 VM.**
+Edit `.env`: set `CAMP_TOKEN` (the server-only cookie-signing secret — use the
+strong value above), set `CAMP_PASSWORD` (the short, speakable password you'll
+tell students — rotate it daily), set `ALLOWED_ORIGINS` to the deployed course2
+origin (plus `http://localhost:5173` for dev), pick `PORT`, leave `DEVICE=auto`.
+For pure-http localhost dev also set `COOKIE_SECURE=0` (the cookie can't be
+`Secure` over plain http). **Nothing else changes between the 3090 and the V100
+VM.**
 
 ### 4. Run persistently (systemd)
 
@@ -250,9 +284,10 @@ The startup log prints the resolved device and GPU name — confirm it says
 `resolved device=cuda:0 gpu=NVIDIA GeForce RTX 3090` (or `Tesla V100-SXM2-32GB
 (CUDA_VISIBLE_DEVICES=2)` per replica) so you know which card it landed on and
 that it didn't silently fall back to CPU. On the multi-GPU deploy, each
-internal `127.0.0.1:830x/health` must report a **different**
-`CUDA_VISIBLE_DEVICES`, and `nvidia-smi` must show one python process per
-card.
+replica's **startup log** must report a **different** `CUDA_VISIBLE_DEVICES`
+(the public `/health` no longer leaks it — start a replica with `ENABLE_DOCS=1`
+and curl `127.0.0.1:830x/health` if you want to confirm it live), and
+`nvidia-smi` must show one python process per card.
 
 ### 5. Smoke test
 
@@ -260,7 +295,8 @@ On the box:
 
 ```bash
 curl -s localhost:$PORT/health
-# {"status":"ok","device":"cuda:0","gpu":"...","models":[...]}
+# {"status":"ok","device_kind":"cuda"}
+# (start with ENABLE_DOCS=1 to also see the exact device/gpu/models)
 ```
 
 From an **outside** machine (this is the reachability test):
@@ -269,29 +305,34 @@ From an **outside** machine (this is the reachability test):
 curl -s http://<public-ip-or-hostname>:PORT/health
 ```
 
-Then one authed call per route, checking the shape against the artifact it
-mirrors:
+First authenticate to get a session cookie into a jar, then one call per route
+(reusing the jar), checking the shape against the artifact it mirrors:
 
 ```bash
-TOKEN=<your CAMP_TOKEN>; BASE=http://<host>:<port>
-curl -s -X POST $BASE/embedding/lookup -H "X-Camp-Token: $TOKEN" -H "Content-Type: application/json" \
+BASE=http://<host>:<port>; JAR=/tmp/camp.cookies
+# Exchange the password for the session cookie (saved into $JAR). Wrong password → 401.
+curl -s -c $JAR -X POST $BASE/auth -H "Content-Type: application/json" \
+  -d '{"password":"<your CAMP_PASSWORD>"}'    # {"ok":true,"expiresInSeconds":28800}
+curl -s -b $JAR -X POST $BASE/embedding/lookup -H "Content-Type: application/json" \
   -d '{"word":"貓"}'                         # inVocab:true, point+neighbors == artifact values (en words mixed in)
-curl -s -X POST $BASE/embedding/lookup -H "X-Camp-Token: $TOKEN" -H "Content-Type: application/json" \
+curl -s -b $JAR -X POST $BASE/embedding/lookup -H "Content-Type: application/json" \
   -d '{"word":"blockchain"}'                 # inVocab:false, live point + neighbors + suggestions
-curl -s -X POST $BASE/next-token/predict -H "X-Camp-Token: $TOKEN" -H "Content-Type: application/json" \
+curl -s -b $JAR -X POST $BASE/next-token/predict -H "Content-Type: application/json" \
   -d '{"prompt":"the cat sat on the"}'       # real Qwen entries[]; matches distributions.json prompts{} verbatim
-curl -s -X POST $BASE/rnn/forward -H "X-Camp-Token: $TOKEN" -H "Content-Type: application/json" \
+curl -s -b $JAR -X POST $BASE/rnn/forward -H "Content-Type: application/json" \
   -d '{"text":"the cat sat by the door and looked at the queen"}'  # hidden 11×16; matches activations.json preset
-curl -s -X POST $BASE/transformer/attention -H "X-Camp-Token: $TOKEN" -H "Content-Type: application/json" \
+curl -s -b $JAR -X POST $BASE/transformer/attention -H "Content-Type: application/json" \
   -d '{"text":"the cat sat on the mat"}'     # 28 layers × 16 heads of real attention (large; gzipped on the wire)
-curl -s -X POST $BASE/order-shuffle/score -H "X-Camp-Token: $TOKEN" -H "Content-Type: application/json" \
+curl -s -b $JAR -X POST $BASE/order-shuffle/score -H "Content-Type: application/json" \
   -d '{"tokens":["the","cat","chased","a","mouse"]}'   # avgLogProb ≈ -5.5; shuffle the tokens → ppl explodes
-curl -s -X POST $BASE/order-shuffle/bag -H "X-Camp-Token: $TOKEN" -H "Content-Type: application/json" \
+curl -s -b $JAR -X POST $BASE/order-shuffle/bag -H "Content-Type: application/json" \
   -d '{"words":["cat","mouse"]}'             # 24-dim fingerprints per word
 ```
 
-An unauthed POST must return 401; a 30-token transformer prompt must return
-422 (not a 500).
+A POST with no session cookie must return 401 (and a wrong password to `/auth`
+must too); a 30-token transformer prompt must return 422 (not a 500). Note:
+`curl` won't save a `Secure` cookie over plain `http` — smoke-test over the
+https funnel, or start the box with `COOKIE_SECURE=0` for a local http check.
 
 ### 6. Point the frontend at it
 
@@ -300,15 +341,54 @@ In the course2 deployment env (e.g. Vercel project settings or
 
 ```
 VITE_LIVE_INFERENCE_URL=http://<host>:<port>
-VITE_LIVE_INFERENCE_TOKEN=<same CAMP_TOKEN>
 ```
 
-Unset ⇒ all stations behave exactly as before (precomputed only).
+That's the **only** live-inference var now — there is deliberately no token to
+set (access is the password → session cookie). `ALLOWED_ORIGINS` on the backend
+must include this page's origin (CORS runs credentialed, so the cookie is only
+sent to listed origins). Unset ⇒ all stations behave exactly as before
+(precomputed only, no login popup). To ship a build with live inference fully
+OFF, just leave `VITE_LIVE_INFERENCE_URL` unset at build time — no code change.
 
 > Note: a page served over **https** cannot call an **http** endpoint (mixed
 > content). For an https course2 deployment, put the server behind TLS (e.g.
 > a caddy/nginx reverse proxy or a Cloudflare tunnel) — for a camp-LAN dev
 > serve over http this doesn't apply.
+
+### 7. Rotating the shared token
+
+The client token is **public by construction** — Vite bakes
+`VITE_LIVE_INFERENCE_TOKEN` into the shipped bundle, so every visitor's browser
+holds it. It is a soft speed bump (it keeps the endpoint off casual scanners and
+gates CORS), not a secret. Treat any token that has shipped as burned; rotate it
+whenever you rebuild, and immediately if you suspect abuse. The rotation is
+atomic from the attacker's view: **the old token stops working the moment the
+backend restarts.**
+
+```bash
+# 1. Generate a fresh token
+NEW=$(python3 -c "import secrets; print(secrets.token_urlsafe(32))")
+
+# 2. Set it on the backend (server/.env — gitignored, never committed)
+#    edit CAMP_TOKEN=$NEW   (or: sed -i "s/^CAMP_TOKEN=.*/CAMP_TOKEN=$NEW/" server/.env)
+
+# 3. Set the SAME value in the frontend build env
+#    apps/course2/.env.local — gitignored:  VITE_LIVE_INFERENCE_TOKEN=$NEW
+
+# 4. Restart the backend workers → the old token is now dead.
+#    multi-GPU (this box, via scripts/serve-multi.sh): restart that; or systemd:
+#      sudo systemctl restart camp-server@0 camp-server@1 camp-server@2 camp-server@3
+#    single process: sudo systemctl restart camp-server
+
+# 5. Rebuild + redeploy the frontend so the new bundle carries the new token
+pnpm --filter @app/course2 build      # then redeploy the built assets
+```
+
+Between steps 4 and 5 the live site's old bundle will 401 and fall back to
+precomputed JSON (no breakage, just no live inference) until the new bundle
+ships. Never commit a real token — only `.env.example` placeholders are tracked
+(`.gitignore` covers `.env` and `.env.local`; verify with `git check-ignore
+server/.env apps/course2/.env.local`).
 
 ## Sidebar A — TWCC V100 VM (`203.145.221.64`)
 
@@ -324,9 +404,11 @@ Reachability: host `iptables` is already open; inbound is gated by the **TWCC
 web-console security group**. In the console, open **only** the one service
 port (TCP, source as narrow as the venue allows). Outside smoke test:
 `curl http://203.145.221.64:<PORT>/health` — if it hangs, the security group
-is still closed. Because this box has a public IP: keep `CAMP_TOKEN` strong and
-secret, expose only the one port, and consider a reverse proxy with rate
-limiting before exposing beyond the camp network.
+is still closed. Because this box has a public IP: expose only the one port,
+rotate `CAMP_TOKEN` on each rebuild (it ships in the client bundle — see
+"Rotating the shared token"; it is not a secret), and rely on the built-in
+concurrency cap + rate limit (`app/limits.py`) to bound abuse. Docs/schema are
+off by default (`ENABLE_DOCS` unset).
 
 ## Sidebar B — Home 3090 box
 
