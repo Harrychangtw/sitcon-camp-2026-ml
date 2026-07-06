@@ -30,7 +30,7 @@ import {
   type LiveState,
 } from "@camp/ui";
 import { Heatmap, VectorStrip } from "@camp/viz";
-import { liveInferTimed, loadJSON } from "@camp/data";
+import { liveInferOutcome, loadJSON } from "@camp/data";
 
 interface TokenLogit {
   token: string;
@@ -296,6 +296,9 @@ export function TransformerStation() {
   const [liveMs, setLiveMs] = useState(0);
   const [livePending, setLivePending] = useState(false);
   const [liveFailed, setLiveFailed] = useState(false);
+  // Server reached but rejected THIS sentence (over the token cap) — distinct
+  // from `liveFailed` (offline), so the status can say "shorten it" not "offline".
+  const [liveRejected, setLiveRejected] = useState(false);
   const [liveShown, setLiveShown] = useState(false);
 
   const sentences = useMemo<PipelineSentence[]>(() => {
@@ -307,10 +310,13 @@ export function TransformerStation() {
     if (!text || livePending) return;
     setLivePending(true);
     setLiveFailed(false);
-    const r = await liveInferTimed<LivePipeline>("/transformer/attention", { text });
+    setLiveRejected(false);
+    const r = await liveInferOutcome<LivePipeline>("/transformer/attention", { text });
     setLivePending(false);
-    if (!r) {
-      setLiveFailed(true);
+    if (!r.ok) {
+      // 4xx → too long / bad input (actionable); anything else → offline.
+      if (r.reason === "rejected") setLiveRejected(true);
+      else setLiveFailed(true);
       return;
     }
     setCustomSentence({ ...r.data, text });
@@ -349,10 +355,11 @@ export function TransformerStation() {
 
   const liveState = useMemo<LiveState>(() => {
     if (livePending) return { kind: "pending" };
+    if (liveRejected) return { kind: "rejected" };
     if (liveFailed) return { kind: "cached" };
     if (liveShown && showingLive) return { kind: "live", ms: liveMs };
     return { kind: "idle" };
-  }, [livePending, liveFailed, liveShown, showingLive, liveMs]);
+  }, [livePending, liveRejected, liveFailed, liveShown, showingLive, liveMs]);
 
   // A new sentence has different tokens — reset the hover.
   useEffect(() => {
@@ -505,9 +512,10 @@ export function TransformerStation() {
           onSubmit={submitText}
           ariaLabel="輸入句子"
           placeholder="自己打一句…GPU 跑整條 pipeline"
-          // The GPU server rejects very long prompts (422); cap the input well
-          // under that so a typed sentence always makes it through the pipeline.
-          maxLength={100}
+          // Coarse char guard; the real limit is the server's 50 real-token cap
+          // (can't be counted client-side). Over it → 422 → the status shows a
+          // "too long" hint. Sized so ~50 English tokens usually fit.
+          maxLength={280}
           presets={(data?.sentences ?? []).map((s) => {
             const text = s.tokens.join("").trim();
             return { label: text, value: text };

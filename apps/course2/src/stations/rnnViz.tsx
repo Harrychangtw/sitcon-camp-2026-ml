@@ -44,10 +44,10 @@ interface Activations {
 const DATA_URL = "/data/course2/rnn-viz/activations.json";
 
 // Mirror the server's cap (server/app/routers/rnn.py): the forward pass rejects
-// >24 tokens (or a token >30 chars) with a 422. We tokenize with the SAME regex
+// >50 tokens (or a token >30 chars) with a 422. We tokenize with the SAME regex
 // the server uses — lowercase a–z runs or single Han chars — so we can cap the
 // request before it's sent and surface the limit in the field.
-const MAX_RNN_TOKENS = 24;
+const MAX_RNN_TOKENS = 50;
 const RNN_TOKEN_MAX_LEN = 30;
 const RNN_TOKEN_RE = /[a-z]+|[一-鿿]/g;
 

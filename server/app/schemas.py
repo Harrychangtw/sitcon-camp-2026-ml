@@ -114,7 +114,7 @@ class RnnForwardRequest(BaseModel):
     precompute corpus) or an explicit token list."""
 
     text: Optional[str] = Field(default=None, max_length=300)
-    tokens: Optional[list[str]] = Field(default=None, max_length=24)
+    tokens: Optional[list[str]] = Field(default=None, max_length=50)
 
 
 class RnnForwardResponse(BaseModel):
@@ -131,8 +131,11 @@ class RnnForwardResponse(BaseModel):
 # --- transformer -----------------------------------------------------------------
 
 
+# The char cap is a coarse guard only; the real limit is the 50 REAL-token cap
+# in qwen.pipeline_payload (over that → 422 → field shows a "too long" hint).
+# Sized so ~50 English tokens fit before the char cap bites.
 class TransformerRequest(BaseModel):
-    text: str = Field(min_length=1, max_length=200)
+    text: str = Field(min_length=1, max_length=280)
 
 
 class TransformerLayer(BaseModel):

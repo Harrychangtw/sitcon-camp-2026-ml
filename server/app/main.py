@@ -18,9 +18,11 @@ import secrets
 from contextlib import asynccontextmanager
 from typing import Annotated
 
-from fastapi import Depends, FastAPI, Header, HTTPException
+from fastapi import Depends, FastAPI, Header, HTTPException, Request
+from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
+from fastapi.responses import JSONResponse
 
 from .config import load_settings
 from .loader import load_models
@@ -28,6 +30,7 @@ from .routers import embedding, next_token, order_shuffle, rnn, tokenizer, trans
 from .schemas import HealthResponse
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
+log = logging.getLogger("camp.server")
 
 settings = load_settings()
 
@@ -56,6 +59,15 @@ app.add_middleware(
 # (~1–2 MB of highly repetitive JSON for a 24-token sentence); gzip shrinks it
 # ~10× on the wire.
 app.add_middleware(GZipMiddleware, minimum_size=8192)
+
+
+@app.exception_handler(RequestValidationError)
+async def log_validation_error(request: Request, exc: RequestValidationError):
+    """Log schema-level 422s (e.g. text over the char cap, token list too long)
+    so a rejected request is never silent server-side — then return FastAPI's
+    default 422 body unchanged."""
+    log.info("422 %s: %s", request.url.path, exc.errors())
+    return JSONResponse(status_code=422, content={"detail": exc.errors()})
 
 
 def require_token(
