@@ -47,9 +47,18 @@ module.exports = {
           "0%": { transform: "translateX(-100%)" },
           "100%": { transform: "translateX(500%)" },
         },
+        // Dock settling into place on a station switch: the bottom dock fades and
+        // eases up a few px as the new station mounts. Runs once per mount (i.e.
+        // once per switch), so it never replays while a slider/input updates.
+        "dock-in": {
+          "0%": { opacity: "0", transform: "translateY(10px) scale(0.985)" },
+          "100%": { opacity: "1", transform: "translateY(0) scale(1)" },
+        },
       },
       animation: {
         indeterminate: "indeterminate 1.15s ease-in-out infinite",
+        // Slow, gentle ease-out (expo-ish) so the dock glides rather than snaps.
+        "dock-in": "dock-in 1s cubic-bezier(0.16, 1, 0.3, 1)",
       },
     },
   },

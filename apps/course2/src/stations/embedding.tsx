@@ -350,7 +350,7 @@ export function EmbeddingStation() {
           {shownWord ? (
             <div className="rounded-md border border-border bg-panel p-3 shadow-md">
               <span className="font-mono text-xs text-accent">
-                {shownWord} · 最近的 {nearest.length} 個
+                {shownWord.slice(0, 10) + (shownWord.length > 10 ? "..." : "")} · 最近的 {nearest.length} 個
               </span>
               <ol className="mt-2 flex flex-col gap-1">
                 {nearest.map((n, i) => (
@@ -395,10 +395,6 @@ export function EmbeddingStation() {
                   </li>
                 ))}
               </ul>
-              <p className="mt-2 text-[0.625rem] leading-snug text-muted">
-                顏色是模型自己分出的 {taxonomy.length}{" "}
-                個語意群，標籤是照每群實際的詞補上的說明。把游標移到任一點，看它最近的鄰居。
-              </p>
             </div>
           )}
         </div>

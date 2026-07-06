@@ -14,7 +14,7 @@
  * weights on the live GPU server. The browser NEVER runs the RNN — it replays
  * JSON; the displayed state is a pure function of (sequence, step).
  */
-import { Fragment, useEffect, useMemo, useState } from "react";
+import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import {
   BlockSlider,
   DockControls,
@@ -182,6 +182,29 @@ export function RnnVizStation() {
   //    horizontal axis, but a column the slider hasn't reached yet stays empty.
   //    Diverging fill mirrors @camp/viz Heatmap: grey at 0 → lime (+) / purple
   //    (−), domain fixed at ±1 (tanh range).
+  // Keep the slider-driven active column in view: on a tight viewport the
+  // sequence overflows and the current token can sit off-screen (or hide behind
+  // the frozen 4.5rem label gutter). When `step` advances there, catch the
+  // horizontal scroll up so the active column is always visible.
+  const scrollRef = useRef<HTMLDivElement | null>(null);
+  const activeCellRef = useRef<HTMLDivElement | null>(null);
+  useEffect(() => {
+    const container = scrollRef.current;
+    const cell = activeCellRef.current;
+    if (!container || !cell) return;
+    const contRect = container.getBoundingClientRect();
+    const cellRect = cell.getBoundingClientRect();
+    const relLeft = cellRect.left - contRect.left;
+    const relRight = cellRect.right - contRect.left;
+    const gutterPx = 72; // mirrors the sticky 4.5rem label gutter
+    const pad = 8;
+    if (relRight > contRect.width) {
+      container.scrollBy({ left: relRight - contRect.width + pad, behavior: "smooth" });
+    } else if (relLeft < gutterPx) {
+      container.scrollBy({ left: relLeft - gutterPx - pad, behavior: "smooth" });
+    }
+  }, [step, seq]);
+
   const theme = useThemeColors();
   const zeroColor = useMemo(() => mix(theme.bg, theme.muted, 0.35), [theme]);
   const hiddenColor = (v: number) => {
@@ -258,7 +281,7 @@ export function RnnVizStation() {
           // view.
           <div className="absolute inset-0 overflow-auto pt-16 pb-28">
             <div className="flex min-h-full flex-col justify-center px-8">
-              <div className="overflow-x-auto">
+              <div ref={scrollRef} className="overflow-x-auto">
                 <div
                   className="mx-auto grid gap-0.5"
                   style={{
@@ -275,6 +298,7 @@ export function RnnVizStation() {
                     return (
                       <div
                         key={`head-${c}`}
+                        ref={active ? activeCellRef : undefined}
                         title={tok}
                         className={`flex h-6 items-end justify-center truncate px-0.5 font-mono text-[10px] uppercase leading-none tracking-wide ${
                           active
@@ -309,7 +333,7 @@ export function RnnVizStation() {
                               reached
                                 ? ""
                                 : "border border-dashed border-border/30"
-                            } ${active ? "ring-1 ring-inset ring-accent" : ""}`}
+                            } ${active ? "ring-1 ring-inset ring-white" : ""}`}
                             style={
                               reached
                                 ? { backgroundColor: hiddenColor(v) }
@@ -359,7 +383,7 @@ export function RnnVizStation() {
                           reached
                             ? ""
                             : "border border-dashed border-border/30"
-                        } ${active ? "ring-1 ring-inset ring-accent" : ""}`}
+                        } ${active ? "ring-1 ring-inset ring-white" : ""}`}
                         style={
                           reached
                             ? {

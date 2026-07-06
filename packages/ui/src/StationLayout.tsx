@@ -82,6 +82,13 @@ export function StationLayout({
   const renderTitle = useContext(HeaderTitleContext);
   return (
     <div className="relative flex h-full min-h-0 flex-col overflow-hidden bg-bg text-fg">
+      {/* Top scrim — a top-to-bottom fade of the page background that lifts the
+          title (and the top-right readout) off a busy canvas. Sits ABOVE the
+          canvas (z-10) but BELOW the top-right readout island (z-20) and the
+          title/nav island (z-50), so both read crisply on top of it.
+          pointer-events-none so it never eats canvas interaction. */}
+      <div className="pointer-events-none absolute inset-x-0 top-0 z-10 h-44 bg-gradient-to-b from-bg via-bg/70 to-transparent" />
+
       {/* Title / nav island — top-left, floating over the canvas. The 重點 info
           button sits just to the right of the title: grayed by default, neon on
           hover, and hovering reveals the takeaway panel (opens downward, left-
@@ -142,7 +149,7 @@ export function StationLayout({
       {/* Bottom-center dock: input (left) · controls (right). */}
       {input || controls ? (
         <div className="pointer-events-none absolute inset-x-0 bottom-4 z-30 flex justify-center px-4">
-          <div className="pointer-events-auto flex max-w-full items-stretch gap-4 rounded-[18px] border border-border bg-panel p-3 shadow-lg">
+          <div className="pointer-events-auto flex max-w-full animate-dock-in items-stretch gap-4 rounded-[18px] border border-border bg-panel p-3 shadow-lg motion-reduce:animate-none">
             {input ? (
               <div className="flex shrink-0 items-stretch">{input}</div>
             ) : null}
