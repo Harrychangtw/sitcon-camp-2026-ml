@@ -8,9 +8,9 @@
 #   than an /embedding/lookup, so balance by in-flight count.
 # - Active health checks against GET /health (unauthenticated by design): a
 #   crashed GPU worker is ejected instead of 502-ing a quarter of the class.
-# - Headers (X-Camp-Token, Content-Type, Origin) pass through untouched, so
-#   auth + CORS keep working; no `encode` directive here, so the backends'
-#   gzip bodies pass through un-recompressed.
+# - Headers (Cookie, Content-Type, Origin) and the /auth Set-Cookie pass through
+#   untouched, so the session-cookie auth + CORS keep working; no `encode`
+#   directive here, so the backends' gzip bodies pass through un-recompressed.
 # - Bound to 127.0.0.1: the tailscale funnel (TLS terminator) proxies to it
 #   locally, so NOTHING listens on the public IP. If you ever expose this box
 #   without the funnel, change `bind` and put TLS on this proxy instead.

@@ -113,7 +113,8 @@ The proxy (`deploy/Caddyfile`) balances by **in-flight count**
 (`lb_policy least_conn` — a transformer request costs far more than an
 embedding lookup), health-checks `GET /health` (unauthenticated by design) so
 a crashed replica is ejected instead of 502-ing a quarter of the class, and
-passes `X-Camp-Token` / CORS / the backends' gzip straight through.
+passes the session `Cookie` / `Set-Cookie` / CORS / the backends' gzip straight
+through.
 
 Launch it with systemd (`deploy/camp-server@.service` ×4 +
 `deploy/camp-proxy.service`) or tmux (`scripts/serve-multi.sh`) — see the
@@ -355,40 +356,39 @@ OFF, just leave `VITE_LIVE_INFERENCE_URL` unset at build time — no code change
 > a caddy/nginx reverse proxy or a Cloudflare tunnel) — for a camp-LAN dev
 > serve over http this doesn't apply.
 
-### 7. Rotating the shared token
+### 7. Rotating the class password
 
-The client token is **public by construction** — Vite bakes
-`VITE_LIVE_INFERENCE_TOKEN` into the shipped bundle, so every visitor's browser
-holds it. It is a soft speed bump (it keeps the endpoint off casual scanners and
-gates CORS), not a secret. Treat any token that has shipped as burned; rotate it
-whenever you rebuild, and immediately if you suspect abuse. The rotation is
-atomic from the attacker's view: **the old token stops working the moment the
-backend restarts.**
+The **password** (`CAMP_PASSWORD`) is the only thing students hold, and it never
+ships in the bundle — so unlike the old token, rotating it needs **no frontend
+rebuild**. Rotate it **daily** (and immediately if it leaks). Because sessions
+are signed with `CAMP_TOKEN`, not the password, existing sessions survive a
+password change until they expire (`SESSION_TTL_HOURS`, default 8h) — set a
+shorter TTL if you want a password rotation to also expire live sessions sooner.
 
 ```bash
-# 1. Generate a fresh token
-NEW=$(python3 -c "import secrets; print(secrets.token_urlsafe(32))")
+# 1. Pick a fresh, speakable password (anything you can say to the room).
+NEW=neuron-4f2a         # e.g.
 
 # 2. Set it on the backend (server/.env — gitignored, never committed)
-#    edit CAMP_TOKEN=$NEW   (or: sed -i "s/^CAMP_TOKEN=.*/CAMP_TOKEN=$NEW/" server/.env)
+#    edit CAMP_PASSWORD=$NEW   (or: sed -i "s/^CAMP_PASSWORD=.*/CAMP_PASSWORD=$NEW/" server/.env)
 
-# 3. Set the SAME value in the frontend build env
-#    apps/course2/.env.local — gitignored:  VITE_LIVE_INFERENCE_TOKEN=$NEW
-
-# 4. Restart the backend workers → the old token is now dead.
+# 3. Restart the backend workers so they pick up the new password.
 #    multi-GPU (this box, via scripts/serve-multi.sh): restart that; or systemd:
 #      sudo systemctl restart camp-server@0 camp-server@1 camp-server@2 camp-server@3
 #    single process: sudo systemctl restart camp-server
 
-# 5. Rebuild + redeploy the frontend so the new bundle carries the new token
-pnpm --filter @app/course2 build      # then redeploy the built assets
+# 4. Tell the room the new password. Done — no rebuild, no redeploy.
 ```
 
-Between steps 4 and 5 the live site's old bundle will 401 and fall back to
-precomputed JSON (no breakage, just no live inference) until the new bundle
-ships. Never commit a real token — only `.env.example` placeholders are tracked
-(`.gitignore` covers `.env` and `.env.local`; verify with `git check-ignore
-server/.env apps/course2/.env.local`).
+To invalidate **every** live session at once (e.g. suspected abuse), also rotate
+`CAMP_TOKEN` (a fresh `python3 -c "import secrets; print(secrets.token_urlsafe(32))"`)
+and restart — that changes the signing key, so all outstanding cookies fail
+`verify_session` immediately and everyone must log in again. Keep `CAMP_TOKEN`
+identical across the four replicas (they share `server/.env`), or a cookie
+minted by one replica won't verify on another behind the LB. Never commit a real
+secret — only `.env.example` placeholders are tracked (`.gitignore` covers
+`.env` and `.env.local`; verify with `git check-ignore server/.env
+apps/course2/.env.local`).
 
 ## Sidebar A — TWCC V100 VM (`203.145.221.64`)
 
@@ -405,10 +405,10 @@ web-console security group**. In the console, open **only** the one service
 port (TCP, source as narrow as the venue allows). Outside smoke test:
 `curl http://203.145.221.64:<PORT>/health` — if it hangs, the security group
 is still closed. Because this box has a public IP: expose only the one port,
-rotate `CAMP_TOKEN` on each rebuild (it ships in the client bundle — see
-"Rotating the shared token"; it is not a secret), and rely on the built-in
-concurrency cap + rate limit (`app/limits.py`) to bound abuse. Docs/schema are
-off by default (`ENABLE_DOCS` unset).
+rotate `CAMP_PASSWORD` daily (see "Rotating the class password" — no secret
+ships in the bundle now), keep `CAMP_TOKEN` a strong server-only value, and rely
+on the built-in concurrency cap + rate limit (`app/limits.py`) to bound abuse.
+Docs/schema are off by default (`ENABLE_DOCS` unset).
 
 ## Sidebar B — Home 3090 box
 

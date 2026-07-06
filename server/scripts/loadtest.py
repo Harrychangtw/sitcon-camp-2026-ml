@@ -12,7 +12,12 @@ imported by app/.
   .venv/bin/python scripts/loadtest.py --base http://127.0.0.1:8300 \
       --route /transformer/attention -n 60
 
-Token resolution: --token flag, else $CAMP_TOKEN, else server/.env.
+Auth: POSTs the password to /auth once, then reuses the session cookie for the
+burst. Password resolution: --password flag, else $CAMP_PASSWORD, else
+server/.env. NB the cookie is Secure — over plain http (a local 127.0.0.1 run)
+the client won't send it back, so either test against the https funnel or start
+the server with COOKIE_SECURE=0 for a local http benchmark.
+
 Routes: /transformer/attention (the heavy, lm_lock-serialised bottleneck),
 /embedding/lookup (light, for contrast), /next-token/predict.
 """
@@ -40,17 +45,17 @@ PAYLOADS: dict[str, dict] = {
 }
 
 
-def resolve_token(cli_token: str | None) -> str:
-    if cli_token:
-        return cli_token
-    if os.environ.get("CAMP_TOKEN"):
-        return os.environ["CAMP_TOKEN"]
+def resolve_password(cli_password: str | None) -> str:
+    if cli_password:
+        return cli_password
+    if os.environ.get("CAMP_PASSWORD"):
+        return os.environ["CAMP_PASSWORD"]
     env_file = Path(__file__).resolve().parent.parent / ".env"
     if env_file.exists():
         for line in env_file.read_text().splitlines():
-            if line.startswith("CAMP_TOKEN="):
+            if line.startswith("CAMP_PASSWORD="):
                 return line.split("=", 1)[1].strip()
-    sys.exit("loadtest: no token (use --token, $CAMP_TOKEN, or server/.env)")
+    sys.exit("loadtest: no password (use --password, $CAMP_PASSWORD, or server/.env)")
 
 
 async def one_request(
@@ -65,17 +70,28 @@ async def one_request(
         return time.perf_counter() - t0, -1
 
 
-async def run(base: str, route: str, token: str, n: int, timeout: float) -> int:
+async def run(base: str, route: str, password: str, n: int, timeout: float) -> int:
     payload = PAYLOADS[route]
-    headers = {"X-Camp-Token": token, "Content-Type": "application/json"}
+    headers = {"Content-Type": "application/json"}
     limits = httpx.Limits(max_connections=n, max_keepalive_connections=n)
+    # cookies default on: the /auth Set-Cookie is kept and replayed on the burst.
     async with httpx.AsyncClient(
         base_url=base, headers=headers, timeout=timeout, limits=limits
     ) as client:
+        # Authenticate once → session cookie into the client's jar.
+        auth = await client.post("/auth", json={"password": password})
+        if auth.status_code != 200:
+            sys.exit(f"loadtest: /auth got {auth.status_code}: {auth.text[:200]}")
         # Warmup (untimed): CUDA kernels, HTTP connections, proxy health state.
         warm = await client.post(route, json=payload)
         if warm.status_code != 200:
-            sys.exit(f"loadtest: warmup got {warm.status_code}: {warm.text[:200]}")
+            hint = (
+                "  (401 over http? the session cookie is Secure — use the https "
+                "funnel or start the server with COOKIE_SECURE=0)"
+                if warm.status_code == 401
+                else ""
+            )
+            sys.exit(f"loadtest: warmup got {warm.status_code}: {warm.text[:200]}{hint}")
 
         gate = asyncio.Event()
         tasks = [
@@ -110,11 +126,11 @@ def main() -> None:
     ap.add_argument("--base", default=os.environ.get("BASE", "http://127.0.0.1:8300"))
     ap.add_argument("--route", default="/transformer/attention", choices=PAYLOADS)
     ap.add_argument("-n", type=int, default=60, help="burst size (default 60)")
-    ap.add_argument("--token", default=None)
+    ap.add_argument("--password", default=None)
     ap.add_argument("--timeout", type=float, default=120.0)
     args = ap.parse_args()
-    token = resolve_token(args.token)
-    sys.exit(asyncio.run(run(args.base, args.route, token, args.n, args.timeout)))
+    password = resolve_password(args.password)
+    sys.exit(asyncio.run(run(args.base, args.route, password, args.n, args.timeout)))
 
 
 if __name__ == "__main__":

@@ -1,9 +1,10 @@
 """Backend abuse guards: a global concurrency cap plus a forgiving rate limit.
 
-The client `X-Camp-Token` is public by construction (Vite inlines every
-`VITE_*` into the shipped bundle — see packages/data/src/liveInfer.ts), so a
-leaked token can call the GPU directly. These guards bound the blast radius so a
-holder of a valid token still can't peg the box.
+The routes are gated by a shared class password → session cookie (app/auth.py),
+but every student in the room holds that password, so a valid session can still
+call the GPU directly. These guards bound the blast radius so a holder of a valid
+session still can't peg the box. (They also throttle /auth to blunt password
+guessing — /auth carries the rate-limit dependency but not the GPU slot.)
 
 What actually protects the GPU here is the **concurrency cap**, not the rate
 limit. It is source-independent: no matter how a flood arrives, at most
