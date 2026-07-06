@@ -124,20 +124,30 @@ const TOKEN_COLORS = [
   "#4a6a44", // olive
 ] as const;
 
-/** Shared row height so token rows line up across the chip / embedding / MLP
- * columns — row i in every column is the same token. */
-const ROW_H = 34;
+/** Height (px) of each column's sub-header line — the zone under the 01–05
+ * index header that holds a step label ("MLP · L3"). Reserved as blank space
+ * in columns without one so every column's rows start at the same offset. */
+const SUBHEAD_H = 20;
 
-/** One labeled pipeline column. All columns stretch to the row's height so
- * the 01–05 index headers share one top line; the content centers below.
+/** Top gutter (px) inside the attention matrix that holds the rotated key-token
+ * labels. The tokenizer / embedding / MLP columns reserve the SAME gutter as
+ * blank space so their row 0 lines up with the matrix's query row 0. */
+const COL_LABEL_GUTTER = 52;
+
+/** One labeled pipeline column. All columns stretch to the row's height so the
+ * 01–05 index headers share one top line. `align="start"` top-anchors the
+ * content (used by the token-aligned columns so their rows share one grid);
+ * "center" (default) vertically centers it (the input + next-token columns).
  * Honesty footnotes live inside each step's hover tooltip, not on an axis. */
 function Column({
   index,
   title,
+  align = "center",
   children,
 }: {
   index: string;
   title: ReactNode;
+  align?: "center" | "start";
   children: ReactNode;
 }) {
   return (
@@ -146,7 +156,13 @@ function Column({
         <span className="mr-1.5 opacity-60">{index}</span>
         {title}
       </div>
-      <div className="flex flex-1 flex-col justify-center">{children}</div>
+      <div
+        className={`flex flex-1 flex-col ${
+          align === "start" ? "justify-start" : "justify-center"
+        }`}
+      >
+        {children}
+      </div>
     </section>
   );
 }
@@ -319,11 +335,19 @@ export function TransformerStation() {
   }, [sentence]);
   const maxProb = outputProbs[0]?.prob ?? 1;
 
-  // Matrix sizing: fixed cell size so the column has intrinsic width inside
-  // the horizontally-scrolling row (Heatmap is responsive to its container).
-  const cell = n > 14 ? 20 : 28;
-  const matrixW = 80 + n * (cell + 2);
-  const matrixH = 30 + n * (cell + 2);
+  // ONE row pitch drives the whole diagram: the token chips, the embedding and
+  // MLP strips, and the attention matrix's cells all step by `rowH`, so token
+  // row i sits at the same y in every column. Tighter for long sentences.
+  const rowH = n > 16 ? 24 : 30;
+
+  // Matrix sizing derived from `rowH` so the Heatmap's cell pitch (cellH + GAP)
+  // lands exactly on `rowH` and its cells come out square. GAP is the Heatmap's
+  // internal 2px inter-cell gap; leftGutter 72 (row labels) + 8 padding, and the
+  // top gutter holds the rotated key labels. Fixed width → intrinsic column size
+  // inside the horizontally-scrolling row (Heatmap is responsive to its box).
+  const HEATMAP_GAP = 2;
+  const matrixW = 72 + 8 + (n * rowH - HEATMAP_GAP);
+  const matrixH = COL_LABEL_GUTTER + 8 + (n * rowH - HEATMAP_GAP);
 
   const barCls = reducedMotion ? "" : "transition-[width,opacity] duration-300";
 
@@ -340,7 +364,7 @@ export function TransformerStation() {
   const tokenChip = (i: number, tip: ReactNode) => {
     const role = roleOf(i);
     return (
-      <div className="group relative flex items-center gap-1.5" style={{ height: ROW_H }}>
+      <div className="group relative flex items-center gap-1.5" style={{ height: rowH }}>
         <span className="w-5 shrink-0 text-right font-mono text-[9px] text-muted opacity-60">
           {String(i).padStart(2, "0")}
         </span>
@@ -369,6 +393,22 @@ export function TransformerStation() {
       </div>
     );
   };
+
+  // The shared top zone for a token-aligned column: an optional sub-header line
+  // (SUBHEAD_H) plus the key-label gutter (COL_LABEL_GUTTER). The matrix reserves
+  // the same two zones (its sub-header + the Heatmap's top gutter), so every
+  // column's first token row starts at the identical offset.
+  const topZone = (subhead?: ReactNode) => (
+    <>
+      <div
+        className="flex items-end font-mono text-[10px] uppercase tracking-wide text-muted"
+        style={{ height: SUBHEAD_H }}
+      >
+        {subhead}
+      </div>
+      <div aria-hidden style={{ height: COL_LABEL_GUTTER }} />
+    </>
+  );
 
   return (
     <StationLayout
@@ -449,8 +489,9 @@ export function TransformerStation() {
               <Arrow />
 
               {/* 02 — tokenizer（tokenizer 站的色塊 chips） */}
-              <Column index="02" title="Tokenizer">
+              <Column index="02" title="Tokenizer" align="start">
                 <div className="flex flex-col">
+                  {topZone()}
                   {tokens.map((_, i) =>
                     <div key={`tok-${i}`}>
                       {tokenChip(
@@ -469,16 +510,17 @@ export function TransformerStation() {
               <Arrow />
 
               {/* 03 — embedding（embedding 站的向量條） */}
-              <Column index="03" title="Embedding">
+              <Column index="03" title="Embedding" align="start">
                 {embVectors ? (
                   <div className="flex flex-col">
+                    {topZone()}
                     {embVectors.map((vec, i) => {
                       const role = roleOf(i);
                       return (
                         <div
                           key={`emb-${i}`}
                           className="group relative flex items-center"
-                          style={{ height: ROW_H }}
+                          style={{ height: rowH }}
                         >
                           <div className={role ? "rounded-sm ring-1 ring-white" : ""}>
                             <VectorStrip
@@ -512,6 +554,7 @@ export function TransformerStation() {
               {/* 04 — 迷你模型：attention matrix + MLP，由 layer/head 轉盤驅動 */}
               <Column
                 index="04"
+                align="start"
                 title={
                   <>
                     {data.model} ·{" "}
@@ -524,7 +567,10 @@ export function TransformerStation() {
                 <div className="flex items-start gap-5">
                   {/* attention matrix：列 = query，欄 = key */}
                   <div>
-                    <div className="mb-1 font-mono text-[10px] uppercase tracking-wide text-muted">
+                    <div
+                      className="flex items-end font-mono text-[10px] uppercase tracking-wide text-muted"
+                      style={{ height: SUBHEAD_H }}
+                    >
                       self-attention · 列 = query · 欄 = key
                     </div>
                     <div style={{ width: matrixW }}>
@@ -536,6 +582,8 @@ export function TransformerStation() {
                         max={1}
                         highlightMax={false}
                         height={matrixH}
+                        topGutter={COL_LABEL_GUTTER}
+                        colLabelAngle={-45}
                         onHoverCell={(c) =>
                           setHovered(
                             c && c.col <= c.row ? { q: c.row, k: c.col } : null,
@@ -569,10 +617,12 @@ export function TransformerStation() {
                   </div>
 
                   {/* MLP：attention 混完，MLP 逐 token 變換 */}
-                  <div className="group relative">
-                    <div className="mb-1 font-mono text-[10px] uppercase tracking-wide text-muted">
-                      MLP · <span className="text-accent">L{l}</span>
-                    </div>
+                  <div className="group relative flex flex-col">
+                    {topZone(
+                      <>
+                        MLP · <span className="text-accent">L{l}</span>
+                      </>,
+                    )}
                     {mlpActs ? (
                       <>
                         <div className="flex flex-col">
@@ -582,7 +632,7 @@ export function TransformerStation() {
                               <div
                                 key={`mlp-${i}`}
                                 className="flex items-center"
-                                style={{ height: ROW_H }}
+                                style={{ height: rowH }}
                               >
                                 <div
                                   className={

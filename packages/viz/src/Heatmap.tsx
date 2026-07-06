@@ -39,6 +39,19 @@ export interface HeatmapProps {
   /** Pixel height; width is responsive. Default 360. */
   height?: number;
   /**
+   * Override the top label gutter (px). When omitted it is 22 if column labels
+   * exist, else 8. A station that rotates its column labels (`colLabelAngle`)
+   * or aligns the grid's rows against neighbouring columns passes an explicit
+   * gutter so the first cell row sits at a known, shared offset.
+   */
+  topGutter?: number;
+  /**
+   * Rotate the column labels by this many degrees (SVG convention: negative =
+   * counter-clockwise) so long, adjacent labels stop overlapping. Default 0
+   * (horizontal, the original layout). Pair with a taller `topGutter`.
+   */
+  colLabelAngle?: number;
+  /**
    * Notify the owner when the hovered cell changes (`null` when the pointer
    * leaves the grid). Lets a station cross-highlight the row/col elsewhere on
    * its canvas; the primitive itself stays a pure function of props.
@@ -94,6 +107,8 @@ export function Heatmap({
   highlightCol,
   diverging = false,
   height = 360,
+  topGutter: topGutterProp,
+  colLabelAngle = 0,
   onHoverCell,
   activeCell,
   activeCellStrokeClass = "stroke-accent",
@@ -125,9 +140,11 @@ export function Heatmap({
     return { domainMin: lo, domainMax: hi, maxCell: mCell };
   }, [matrix, rows, cols, min, max]);
 
-  // Label gutters sized to whether labels exist (mono micro-labels).
+  // Label gutters sized to whether labels exist (mono micro-labels). A caller
+  // may override the top gutter (e.g. to make room for rotated column labels
+  // and to align the first cell row with neighbouring columns).
   const leftGutter = rowLabels && rowLabels.length ? 72 : 8;
-  const topGutter = colLabels && colLabels.length ? 22 : 8;
+  const topGutter = topGutterProp ?? (colLabels && colLabels.length ? 22 : 8);
 
   const gridW = Math.max(width - leftGutter - 8, 1);
   const gridH = Math.max(height - topGutter - 8, 1);
@@ -180,22 +197,40 @@ export function Heatmap({
             onHoverCell?.(null);
           }}
         >
-          {/* Column labels — the active step's/cell's label is the lime mark. */}
-          {colLabels?.map((label, c) => (
-            <text
-              key={`col-${c}`}
-              x={leftGutter + c * (cellW + GAP) + cellW / 2}
-              y={topGutter - 8}
-              textAnchor="middle"
-              className={
-                c === activeCol || c === active?.col
-                  ? "fill-accent font-mono text-[10px] uppercase tracking-wide"
-                  : "fill-muted font-mono text-[10px] uppercase tracking-wide"
-              }
-            >
-              {label}
-            </text>
-          ))}
+          {/* Column labels — the active step's/cell's label is the lime mark.
+              When rotated, each label is anchored just above its cell and tilts
+              up so long adjacent labels never overlap. */}
+          {colLabels?.map((label, c) => {
+            const cx = leftGutter + c * (cellW + GAP) + cellW / 2;
+            const cls =
+              c === activeCol || c === active?.col
+                ? "fill-accent font-mono text-[10px] uppercase tracking-wide"
+                : "fill-muted font-mono text-[10px] uppercase tracking-wide";
+            if (colLabelAngle) {
+              return (
+                <text
+                  key={`col-${c}`}
+                  transform={`translate(${cx}, ${topGutter - 6}) rotate(${colLabelAngle})`}
+                  textAnchor="start"
+                  dominantBaseline="central"
+                  className={cls}
+                >
+                  {label}
+                </text>
+              );
+            }
+            return (
+              <text
+                key={`col-${c}`}
+                x={cx}
+                y={topGutter - 8}
+                textAnchor="middle"
+                className={cls}
+              >
+                {label}
+              </text>
+            );
+          })}
 
           {/* Cells */}
           {Array.from({ length: rows }).map((_, r) =>
