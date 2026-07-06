@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { stations } from "../stations/registry";
+import { isLocked, useUnlockedCount } from "../lib/progression";
 
 // Only the lesson stations show in the menu. Dev stations are reachable by URL.
 const menuStations = stations.filter((s) => s.group === "lesson");
@@ -18,6 +19,7 @@ export function StationNav({ title }: { title: string }) {
   const location = useLocation();
   const ref = useRef<HTMLDivElement>(null);
   const currentId = location.pathname.replace(/^\//, "");
+  const unlockedCount = useUnlockedCount();
 
   useEffect(() => {
     if (!open) return;
@@ -77,21 +79,41 @@ export function StationNav({ title }: { title: string }) {
           >
             {menuStations.map((s) => {
               const active = s.id === currentId;
+              const locked = isLocked(s.id, unlockedCount);
               return (
                 <button
                   key={s.id}
                   type="button"
                   role="menuitem"
+                  disabled={locked}
+                  aria-disabled={locked}
                   onClick={() => {
+                    if (locked) return;
                     navigate(`/${s.id}`);
                     setOpen(false);
                   }}
-                  className={`flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm text-fg transition-colors hover:bg-bg ${
-                    active ? "font-semibold" : ""
-                  }`}
+                  className={`flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm transition-colors ${
+                    locked
+                      ? "cursor-not-allowed text-muted"
+                      : "text-fg hover:bg-bg"
+                  } ${active ? "font-semibold" : ""}`}
                 >
                   <span className="truncate">{s.title}</span>
-                  {active ? (
+                  {locked ? (
+                    <svg
+                      viewBox="0 0 24 24"
+                      className="ml-auto h-3.5 w-3.5 shrink-0 text-muted"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      aria-label="鎖定"
+                    >
+                      <rect x="5" y="11" width="14" height="10" rx="2" />
+                      <path d="M8 11V7a4 4 0 0 1 8 0v4" />
+                    </svg>
+                  ) : active ? (
                     <span
                       aria-hidden="true"
                       className="ml-auto h-2 w-2 shrink-0 rounded-full bg-accent shadow-[0_0_8px_1px] shadow-accent"

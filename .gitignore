@@ -26,6 +26,9 @@ public/data/**/*.bin
 # regenerable, ~10 MB/language — never committed)
 precompute/artifacts/
 
+# classroom progression lock — runtime state written by scripts/unlock.sh
+apps/course2/public/unlocked.txt
+
 # editor / os
 .DS_Store
 *.log
