@@ -134,6 +134,11 @@ const SUBHEAD_H = 20;
  * blank space so their row 0 lines up with the matrix's query row 0. */
 const COL_LABEL_GUTTER = 52;
 
+/** The tokenizer / embedding / qwen columns are nudged up by this much from
+ * their centered position (input + next-token stay put), applied as one shared
+ * transform so the three columns keep their row alignment. */
+const GROUP_NUDGE = "translateY(-32px)";
+
 /** One labeled pipeline column. All columns stretch to the row's height so the
  * 01–05 index headers share one top line. `align="start"` top-anchors the
  * content (used by the token-aligned columns so their rows share one grid);
@@ -349,6 +354,15 @@ export function TransformerStation() {
   const matrixW = 72 + 8 + (n * rowH - HEATMAP_GAP);
   const matrixH = COL_LABEL_GUTTER + 8 + (n * rowH - HEATMAP_GAP);
 
+  // Every token-aligned column (tokenizer / embedding / matrix / MLP) is one
+  // fixed-height "rail": the shared top zone (sub-header + key-label gutter)
+  // above `n` rows of `rowH`. Giving them all the SAME height lets each be
+  // vertically centered independently yet land on the same center line — so the
+  // whole pipeline reads as one centered group AND row i still aligns across
+  // columns. (The matrix's Heatmap runs ~6px taller and spills harmlessly below
+  // its rail; its readout is absolutely positioned so it never shifts centering.)
+  const railH = SUBHEAD_H + COL_LABEL_GUTTER + n * rowH;
+
   const barCls = reducedMotion ? "" : "transition-[width,opacity] duration-300";
 
   const hoveredQTok = hovered ? displayTokens[hovered.q] : null;
@@ -489,8 +503,11 @@ export function TransformerStation() {
               <Arrow />
 
               {/* 02 — tokenizer（tokenizer 站的色塊 chips） */}
-              <Column index="02" title="Tokenizer" align="start">
-                <div className="flex flex-col">
+              <Column index="02" title="Tokenizer">
+                <div
+                  className="flex flex-col"
+                  style={{ height: railH, transform: GROUP_NUDGE }}
+                >
                   {topZone()}
                   {tokens.map((_, i) =>
                     <div key={`tok-${i}`}>
@@ -510,9 +527,12 @@ export function TransformerStation() {
               <Arrow />
 
               {/* 03 — embedding（embedding 站的向量條） */}
-              <Column index="03" title="Embedding" align="start">
+              <Column index="03" title="Embedding">
                 {embVectors ? (
-                  <div className="flex flex-col">
+                  <div
+                    className="flex flex-col"
+                    style={{ height: railH, transform: GROUP_NUDGE }}
+                  >
                     {topZone()}
                     {embVectors.map((vec, i) => {
                       const role = roleOf(i);
@@ -554,7 +574,6 @@ export function TransformerStation() {
               {/* 04 — 迷你模型：attention matrix + MLP，由 layer/head 轉盤驅動 */}
               <Column
                 index="04"
-                align="start"
                 title={
                   <>
                     {data.model} ·{" "}
@@ -564,9 +583,9 @@ export function TransformerStation() {
                   </>
                 }
               >
-                <div className="flex items-start gap-5">
+                <div className="flex items-start gap-5" style={{ transform: GROUP_NUDGE }}>
                   {/* attention matrix：列 = query，欄 = key */}
-                  <div>
+                  <div className="relative flex flex-col" style={{ height: railH }}>
                     <div
                       className="flex items-end font-mono text-[10px] uppercase tracking-wide text-muted"
                       style={{ height: SUBHEAD_H }}
@@ -595,11 +614,12 @@ export function TransformerStation() {
                         activeCellStrokeClass="stroke-white"
                       />
                     </div>
-                    {/* Constant-size readout box: swapping the default line for
-                        the hover readout must not resize the column (the gap to
-                        the MLP block would snap). */}
+                    {/* Absolutely positioned readout: it sits just below the
+                        matrix (which itself spills a few px past the fixed-height
+                        rail) so swapping the default line for the hover readout
+                        never resizes the rail or shifts the group's centering. */}
                     <p
-                      className="mt-1 h-8 font-mono text-[10px] leading-snug text-muted"
+                      className="absolute top-full mt-2 h-8 font-mono text-[10px] leading-snug text-muted"
                       style={{ width: Math.max(matrixW, 320) }}
                     >
                       {hovered && hoveredW !== undefined && Number.isFinite(hoveredW) ? (
@@ -617,7 +637,7 @@ export function TransformerStation() {
                   </div>
 
                   {/* MLP：attention 混完，MLP 逐 token 變換 */}
-                  <div className="group relative flex flex-col">
+                  <div className="group relative flex flex-col" style={{ height: railH }}>
                     {topZone(
                       <>
                         MLP · <span className="text-accent">L{l}</span>
