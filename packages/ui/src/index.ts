@@ -43,5 +43,10 @@ export type { RunButtonProps } from "./RunButton";
 export { LiveStatus } from "./LiveStatus";
 export type { LiveState, LiveStatusProps } from "./LiveStatus";
 
+export { LoadingTimer } from "./LoadingTimer";
+export type { LoadingTimerProps } from "./LoadingTimer";
+
+export { useStopwatch } from "./useStopwatch";
+
 // Theme tokens live in ./theme.css and ../tailwind-preset.cjs.
 // Import them from app stylesheets / tailwind configs, not from JS.

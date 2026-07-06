@@ -20,6 +20,7 @@ import {
   BlockToggle,
   DockControls,
   LiveStatus,
+  LoadingTimer,
   StationLayout,
   SuggestInput,
   type LiveState,
@@ -262,7 +263,7 @@ export function NextTokenStation() {
           </div>
         ) : !dist ? (
           <div className="flex h-full items-center justify-center">
-            <p className="font-mono text-xs text-muted">載入機率分布中…</p>
+            <LoadingTimer label="載入機率分布中" />
           </div>
         ) : (
           // The bar field is the whole page: vertically centered, capped to a

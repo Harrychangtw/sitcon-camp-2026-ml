@@ -19,6 +19,7 @@ import {
   BlockSlider,
   DockControls,
   LiveStatus,
+  LoadingTimer,
   StationLayout,
   SuggestInput,
   type LiveState,
@@ -116,15 +117,17 @@ export function RnnVizStation() {
       setSequenceId(presetId);
       return;
     }
-    const capped = rnnTokens
-      .slice(0, MAX_RNN_TOKENS)
-      .filter((t) => t.length <= RNN_TOKEN_MAX_LEN);
-    if (capped.length === 0) return;
+    // Over the token cap → REJECT rather than truncate-and-send: leave the last
+    // result in place and let the field's cap hint say why. (The server would
+    // 422 a >MAX_RNN_TOKENS request anyway.)
+    if (overCap) return;
+    const tokens = rnnTokens.filter((t) => t.length <= RNN_TOKEN_MAX_LEN);
+    if (tokens.length === 0) return;
     let alive = true;
     setLivePending(true);
     // Debounced: only forward once typing pauses.
     const timer = setTimeout(() => {
-      liveInferTimed<RnnSequence>("/rnn/forward", { tokens: capped }).then(
+      liveInferTimed<RnnSequence>("/rnn/forward", { tokens }).then(
         (r) => {
           if (!alive) return;
           setLivePending(false);
@@ -144,7 +147,7 @@ export function RnnVizStation() {
       clearTimeout(timer);
       setLivePending(false);
     };
-  }, [trimmedText, rnnTokens, presetIdByText]);
+  }, [trimmedText, rnnTokens, overCap, presetIdByText]);
 
   const seq = useMemo(
     () => sequences.find((s) => s.sequenceId === sequenceId) ?? null,
@@ -236,7 +239,7 @@ export function RnnVizStation() {
           </div>
         ) : !seq || !data ? (
           <div className="flex h-full items-center justify-center">
-            <p className="font-mono text-xs text-muted">載入啟動值中…</p>
+            <LoadingTimer label="載入啟動值中" />
           </div>
         ) : (
           // The table IS the page: every token on the horizontal axis, hidden
