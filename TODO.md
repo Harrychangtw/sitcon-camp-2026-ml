@@ -1,6 +1,1 @@
-- [ ] Add taxonomy with color labeling (color label can reference tokenizer pallette) to the embedding 3d vizaulization. so when nothing is hovered, the panel on the top right would show the taxonomy color labeling legend. When hoevered, it shows the top closest neighbors.
-- [x] Add hover info tooltip to items in order shuffle station, namely 順暢度 and perplexity. no emdashes
-- [x] Add input length cap to all stations to avoid OOM errors. 
-- [ ] Increase text size or just the panel size for next token or even overall stations (e.g., label hoveR)
-- [x] If the backend thores 422  do to length cap. make sure the length cap is already enforced and communicated clearly in the front end. Check every station. the from end should show the input cap on the
-- [ ] The current next token prediction 
+- [ ] Include more descriptive, intersting and diverse precomputed examples

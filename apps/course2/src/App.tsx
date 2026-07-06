@@ -1,9 +1,29 @@
+import type { ReactElement } from "react";
 import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
 import { StationHeaderTitleProvider } from "@camp/ui";
 import { StationNav } from "./components/StationNav";
 import { stations } from "./stations/registry";
+import {
+  ProgressionProvider,
+  highestUnlockedId,
+  isLocked,
+  useUnlockedCount,
+} from "./lib/progression";
 
 const firstId = stations[0]?.id ?? "tokenizer";
+
+/**
+ * Route-level lock: a student who types the URL of a not-yet-unlocked lesson
+ * station is redirected to the furthest unlocked one, so the nav gate can't be
+ * bypassed by hand. Dev stations are never locked.
+ */
+function StationGate({ id, children }: { id: string; children: ReactElement }) {
+  const unlockedCount = useUnlockedCount();
+  if (isLocked(id, unlockedCount)) {
+    return <Navigate to={`/${highestUnlockedId(unlockedCount)}`} replace />;
+  }
+  return children;
+}
 
 function NotFound() {
   return (
@@ -26,17 +46,23 @@ function NotFound() {
 export function App() {
   return (
     <BrowserRouter>
-      <StationHeaderTitleProvider render={(title) => <StationNav title={title} />}>
-        <div className="h-full min-h-0 min-w-0">
-          <Routes>
-            <Route path="/" element={<Navigate to={`/${firstId}`} replace />} />
-            {stations.map((s) => (
-              <Route key={s.id} path={`/${s.id}`} element={s.element} />
-            ))}
-            <Route path="*" element={<NotFound />} />
-          </Routes>
-        </div>
-      </StationHeaderTitleProvider>
+      <ProgressionProvider>
+        <StationHeaderTitleProvider render={(title) => <StationNav title={title} />}>
+          <div className="h-full min-h-0 min-w-0">
+            <Routes>
+              <Route path="/" element={<Navigate to={`/${firstId}`} replace />} />
+              {stations.map((s) => (
+                <Route
+                  key={s.id}
+                  path={`/${s.id}`}
+                  element={<StationGate id={s.id}>{s.element}</StationGate>}
+                />
+              ))}
+              <Route path="*" element={<NotFound />} />
+            </Routes>
+          </div>
+        </StationHeaderTitleProvider>
+      </ProgressionProvider>
     </BrowserRouter>
   );
 }
