@@ -45,8 +45,8 @@
       "kind": "json",
       "path": "rnn-viz/activations.json",
       "station": "rnn-viz",
-      "bytes": 11294,
-      "description": "Per-timestep hidden-state vectors from a small TRAINED GRU language model (train-rnn), plus a token-0 influence-decay trace. Replayed on a heatmap; the browser never runs the RNN."
+      "bytes": 16149,
+      "description": "Per-timestep hidden-state vectors from a small TRAINED GRU language model (train-rnn), plus a per-(query-step, key-token) ablation influence matrix. Replayed on a heatmap; the browser never runs the RNN."
     },
     {
       "id": "tokenizer-vocab",

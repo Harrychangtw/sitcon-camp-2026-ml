@@ -125,7 +125,8 @@ class RnnForwardResponse(BaseModel):
     tokens: list[str]
     hiddenSize: int
     hidden: list[list[float]]
-    influence: list[float]
+    # influence[q][k]: per-(query-step, key-token) ablation matrix (see run_sequence).
+    influence: list[list[float]]
 
 
 # --- transformer -----------------------------------------------------------------

@@ -132,29 +132,39 @@ def token_ids(state: RnnState, tokens: list[str]) -> list[int]:
     return [state.word_index.get(t, unk) for t in tokens]
 
 
-def run_sequence(state: RnnState, tokens: list[str]) -> tuple[list[list[float]], list[float]]:
+def run_sequence(state: RnnState, tokens: list[str]) -> tuple[list[list[float]], list[list[float]]]:
     """Forward a token sequence through the TRAINED GRU; return (hidden,
     influence) rounded like the artifact.
 
-    `influence` re-runs the forward pass with the FIRST token's input zeroed
-    and takes the L2 divergence between the two runs at each step, normalised
-    so step 0 = 1.0 — the first token's lingering fingerprint, now measured on
-    real trained weights.
+    `hidden[q]` is the hidden vector after consuming token `q`.
+
+    `influence` is a real per-(query-step, key-token) ablation matrix. For each
+    key token `k` we zero *its* input, re-forward, and take the L2 divergence of
+    the hidden state at every query step `q`. `influence[q][k]` is that
+    divergence at step `q`, normalised by token `k`'s *immediate* footprint (its
+    own divergence at step `k`) — so every token starts at 1.0 the moment it is
+    consumed and decays as its fingerprint washes out of the fixed-size vector.
+    Entries with `k > q` are 0.0 (that token has not been seen yet), and column
+    0 is exactly the old token-0 decay trace. This is measured on the real
+    trained weights, not modelled from distance alone.
     """
     xs = state.emb[token_ids(state, tokens)]
+    T = len(tokens)
 
     states = _forward(state, xs)
 
-    xs_ablated = xs.copy()
-    xs_ablated[0] = 0.0
-    states_ablated = _forward(state, xs_ablated)
-
-    diff = np.linalg.norm(states - states_ablated, axis=1)
-    base = diff[0] if diff[0] > 1e-9 else 1.0
-    influence = np.clip(diff / base, 0.0, None)
+    influence = [[0.0] * T for _ in range(T)]
+    for k in range(T):
+        xs_ablated = xs.copy()
+        xs_ablated[k] = 0.0
+        states_ablated = _forward(state, xs_ablated)
+        diff = np.linalg.norm(states - states_ablated, axis=1)  # [T]
+        base = diff[k] if diff[k] > 1e-9 else 1.0
+        for q in range(k, T):
+            influence[q][k] = round(float(np.clip(diff[q] / base, 0.0, None)), 4)
 
     hidden = [[round(float(v), 4) for v in step] for step in states]
-    return hidden, [round(float(v), 4) for v in influence]
+    return hidden, influence
 
 
 # --- training (torch, offline only) -------------------------------------------
@@ -320,11 +330,13 @@ def build_rnn_viz(state: RnnState) -> dict:
             f"(hidden {HIDDEN_SIZE}), trained by `camp-precompute train-rnn` on "
             "Alice's Adventures in Wonderland (Project Gutenberg #11, public "
             "domain). `hidden[step]` is the hidden vector after consuming that "
-            "token; `influence[step]` is the normalised L2 divergence when the "
-            "FIRST token's input is ablated — it decays as the earliest token's "
-            "fingerprint washes out. Values are in [-1, 1] (signed → diverging "
-            "heatmap). Presets are recorded outputs of the same weights the "
-            "live server loads."
+            "token; `influence[q][k]` is a per-(query-step, key-token) ablation "
+            "matrix — the L2 divergence of the step-`q` hidden state when token "
+            "`k`'s input is zeroed, normalised by token `k`'s immediate footprint "
+            "so each token starts at 1.0 when consumed and decays as its "
+            "fingerprint washes out (entries with k>q are 0). Hidden values are "
+            "in [-1, 1] (signed → diverging heatmap). Presets are recorded "
+            "outputs of the same weights the live server loads."
         ),
         "hiddenSize": HIDDEN_SIZE,
         "sequences": out_sequences,
@@ -354,8 +366,9 @@ def rnn_viz(out_dir: Path, artifacts_dir: Path) -> Path:
             "bytes": art_path.stat().st_size,
             "description": (
                 "Per-timestep hidden-state vectors from a small TRAINED GRU "
-                "language model (train-rnn), plus a token-0 influence-decay "
-                "trace. Replayed on a heatmap; the browser never runs the RNN."
+                "language model (train-rnn), plus a per-(query-step, key-token) "
+                "ablation influence matrix. Replayed on a heatmap; the browser "
+                "never runs the RNN."
             ),
         },
     )

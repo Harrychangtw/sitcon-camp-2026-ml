@@ -32,8 +32,13 @@ interface RnnSequence {
   tokens: string[];
   /** hidden[step] = hidden-state vector after consuming token `step`. */
   hidden: number[][];
-  /** influence[step] = normalized lingering influence of the FIRST token. */
-  influence: number[];
+  /**
+   * influence[q][k] = real per-(query-step, key-token) ablation strength: how
+   * much token `k`'s fingerprint still moves the hidden state at query step `q`
+   * (1.0 the step it enters, decaying after; 0 for k > q). Column 0 is the
+   * first token's lingering-influence trace.
+   */
+  influence: number[][];
 }
 
 interface Activations {
@@ -294,10 +299,11 @@ export function RnnVizStation() {
                     style={{ gridColumn: "1 / -1" }}
                   />
 
-                  {/* Reference row: at the current step (about to predict the
-                      next token), how much the model still references each earlier
-                      token. Derived from the recorded fingerprint-vs-distance
-                      curve — token c's strength at step q is influence[q - c], so
+                  {/* Influence row: at the current step (about to predict the
+                      next token), how much token c's fingerprint still moves the
+                      hidden state. Read straight from the REAL per-(query-step,
+                      key-token) ablation matrix — token c's strength at step q is
+                      influence[q][c] (1.0 the step it enters, decaying after), so
                       the most recent token reads full and the first token fades as
                       generation advances. Frozen label + hover tooltip. */}
                   <div className="group sticky left-0 z-20 mt-1 flex h-4 items-center border-r border-border/40 bg-bg">
@@ -313,9 +319,10 @@ export function RnnVizStation() {
                   {seq.tokens.map((_, c) => {
                     const reached = c <= step;
                     const active = c === step;
-                    // Reference strength = fingerprint remaining after (step − c)
-                    // more tokens; the current token (distance 0) reads full.
-                    const ref = reached ? seq.influence[step - c] ?? 0 : 0;
+                    // Real ablation strength: how much of token c's fingerprint
+                    // still moves the step-`step` hidden state (1.0 when it just
+                    // entered, decaying after). The current token reads full.
+                    const ref = reached ? seq.influence[step]?.[c] ?? 0 : 0;
                     return (
                       <div
                         key={`ref-${c}`}

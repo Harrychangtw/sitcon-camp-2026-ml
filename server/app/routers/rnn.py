@@ -1,5 +1,5 @@
 """POST /rnn/forward — live substitute for one element of activations.json
-`sequences[]` (per-timestep hidden vectors + the token-0 influence-decay trace).
+`sequences[]` (per-timestep hidden vectors + the per-(query,key) influence matrix).
 
 The weights are the TRAINED GRU exported by `camp-precompute train-rnn` — the
 same npz the artifact build reads — so a preset sequence typed here returns
