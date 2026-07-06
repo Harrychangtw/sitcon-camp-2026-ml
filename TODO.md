@@ -6,3 +6,4 @@
 - [ ] Add loading singal on the top bar. for the order shuffle station and more specifically 順序感知 · Qwen3-0.6B會跟著順序變, instead of showing GPU 計算中, which causes layout shift. just wait for the results and it will refresh the bar (so the bar moves. also resolve the layout shift issues on this page.
 
 - [x] If the backend thores 422  do to length cap. make sure the length cap is already enforced and communicated clearly in the front end. Check every station. the from end should show the input cap on the
+- [ ] The current next token prediction

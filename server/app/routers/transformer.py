@@ -1,8 +1,11 @@
-"""POST /transformer/attention — REAL self-attention from Qwen3-0.6B.
+"""POST /transformer/attention — the REAL forward-pass pipeline from
+Qwen3-0.6B.
 
 Live substitute for one element of attention.json `sentences[]`: the full
-[layer][head][query][key] tensor for a typed sentence (output_attentions=True,
-same code + settings as the precompute recording — camp_precompute.qwen).
+[layer][head][query][key] attention tensor PLUS the pipeline extras the
+station's diagram draws — token ids, fixed-stride embedding/MLP slices, and
+the top-N next-token distribution — for a typed sentence (one forward pass,
+same code + settings as the precompute recording: qwen.pipeline_payload).
 Tokens are the model's real subword pieces.
 
 Input is capped at ATTENTION_MAX_TOKENS (~24) for canvas legibility, not for
@@ -34,15 +37,19 @@ def attention(req: TransformerRequest, request: Request) -> TransformerResponse:
 
     try:
         with store.lm_lock:
-            att = qwen.attention_payload(store.qwen_tok, store.qwen_model, req.text)
+            pipe = qwen.pipeline_payload(store.qwen_tok, store.qwen_model, req.text)
     except ValueError as e:
         raise HTTPException(status_code=422, detail=str(e)) from e
 
     digest = hashlib.sha1(req.text.encode("utf-8")).hexdigest()[:8]
     return TransformerResponse(
         sentenceId=f"live-{digest}",
-        tokens=att["tokens"],
-        layers=att["layers"],
-        nLayers=att["nLayers"],
-        nHeads=att["nHeads"],
+        tokens=pipe["tokens"],
+        tokenIds=pipe["tokenIds"],
+        layers=pipe["layers"],
+        nLayers=pipe["nLayers"],
+        nHeads=pipe["nHeads"],
+        embedding=pipe["embedding"],
+        mlp=pipe["mlp"],
+        output=pipe["output"],
     )

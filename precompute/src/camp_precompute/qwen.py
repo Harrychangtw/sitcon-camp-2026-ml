@@ -31,6 +31,13 @@ MODEL = "Qwen/Qwen3-0.6B"
 
 NEXT_TOKEN_TOP_N = 12
 
+# The transformer station's pipeline diagram shows per-token vectors as small
+# strips; full Qwen widths (1024-dim embeddings, 3072-dim MLP intermediates)
+# can't render on screen, so pipeline_payload() exports a FIXED-STRIDE
+# subsample — real numbers, honestly labeled a representative slice in the UI.
+EMBEDDING_SHOWN_DIMS = 32
+MLP_SHOWN_DIMS = 24
+
 # Live-input caps. Next-token prompts are truncated (keep the tail — that is
 # what conditions the next token); attention input is rejected beyond the cap
 # because the station has to DRAW every token pair.
@@ -83,26 +90,12 @@ def tokenize_pieces(
     return [{"id": int(i), "piece": tok.decode([i])} for i in ids]
 
 
-def next_token_entries(tok, model, prompt: str, top_n: int = NEXT_TOKEN_TOP_N) -> list[dict]:
-    """Top-N next-token log-probs for a prompt: [{token, logit}, ...].
-
-    ``logit`` is log P(token | prompt) over the FULL vocab (log-softmax), so the
-    browser's softmax(logit / T) over the top-N recovers the renormalised
-    distribution at T=1 — the same light transform the station always did.
-    Special tokens (im_end etc.) are skipped; they are chat scaffolding, not
-    language.
-    """
+def _top_entries(tok, logprobs, top_n: int) -> list[dict]:
+    """Top-N [{token, logit}] from a full-vocab log-prob tensor. Special tokens
+    (im_end etc.) are skipped; they are chat scaffolding, not language."""
     import torch
 
-    ids = tok(prompt, return_tensors="pt").input_ids
-    if ids.shape[1] == 0:
-        return []
-    ids = ids[:, -NEXT_TOKEN_MAX_TOKENS:]
-    with torch.no_grad():
-        logits = model(ids.to(model.device)).logits[0, -1]
-    logprobs = torch.log_softmax(logits.float(), dim=-1)
     special = set(tok.all_special_ids)
-
     ranked = torch.argsort(logprobs, descending=True)
     entries: list[dict] = []
     for idx in ranked.tolist():
@@ -114,6 +107,25 @@ def next_token_entries(tok, model, prompt: str, top_n: int = NEXT_TOKEN_TOP_N) -
         if len(entries) >= top_n:
             break
     return entries
+
+
+def next_token_entries(tok, model, prompt: str, top_n: int = NEXT_TOKEN_TOP_N) -> list[dict]:
+    """Top-N next-token log-probs for a prompt: [{token, logit}, ...].
+
+    ``logit`` is log P(token | prompt) over the FULL vocab (log-softmax), so the
+    browser's softmax(logit / T) over the top-N recovers the renormalised
+    distribution at T=1 — the same light transform the station always did.
+    """
+    import torch
+
+    ids = tok(prompt, return_tensors="pt").input_ids
+    if ids.shape[1] == 0:
+        return []
+    ids = ids[:, -NEXT_TOKEN_MAX_TOKENS:]
+    with torch.no_grad():
+        logits = model(ids.to(model.device)).logits[0, -1]
+    logprobs = torch.log_softmax(logits.float(), dim=-1)
+    return _top_entries(tok, logprobs, top_n)
 
 
 def attention_payload(
@@ -148,6 +160,103 @@ def attention_payload(
         "layers": layers,
         "nLayers": len(layers),
         "nHeads": int(out.attentions[0].shape[1]),
+    }
+
+
+def _stride_indices(full: int, shown: int) -> np.ndarray:
+    """Fixed, deterministic subsample: `shown` indices evenly spread over
+    0..full-1. The SAME slice on precompute and the live server, so a typed
+    preset reproduces its shipped strips."""
+    return np.linspace(0, full - 1, num=min(shown, full)).round().astype(int)
+
+
+def pipeline_payload(
+    tok,
+    model,
+    text: str,
+    max_tokens: int = ATTENTION_MAX_TOKENS,
+    top_n: int = NEXT_TOKEN_TOP_N,
+) -> dict:
+    """ONE forward pass → everything the transformer station's pipeline diagram
+    shows: token pieces + ids, a per-token input-embedding slice, the full
+    per-layer/per-head attention tensor, a per-(layer, token) MLP activation
+    slice, and the top-N next-token distribution.
+
+    Everything is a REAL model number. The embedding / MLP strips are
+    fixed-stride subsamples (EMBEDDING_SHOWN_DIMS of the 1024-dim embedding;
+    MLP_SHOWN_DIMS of the ~3072-dim MLP intermediate, captured at each layer's
+    down_proj input) — the station labels them representative slices. Raises
+    ValueError on too-few/too-many tokens (server → 422; precompute → build
+    error).
+    """
+    import torch
+
+    ids = tok(text, return_tensors="pt").input_ids
+    n = int(ids.shape[1])
+    if n < 2:
+        raise ValueError("need at least 2 tokens")
+    if n > max_tokens:
+        raise ValueError(f"too many tokens ({n} > max {max_tokens})")
+    id_list = [int(i) for i in ids[0].tolist()]
+    ids = ids.to(model.device)
+
+    # Input embeddings (the vectors entering layer 0), subsampled per token.
+    with torch.no_grad():
+        emb = model.get_input_embeddings()(ids)[0].float().cpu().numpy()
+    emb_full = int(emb.shape[1])
+    emb_idx = _stride_indices(emb_full, EMBEDDING_SHOWN_DIMS)
+    embedding = np.round(emb[:, emb_idx], 3).tolist()
+
+    # MLP intermediate activations, captured at every layer's down_proj input
+    # (i.e. act_fn(gate(x)) * up(x)) via forward pre-hooks. Hooks fire in layer
+    # order within the single forward pass below.
+    captured: list = []
+
+    def _grab(_module, args):
+        captured.append(args[0][0].detach())
+
+    handles = [
+        layer.mlp.down_proj.register_forward_pre_hook(_grab)
+        for layer in model.model.layers
+    ]
+    try:
+        with torch.no_grad():
+            out = model(ids, output_attentions=True)
+    finally:
+        for h in handles:
+            h.remove()
+
+    layers = []
+    for layer_att in out.attentions:  # each: [1, heads, n, n]
+        heads = np.round(layer_att[0].float().cpu().numpy(), 3)
+        layers.append({"heads": heads.tolist()})
+
+    mlp_full = int(captured[0].shape[1])
+    mlp_idx = _stride_indices(mlp_full, MLP_SHOWN_DIMS)
+    mlp_layers = [
+        np.round(act.float().cpu().numpy()[:, mlp_idx], 3).tolist()
+        for act in captured
+    ]
+
+    logprobs = torch.log_softmax(out.logits[0, -1].float(), dim=-1)
+
+    return {
+        "tokens": _decode_pieces(tok, id_list),
+        "tokenIds": id_list,
+        "layers": layers,
+        "nLayers": len(layers),
+        "nHeads": int(out.attentions[0].shape[1]),
+        "embedding": {
+            "dims": int(len(emb_idx)),
+            "fullDims": emb_full,
+            "vectors": embedding,
+        },
+        "mlp": {
+            "dims": int(len(mlp_idx)),
+            "fullDims": mlp_full,
+            "layers": mlp_layers,
+        },
+        "output": _top_entries(tok, logprobs, top_n),
     }
 
 

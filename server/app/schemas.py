@@ -142,15 +142,39 @@ class TransformerLayer(BaseModel):
     heads: list[list[list[float]]]
 
 
+class TransformerEmbedding(BaseModel):
+    """Per-token input-embedding slice: `vectors[token][d]` holds `dims` real
+    values sampled at a fixed stride from the `fullDims`-dim embedding."""
+
+    dims: int
+    fullDims: int
+    vectors: list[list[float]]
+
+
+class TransformerMlp(BaseModel):
+    """Per-(layer, token) MLP activation slice: `layers[l][token][d]` holds
+    `dims` real values sampled at a fixed stride from the `fullDims`-dim MLP
+    intermediate (down_proj input)."""
+
+    dims: int
+    fullDims: int
+    layers: list[list[list[float]]]
+
+
 class TransformerResponse(BaseModel):
-    """Mirrors one element of attention.json `sentences[]` plus the tensor
-    dims the station needs for its layer/head pickers."""
+    """Mirrors one element of attention.json `sentences[]` (the full pipeline
+    payload: attention + embedding/MLP slices + next-token output) plus the
+    tensor dims the station needs for its layer/head dials."""
 
     sentenceId: str
     tokens: list[str]
+    tokenIds: list[int]
     layers: list[TransformerLayer]
     nLayers: int
     nHeads: int
+    embedding: TransformerEmbedding
+    mlp: TransformerMlp
+    output: list[TokenLogit]
 
 
 # --- order-shuffle ----------------------------------------------------------------

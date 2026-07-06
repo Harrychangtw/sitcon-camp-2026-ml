@@ -11,6 +11,8 @@ export default tseslint.config(
     ignores: [
       "**/node_modules/**",
       "**/dist/**",
+      // Vendored reference repos (git-ignored study copies, not our code).
+      "**/.reference/**",
       "**/.next/**",
       "**/out/**",
       "**/build/**",

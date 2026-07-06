@@ -38,6 +38,24 @@ export interface HeatmapProps {
   diverging?: boolean;
   /** Pixel height; width is responsive. Default 360. */
   height?: number;
+  /**
+   * Notify the owner when the hovered cell changes (`null` when the pointer
+   * leaves the grid). Lets a station cross-highlight the row/col elsewhere on
+   * its canvas; the primitive itself stays a pure function of props.
+   */
+  onHoverCell?: (cell: { row: number; col: number } | null) => void;
+  /**
+   * Mark one cell as the focused/active one: a lime outline on the cell and
+   * its row + column labels in accent (the crosshair). Owned by the station
+   * (usually fed back from `onHoverCell`). Out-of-range or null → no mark.
+   */
+  activeCell?: { row: number; col: number } | null;
+  /**
+   * Stroke class for the active-cell outline. Defaults to the lime accent mark;
+   * a station whose cross-highlight elsewhere is a different color (e.g. white)
+   * can override it here to match. Does not affect the active row/col labels.
+   */
+  activeCellStrokeClass?: string;
 }
 
 const GAP = 2;
@@ -76,6 +94,9 @@ export function Heatmap({
   highlightCol,
   diverging = false,
   height = 360,
+  onHoverCell,
+  activeCell,
+  activeCellStrokeClass = "stroke-accent",
 }: HeatmapProps) {
   const { ref, size } = useResizeObserver<HTMLDivElement>();
   const [hover, setHover] = useState<{ r: number; c: number } | null>(null);
@@ -132,6 +153,15 @@ export function Heatmap({
       ? highlightCol
       : null;
 
+  const active =
+    activeCell &&
+    activeCell.row >= 0 &&
+    activeCell.row < rows &&
+    activeCell.col >= 0 &&
+    activeCell.col < cols
+      ? activeCell
+      : null;
+
   const hovered =
     hover && Number.isFinite(matrix[hover.r]?.[hover.c])
       ? { ...hover, v: matrix[hover.r]![hover.c]! }
@@ -140,8 +170,17 @@ export function Heatmap({
   return (
     <div ref={ref} className="relative w-full" style={{ height }}>
       {width > 0 ? (
-        <svg width={width} height={height} role="img" aria-label="Heatmap">
-          {/* Column labels — the active step's label is the one lime mark. */}
+        <svg
+          width={width}
+          height={height}
+          role="img"
+          aria-label="Heatmap"
+          onMouseLeave={() => {
+            setHover(null);
+            onHoverCell?.(null);
+          }}
+        >
+          {/* Column labels — the active step's/cell's label is the lime mark. */}
           {colLabels?.map((label, c) => (
             <text
               key={`col-${c}`}
@@ -149,7 +188,7 @@ export function Heatmap({
               y={topGutter - 8}
               textAnchor="middle"
               className={
-                c === activeCol
+                c === activeCol || c === active?.col
                   ? "fill-accent font-mono text-[10px] uppercase tracking-wide"
                   : "fill-muted font-mono text-[10px] uppercase tracking-wide"
               }
@@ -199,7 +238,10 @@ export function Heatmap({
                           : 0
                     }
                     strokeWidth={0.5}
-                    onMouseEnter={() => setHover({ r, c })}
+                    onMouseEnter={() => {
+                      setHover({ r, c });
+                      onHoverCell?.({ row: r, col: c });
+                    }}
                     onMouseLeave={() => setHover(null)}
                   />
                   {showValues && defined ? (
@@ -235,6 +277,19 @@ export function Heatmap({
             />
           ) : null}
 
+          {/* Active-cell crosshair — the focused mark for the hovered cell. */}
+          {active ? (
+            <rect
+              x={leftGutter + active.col * (cellW + GAP) - 1}
+              y={topGutter + active.row * (cellH + GAP) - 1}
+              width={cellW + 2}
+              height={cellH + 2}
+              rx={3}
+              className={`pointer-events-none fill-none ${activeCellStrokeClass}`}
+              strokeWidth={1.5}
+            />
+          ) : null}
+
           {/* Row labels */}
           {rowLabels?.map((label, r) => (
             <text
@@ -243,7 +298,11 @@ export function Heatmap({
               y={topGutter + r * (cellH + GAP) + cellH / 2}
               textAnchor="end"
               dominantBaseline="central"
-              className="fill-muted font-mono text-[10px] uppercase tracking-wide"
+              className={
+                r === active?.row
+                  ? "fill-accent font-mono text-[10px] uppercase tracking-wide"
+                  : "fill-muted font-mono text-[10px] uppercase tracking-wide"
+              }
             >
               {label}
             </text>
