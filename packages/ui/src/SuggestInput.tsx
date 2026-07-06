@@ -1,4 +1,4 @@
-import { useLayoutEffect, useRef, useState, type ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 
 export interface SuggestPreset {
   /** What the chip shows. */
@@ -57,12 +57,6 @@ export interface SuggestInputProps {
    * that are naturally multi-line.
    */
   multiline?: boolean;
-  /**
-   * "Bloom on focus": at rest the field sits at a compact width; on focus it
-   * animates out to (near) full dock width, and retracts again on blur. Ignored
-   * when `className` sets an explicit width.
-   */
-  expandOnFocus?: boolean;
   /** Width utility for the field; defaults to a comfortable dock width. */
   className?: string;
 }
@@ -88,7 +82,6 @@ export function SuggestInput({
   capLabel,
   capReached,
   multiline = false,
-  expandOnFocus = false,
   className,
 }: SuggestInputProps) {
   const [focused, setFocused] = useState(false);
@@ -103,28 +96,10 @@ export function SuggestInput({
       ? Boolean(capReached)
       : maxLength != null && value.length >= maxLength;
 
-  // Auto-grow: size the textarea to its content (the className's max-h caps
-  // it, after which it scrolls).
-  const fieldRef = useRef<HTMLTextAreaElement | null>(null);
-  useLayoutEffect(() => {
-    const el = fieldRef.current;
-    if (!el) return;
-    el.style.height = "0px";
-    el.style.height = `${el.scrollHeight}px`;
-  }, [value]);
-
   return (
     // Fills the dock's height (respecting its padding); the box IS the field,
     // with the arrow + status floated inside its bottom band.
-    <div
-      className={`relative h-full transition-[width] duration-200 ${
-        expandOnFocus
-          ? focused
-            ? "w-[40rem] max-w-[72vw]"
-            : "w-60 max-w-[72vw]"
-          : className ?? "w-72 max-w-[75vw]"
-      }`}
-    >
+    <div className={`relative h-full ${className ?? "w-72 max-w-[75vw]"}`}>
       {/* Cap hint — only once the limit is reached. Floats ABOVE the whole dock
           (the `mb` clears the dock's p-3 + border so it sits over the panel's
           top edge, not inside it). The field is non-empty at the cap, so the
@@ -153,7 +128,6 @@ export function SuggestInput({
       <div className="relative flex h-full min-h-[3.5rem] flex-col rounded-md bg-bg focus-within:ring-2 focus-within:ring-accent/50">
         {multiline ? (
           <textarea
-            ref={fieldRef}
             rows={1}
             value={value}
             maxLength={maxLength}
@@ -172,10 +146,11 @@ export function SuggestInput({
               }
             }}
             placeholder={placeholder}
-            // Collapsed to ~1 line at rest (matching the dock's initial height);
-            // on focus it can grow up to 3× that (10.5rem) before it scrolls.
-            className={`w-full flex-none resize-none overflow-y-auto bg-transparent px-3.5 pb-8 pt-3 text-sm text-fg placeholder:text-muted transition-[max-height] duration-150 focus:outline-none ${
-              focused ? "max-h-[10.5rem]" : "max-h-[3.5rem]"
+            // Collapsed to ~1 line at rest; snaps open to a fixed 3× height
+            // (10.5rem) on focus regardless of how much text is in it, and
+            // retracts on blur. Content taller than the open box scrolls.
+            className={`w-full flex-none resize-none overflow-y-auto bg-transparent px-3.5 pb-8 pt-3 text-sm text-fg placeholder:text-muted transition-[height] duration-200 focus:outline-none ${
+              focused ? "h-[10.5rem]" : "h-[3.5rem]"
             }`}
           />
         ) : (
