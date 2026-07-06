@@ -43,3 +43,5 @@ slides/decks/png
 # Affinity source files (large binaries; export PNG/PDF for the repo instead)
 *.af
 *.af~lock~
+# Cloned reference apps for planning (not ours; MIT — see LICENSE inside)
+.reference/
