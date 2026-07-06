@@ -317,6 +317,7 @@ export function TransformerStation() {
             onSubmit={submitText}
             ariaLabel="輸入句子"
             placeholder="自己打一句…GPU 算 attention"
+            maxLength={200}
             presets={(data?.sentences ?? []).map((s) => {
               const text = s.tokens.join("").trim();
               return { label: text, value: text };

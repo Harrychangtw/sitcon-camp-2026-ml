@@ -38,6 +38,19 @@ module.exports = {
         sans: ["var(--camp-font-sans)"],
         mono: ["var(--camp-font-mono)"],
       },
+      // Indeterminate "still working" sweep — a short bar that slides across its
+      // track. Used for the top-of-panel loading signal on live-inference cards,
+      // so a pending request animates in place instead of swapping copy in/out
+      // (which shifts layout).
+      keyframes: {
+        indeterminate: {
+          "0%": { transform: "translateX(-100%)" },
+          "100%": { transform: "translateX(500%)" },
+        },
+      },
+      animation: {
+        indeterminate: "indeterminate 1.15s ease-in-out infinite",
+      },
     },
   },
 };
