@@ -1,85 +1,88 @@
 /**
  * TRANSFORMER — station 06 of Course 2, the payoff.
  *
- * Wave 3: two clearly-separated modes.
+ * Pipeline overhaul: ONE horizontally-scrollable, left-to-right diagram of a
+ * real forward pass — 輸入 → tokenizer → embedding → 迷你模型（attention
+ * matrix + MLP，layer/head 兩個轉盤）→ next-token 輸出。The left/right columns
+ * deliberately echo the earlier stations (tokenizer 的色塊 chips、embedding 的
+ * 向量條、next-token 的機率長條), so the course visibly chains into one model.
  *
- * 真實模型 (default) — REAL attention from Qwen3-0.6B. Type any sentence
- * (≤ ~24 tokens), pick a layer (28) and head (16), hover a token → see its
- * real attention to every other token. Presets are RECORDED Qwen outputs
- * (attention.json); typed sentences come from the live GPU server running the
- * same model. No synthetic head labels — real heads don't carry clean roles,
- * so the UI shows honest L{n}·H{m} indices. Attention is causal (a decoder
- * only looks left) — visible and teachable.
+ * EVERY number on screen is a real Qwen3-0.6B output: presets are RECORDED
+ * pipeline payloads (attention.json, written by `camp-precompute transformer`);
+ * typed sentences come from the live GPU server running the same
+ * qwen.pipeline_payload(). Embedding/MLP strips are fixed-stride subsamples of
+ * the real 1024-dim / 3072-dim vectors — labeled 代表性切片, never decorative.
  *
- * 機制示意 — the five-step Q·K → ÷√d → softmax → ΣwV walkthrough survives as a
- * FIXED schematic on one hand-picked dim-6 example (clearly marked 示意 — not
- * the live model; real 1024-dim vectors can't render on screen). The Q/K pair
- * is factored so softmax(Q·Kᵀ/√d) reproduces the schematic matrix exactly, so
- * the browser's light arithmetic is genuine.
- *
- * The browser NEVER runs a transformer — it replays recorded/live JSON and
- * does only tiny dot-product/softmax arithmetic in the schematic.
+ * Interaction is free clicking + hover (no guided steps): the layer/head dials
+ * pick which attention matrix + MLP slice to show; hovering a matrix cell
+ * cross-highlights the query + key tokens across the columns; hovering
+ * chips/strips surfaces short explanations. The browser NEVER runs a
+ * transformer — it replays recorded/live JSON and does only a softmax over the
+ * top-N exported logits.
  */
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import {
-  BlockButtons,
   BlockSlider,
-  BlockToggle,
   DockControls,
   LiveStatus,
   StationLayout,
   SuggestInput,
   type LiveState,
 } from "@camp/ui";
-import { AttentionLines, VectorStrip } from "@camp/viz";
+import { Heatmap, VectorStrip } from "@camp/viz";
 import { liveInferTimed, loadJSON } from "@camp/data";
 
-/** One sentence's REAL attention — the element shape of both the shipped
- * `sentences[]` and the live server's POST /transformer/attention response. */
-interface AttentionSentence {
+interface TokenLogit {
+  token: string;
+  /** log P(token|prompt) from the real model; softmax(logit) → probs. */
+  logit: number;
+}
+
+/** Fixed-stride representative slice of the per-token input embeddings. */
+interface PipelineEmbedding {
+  dims: number;
+  fullDims: number;
+  /** vectors[token][d] — real values, `dims` of the `fullDims`-dim vector. */
+  vectors: number[][];
+}
+
+/** Fixed-stride representative slice of the per-(layer, token) MLP acts. */
+interface PipelineMlp {
+  dims: number;
+  fullDims: number;
+  /** layers[l][token][d] — real values at layer l's down_proj input. */
+  layers: number[][][];
+}
+
+/** One sentence's REAL pipeline — the element shape of both the shipped
+ * `sentences[]` and the live server's POST /transformer/attention response.
+ * embedding/mlp/output are optional so a stale live server (attention-only)
+ * degrades honestly instead of breaking the diagram. */
+interface PipelineSentence {
   sentenceId: string;
   /** Real subword pieces (a leading space is part of the token). */
   tokens: string[];
+  tokenIds?: number[];
   /** layers[l].heads[h] is a [query][key] matrix (causal). */
   layers: { heads: number[][][] }[];
+  embedding?: PipelineEmbedding;
+  mlp?: PipelineMlp;
+  output?: TokenLogit[];
 }
 
-/** The fixed 機制示意 example: tiny hand-designed Q/K/V (NOT the live model). */
-interface Schematic {
-  tokens: string[];
-  dim: number;
-  q: number[][];
-  k: number[][];
-  v: number[][];
-}
-
-interface AttentionData {
+interface PipelineData {
   model: string;
   nLayers: number;
   nHeads: number;
-  sentences: AttentionSentence[];
-  schematic: Schematic;
+  sentences: PipelineSentence[];
 }
 
-interface LiveAttention extends AttentionSentence {
+interface LivePipeline extends PipelineSentence {
   nLayers: number;
   nHeads: number;
 }
 
 const DATA_URL = "/data/course2/transformer/attention.json";
-const AUTO_STEP_MS = 2400;
-
-/** The five walkthrough phases, in mechanism order (機制示意 only). */
-const STEPS = [
-  { key: "qk", label: "01", name: "Q·K 內積" },
-  { key: "scale", label: "02", name: "÷ √d 縮放" },
-  { key: "softmax", label: "03", name: "softmax → weights" },
-  { key: "wv", label: "04", name: "加權求和 V" },
-  { key: "out", label: "05", name: "輸出向量" },
-] as const;
-const LAST_STEP = STEPS.length - 1;
-
-type Mode = "real" | "schematic";
 
 /** Make a subword piece visible: leading space → ␣ (it IS part of the token). */
 function displayToken(token: string): string {
@@ -99,41 +102,90 @@ function usePrefersReducedMotion(): boolean {
   return reduced;
 }
 
-function dot(a: number[], b: number[]): number {
-  let s = 0;
-  for (let i = 0; i < a.length; i++) s += (a[i] ?? 0) * (b[i] ?? 0);
-  return s;
-}
-
-function softmax(scores: number[]): number[] {
-  const max = Math.max(...scores);
-  const exps = scores.map((s) => Math.exp(s - max));
+/** softmax over the exported top-N log-probs — the only in-browser math. */
+function softmax(logits: number[]): number[] {
+  const max = Math.max(...logits);
+  const exps = logits.map((l) => Math.exp(l - max));
   const sum = exps.reduce((a, b) => a + b, 0) || 1;
   return exps.map((e) => e / sum);
 }
 
-export function TransformerStation() {
-  // 1. STATE
-  const [data, setData] = useState<AttentionData | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [mode, setMode] = useState<Mode>("real");
+// The tokenizer station's muted categorical palette, echoed here so the chips
+// read as "the same tokens you met at station 1". Cycled by position — the
+// color carries NO meaning beyond "this is one token".
+const TOKEN_COLORS = [
+  "#3f6f52", // green
+  "#2f6470", // teal
+  "#7a4a54", // muted rose
+  "#5a4d84", // purple
+  "#7a6234", // gold
+  "#3a5578", // slate blue
+  "#6a4a6e", // plum
+  "#4a6a44", // olive
+] as const;
 
-  // 真實模型 state
+/** Shared row height so token rows line up across the chip / embedding / MLP
+ * columns — row i in every column is the same token. */
+const ROW_H = 34;
+
+/** One labeled pipeline column. All columns stretch to the row's height so
+ * the 01–05 index headers share one top line; the content centers below.
+ * Honesty footnotes live inside each step's hover tooltip, not on an axis. */
+function Column({
+  index,
+  title,
+  children,
+}: {
+  index: string;
+  title: ReactNode;
+  children: ReactNode;
+}) {
+  return (
+    <section className="flex shrink-0 flex-col">
+      <div className="mb-3 font-mono text-[10px] uppercase tracking-wide text-muted">
+        <span className="mr-1.5 opacity-60">{index}</span>
+        {title}
+      </div>
+      <div className="flex flex-1 flex-col justify-center">{children}</div>
+    </section>
+  );
+}
+
+/** The flow arrow between columns. */
+function Arrow() {
+  return (
+    <div aria-hidden className="shrink-0 self-center px-1 font-mono text-lg text-muted/50">
+      →
+    </div>
+  );
+}
+
+/** On-canvas hover tooltip (the rnnViz group-hover idiom). Wrap the hover
+ * target in a `group relative` element and drop this inside. */
+function HoverTip({ children }: { children: ReactNode }) {
+  return (
+    <div className="pointer-events-none absolute bottom-full left-0 z-40 mb-1.5 w-max max-w-xs rounded-md border border-border bg-panel px-3 py-2 text-xs leading-relaxed text-fg opacity-0 shadow-md transition-opacity duration-150 group-hover:opacity-100">
+      {children}
+    </div>
+  );
+}
+
+export function TransformerStation() {
+  // 1. STATE — everything rendered is a pure function of
+  //    (data, sentence, layer, head, hovered).
+  const [data, setData] = useState<PipelineData | null>(null);
+  const [error, setError] = useState<string | null>(null);
   const [sentenceId, setSentenceId] = useState<string | null>(null);
   const [layer, setLayer] = useState(0);
   const [head, setHead] = useState(0);
-  const [focus, setFocus] = useState<number | null>(null);
-
-  // 機制示意 state
-  const [query, setQuery] = useState(0);
-  const [step, setStep] = useState(0);
-  const [playing, setPlaying] = useState(false);
+  /** Hovered attention cell: q = query row, k = key column. */
+  const [hovered, setHovered] = useState<{ q: number; k: number } | null>(null);
   const reducedMotion = usePrefersReducedMotion();
 
-  // 2. LOAD PRECOMPUTED DATA — recorded real Qwen attention + the schematic.
+  // 2. LOAD PRECOMPUTED DATA — recorded real Qwen pipeline payloads.
   useEffect(() => {
     let alive = true;
-    loadJSON<AttentionData>(DATA_URL)
+    loadJSON<PipelineData>(DATA_URL)
       .then((d) => {
         if (!alive) return;
         setData(d);
@@ -145,18 +197,18 @@ export function TransformerStation() {
     };
   }, []);
 
-  // TYPED INPUT — the primary interaction: any sentence gets its REAL
-  // attention tensor from the live GPU server (same model that recorded the
-  // presets). Enter (or the button) submits; the response is a full
-  // 28-layer × 16-head tensor, so this is not fired per keystroke.
+  // TYPED INPUT — any sentence gets its REAL pipeline from the live GPU server
+  // (same model + code that recorded the presets). Enter (or the button)
+  // submits; the response carries a full 28-layer × 16-head tensor, so this is
+  // not fired per keystroke.
   const [customText, setCustomText] = useState("");
-  const [customSentence, setCustomSentence] = useState<AttentionSentence | null>(null);
+  const [customSentence, setCustomSentence] = useState<PipelineSentence | null>(null);
   const [liveMs, setLiveMs] = useState(0);
   const [livePending, setLivePending] = useState(false);
   const [liveFailed, setLiveFailed] = useState(false);
   const [liveShown, setLiveShown] = useState(false);
 
-  const sentences = useMemo<AttentionSentence[]>(() => {
+  const sentences = useMemo<PipelineSentence[]>(() => {
     const base = data?.sentences ?? [];
     return customSentence ? [...base, customSentence] : base;
   }, [data, customSentence]);
@@ -165,7 +217,7 @@ export function TransformerStation() {
     if (!text || livePending) return;
     setLivePending(true);
     setLiveFailed(false);
-    const r = await liveInferTimed<LiveAttention>("/transformer/attention", { text });
+    const r = await liveInferTimed<LivePipeline>("/transformer/attention", { text });
     setLivePending(false);
     if (!r) {
       setLiveFailed(true);
@@ -175,13 +227,11 @@ export function TransformerStation() {
     setLiveMs(r.ms);
     setLiveShown(true);
     setSentenceId(r.data.sentenceId);
-    setFocus(null);
   };
 
   // The recorded sentences surface as the input's presets. A submitted text
   // that matches one selects it locally (no round-trip); anything else goes to
-  // the live GPU. Submit-based on purpose — the response is a full
-  // 28-layer × 16-head tensor, too heavy to fire per keystroke.
+  // the live GPU.
   const presetByText = useMemo(() => {
     const m = new Map<string, string>();
     for (const s of data?.sentences ?? []) {
@@ -216,524 +266,403 @@ export function TransformerStation() {
 
   // A new sentence has different tokens — reset the hover.
   useEffect(() => {
-    setFocus(null);
+    setHovered(null);
   }, [sentenceId]);
 
-  // 3. DERIVED — 真實模型: the picked (layer, head) matrix, indices clamped so
-  //    a stale slider position is safe.
+  // 3. DERIVED — the picked (layer, head) slice, indices clamped so a stale
+  //    dial position is safe.
   const nLayers = data?.nLayers ?? 1;
   const nHeads = data?.nHeads ?? 1;
+  const l = Math.min(layer, nLayers - 1);
+  const h = Math.min(head, nHeads - 1);
 
-  const weights = useMemo<number[][]>(() => {
+  const tokens = useMemo(() => sentence?.tokens ?? [], [sentence]);
+  const n = tokens.length;
+  const displayTokens = useMemo(() => tokens.map(displayToken), [tokens]);
+
+  // Attention matrix for the Heatmap: upper triangle (key > query) → NaN so
+  // the causal mask renders as visibly EMPTY cells, not zero-weight ones.
+  const matrix = useMemo<number[][]>(() => {
     if (!sentence) return [];
-    const l = Math.min(layer, sentence.layers.length - 1);
-    const heads = sentence.layers[l]?.heads ?? [];
-    const h = Math.min(head, heads.length - 1);
-    return heads[h] ?? [];
-  }, [sentence, layer, head]);
+    const li = Math.min(l, sentence.layers.length - 1);
+    const heads = sentence.layers[li]?.heads ?? [];
+    const w = heads[Math.min(h, heads.length - 1)] ?? [];
+    return w.map((row, q) => row.map((v, k) => (k > q ? NaN : v)));
+  }, [sentence, l, h]);
 
-  const displayTokens = useMemo(
-    () => (sentence ? sentence.tokens.map(displayToken) : []),
-    [sentence],
+  // Embedding strips share one color domain so the column reads on one scale.
+  const embVectors = sentence?.embedding?.vectors ?? null;
+  const embMaxAbs = useMemo(
+    () => Math.max(...(embVectors ?? []).flat().map(Math.abs), 1e-9),
+    [embVectors],
   );
 
-  // 3b. DERIVED — 機制示意: light arithmetic on the tiny hand-designed
-  //     vectors (dim-6 dot products + a softmax over ≤6 scores). Playback of a
-  //     schematic, not a model forward pass.
-  const schematic = data?.schematic ?? null;
+  // MLP slice for the dialed layer, one strip per token, shared domain.
+  const mlpActs = useMemo(() => {
+    const layers = sentence?.mlp?.layers;
+    if (!layers) return null;
+    return layers[Math.min(l, layers.length - 1)] ?? null;
+  }, [sentence, l]);
+  const mlpMaxAbs = useMemo(
+    () => Math.max(...(mlpActs ?? []).flat().map(Math.abs), 1e-9),
+    [mlpActs],
+  );
 
-  useEffect(() => {
-    // entering/leaving schematic mode restarts the walkthrough
-    setQuery(0);
-    setStep(0);
-    setPlaying(false);
-  }, [mode]);
+  // Next-token bars: softmax over the exported top-N log-probs (T = 1).
+  const outputProbs = useMemo(() => {
+    const entries = sentence?.output ?? [];
+    if (!entries.length) return [];
+    const p = softmax(entries.map((e) => e.logit));
+    return entries
+      .map((e, i) => ({ token: e.token, prob: p[i] ?? 0 }))
+      .sort((a, b) => b.prob - a.prob);
+  }, [sentence]);
+  const maxProb = outputProbs[0]?.prob ?? 1;
 
-  // Auto-play: advance one phase per beat, stop on the last one.
-  useEffect(() => {
-    if (!playing) return;
-    if (step >= LAST_STEP) {
-      setPlaying(false);
-      return;
-    }
-    const id = setTimeout(() => setStep((s) => Math.min(s + 1, LAST_STEP)), AUTO_STEP_MS);
-    return () => clearTimeout(id);
-  }, [playing, step]);
+  // Matrix sizing: fixed cell size so the column has intrinsic width inside
+  // the horizontally-scrolling row (Heatmap is responsive to its container).
+  const cell = n > 14 ? 20 : 28;
+  const matrixW = 80 + n * (cell + 2);
+  const matrixH = 30 + n * (cell + 2);
 
-  const mech = useMemo(() => {
-    if (!schematic) return null;
-    const qi = Math.min(query, schematic.tokens.length - 1);
-    const dim = schematic.dim;
+  const barCls = reducedMotion ? "" : "transition-[width,opacity] duration-300";
 
-    const qRow = schematic.q[qi] ?? [];
-    const dots = schematic.k.map((kRow) => dot(qRow, kRow));
-    const scale = Math.sqrt(dim);
-    const scores = dots.map((d) => d / scale);
-    const w = softmax(scores);
-    const argmax = w.indexOf(Math.max(...w));
-    const output = Array.from({ length: dim }, (_, d) =>
-      w.reduce((acc, wj, j) => acc + wj * (schematic.v[j]?.[d] ?? 0), 0),
+  const hoveredQTok = hovered ? displayTokens[hovered.q] : null;
+  const hoveredKTok = hovered ? displayTokens[hovered.k] : null;
+  const hoveredW = hovered ? matrix[hovered.q]?.[hovered.k] : undefined;
+
+  /** Cross-highlight role of token row i under the current matrix hover. */
+  const roleOf = (i: number): "q" | "k" | null =>
+    hovered ? (i === hovered.q ? "q" : i === hovered.k ? "k" : null) : null;
+
+  // One token row: index + chip, shared by the tokenizer and embedding
+  // columns so rows align and cross-highlight identically.
+  const tokenChip = (i: number, tip: ReactNode) => {
+    const role = roleOf(i);
+    return (
+      <div className="group relative flex items-center gap-1.5" style={{ height: ROW_H }}>
+        <span className="w-5 shrink-0 text-right font-mono text-[9px] text-muted opacity-60">
+          {String(i).padStart(2, "0")}
+        </span>
+        <span
+          className={`relative flex w-28 items-baseline rounded-md px-2 py-1 font-mono text-xs leading-none text-white ${
+            role ? "ring-1 ring-white" : ""
+          }`}
+          style={{ backgroundColor: TOKEN_COLORS[i % TOKEN_COLORS.length] }}
+        >
+          <span className="min-w-0 flex-1 truncate whitespace-pre text-left">
+            {displayTokens[i]}
+          </span>
+          {sentence?.tokenIds?.[i] !== undefined ? (
+            <span className="shrink-0 pl-1.5 text-[9px] leading-none text-white/70">
+              {sentence.tokenIds[i]}
+            </span>
+          ) : null}
+          {/* Absolutely positioned so it never widens the row on hover. */}
+          {role ? (
+            <span className="absolute left-full top-1/2 ml-1.5 -translate-y-1/2 font-mono text-[9px] uppercase text-white">
+              {role === "q" ? "Q" : "K"}
+            </span>
+          ) : null}
+        </span>
+        <HoverTip>{tip}</HoverTip>
+      </div>
     );
-
-    // The full schematic attention matrix (all queries) for the payoff view.
-    const matrix = schematic.q.map((qr) =>
-      softmax(schematic.k.map((kr) => dot(qr, kr) / scale)),
-    );
-
-    // Shared color domains so strips read on one scale per family.
-    const qkMax = Math.max(
-      ...qRow.map(Math.abs),
-      ...schematic.k.flat().map(Math.abs),
-      1e-9,
-    );
-    const vMax = Math.max(
-      ...schematic.v.flat().map(Math.abs),
-      ...output.map(Math.abs),
-      1e-9,
-    );
-
-    return { qi, dim, scale, qRow, k: schematic.k, v: schematic.v, dots, scores, w, argmax, output, qkMax, vMax, matrix };
-  }, [schematic, query]);
-
-  const activeStep = STEPS[Math.min(step, LAST_STEP)]!;
-  const fadeCls = reducedMotion ? "" : "transition-opacity duration-500";
-
-  // Per-pipeline-column visibility/focus: hidden until its phase, lime while
-  // active, quiet grey once passed. Column c becomes visible at step ≥ c.
-  const colState = (c: number): { cls: string; active: boolean } => {
-    if (step < c) return { cls: "opacity-0 pointer-events-none", active: false };
-    return { cls: step === c ? "opacity-100" : "opacity-60", active: step === c };
   };
 
   return (
     <StationLayout
       title="Transformer"
-      subtitle="如果每個 token 都能直接看到所有其他 token 呢？看真實模型的 attention 分工。"
+      subtitle="跟著一個 token，看它流過一次真實的 forward pass。"
+      fullBleed
       input={
-        mode === "real" ? (
-          <SuggestInput
-            value={customText}
-            onChange={setCustomText}
-            onSubmit={submitText}
-            ariaLabel="輸入句子"
-            placeholder="自己打一句…GPU 算 attention"
-            maxLength={200}
-            presets={(data?.sentences ?? []).map((s) => {
-              const text = s.tokens.join("").trim();
-              return { label: text, value: text };
-            })}
-            status={<LiveStatus state={liveState} />}
-          />
-        ) : undefined
+        <SuggestInput
+          value={customText}
+          onChange={setCustomText}
+          onSubmit={submitText}
+          ariaLabel="輸入句子"
+          placeholder="自己打一句…GPU 跑整條 pipeline"
+          maxLength={200}
+          presets={(data?.sentences ?? []).map((s) => {
+            const text = s.tokens.join("").trim();
+            return { label: text, value: text };
+          })}
+          status={<LiveStatus state={liveState} />}
+        />
       }
       controls={
         <DockControls>
-          <BlockToggle<Mode>
-            label="模式"
-            info="切換觀看方式。「真實模型」顯示 Qwen3-0.6B 對你句子算出的真實注意力；「機制示意」用一個固定的小例子，拆解注意力是怎麼一步步算出來的。"
-            value={mode}
-            onChange={setMode}
-            options={[
-              { label: "真實模型", value: "real" },
-              { label: "機制示意", value: "schematic" },
-            ]}
+          <BlockSlider
+            label="Layer"
+            info="選看第幾層。attention matrix 和 MLP 切片都會跟著換層。淺層多半關注鄰近、表面的關係，越深的層才逐漸組合出比較抽象的語意。"
+            min={0}
+            max={nLayers - 1}
+            step={1}
+            value={l}
+            onChange={setLayer}
+            format={(v) => `L${v} / L${nLayers - 1}`}
           />
-
-          {mode === "real" ? (
-            <>
-              <BlockSlider
-                label="Layer"
-                info="選看第幾層的注意力。淺層多半關注鄰近、表面的關係，越深的層才逐漸組合出比較抽象的語意。"
-                min={0}
-                max={nLayers - 1}
-                step={1}
-                value={Math.min(layer, nLayers - 1)}
-                onChange={setLayer}
-                format={(v) => `L${v} / L${nLayers - 1}`}
-              />
-              <BlockSlider
-                label="Head"
-                info="選同一層裡的哪一個注意力頭。每個 head 各自學到不同的關注模式，看的重點不一樣。"
-                min={0}
-                max={nHeads - 1}
-                step={1}
-                value={Math.min(head, nHeads - 1)}
-                onChange={setHead}
-                format={(v) => `H${v} / H${nHeads - 1}`}
-              />
-            </>
-          ) : (
-            <>
-              <BlockSlider
-                label="步驟"
-                info="逐步播放注意力的計算流程：Q·K 算相似度，除以 √d 縮放，softmax 轉成權重，再加權求和。"
-                min={0}
-                max={LAST_STEP}
-                step={1}
-                value={Math.min(step, LAST_STEP)}
-                onChange={(v) => {
-                  setPlaying(false);
-                  setStep(v);
-                }}
-                format={(v) => STEPS[v]?.name ?? String(v)}
-              />
-              <BlockButtons
-                label="播放"
-                buttons={[
-                  {
-                    label: playing ? "播放中…" : "從頭播放",
-                    onClick: () => {
-                      setStep(0);
-                      setPlaying(true);
-                    },
-                    disabled: playing,
-                    primary: true,
-                  },
-                ]}
-              />
-            </>
-          )}
+          <BlockSlider
+            label="Head"
+            info="選同一層裡的哪一個注意力頭。每個 head 各自學到不同的關注模式；真實模型沒有乾淨的「這個 head 做什麼」標籤，自己去翻。"
+            min={0}
+            max={nHeads - 1}
+            step={1}
+            value={h}
+            onChange={setHead}
+            format={(v) => `H${v} / H${nHeads - 1}`}
+          />
         </DockControls>
       }
       takeaway={
         <span>
-          attention 不是魔法：Q·K 內積 → ÷√d → softmax → 加權求和 V，四步而已。
-          每個 token 一跳就能看到整個句子，這就是 Transformer 拆掉 RNN 那道牆的方式。
-          真實模型裡沒有乾淨的「這個 head 做什麼」標籤，28 層 × 16 個 head
-          的分工是訓練自己長出來的，自己去翻。
+          一次 forward pass 就是一條生產線：tokenizer 給 id、embedding 給向量，
+          attention 讓每個 token 一跳看回整句（causal：只能看左邊），MLP
+          再逐一變換。把這個 block 疊 {nLayers} 層、每層 {nHeads} 個
+          head，最後 softmax 出下一個 token，就是整個模型。
         </span>
       }
     >
-      <div className="flex h-full flex-col gap-5">
+      <div className="relative h-full w-full">
         {error ? (
-          <p className="text-sm text-warning">
-            載入 attention 資料失敗（{error}）。請執行{" "}
-            <code className="font-mono">uv run camp-precompute transformer</code>。
-          </p>
-        ) : !data ? (
-          <p className="text-sm text-muted">attention 資料載入中…</p>
-        ) : mode === "real" ? (
-          /* ---------- 真實模型 — real Qwen attention, hover to read. ---------- */
-          !sentence ? (
-            <p className="text-sm text-muted">attention 資料載入中…</p>
-          ) : (
-            <>
-              <div>
-                <div className="mb-1 font-mono text-xs uppercase tracking-wide text-muted">
-                  {data.model} · self-attention ·{" "}
-                  <span className="text-accent">
-                    L{Math.min(layer, nLayers - 1)} · H{Math.min(head, nHeads - 1)}
-                  </span>
-                </div>
-                <p className="text-sm text-muted">
-                  {focus != null && sentence.tokens[focus] ? (
-                    <>
-                      <span className="font-mono text-accent">
-                        {displayToken(sentence.tokens[focus]!)}
-                      </span>{" "}
-                      最強烈注意的，就是連線最亮的那些 token。
-                    </>
-                  ) : (
-                    <>
-                      hover 下方任一個 token，追蹤它的 attention。連線的透明度與粗細
-                      和 attention weight 成正比。
-                    </>
-                  )}
-                </p>
-              </div>
-
-              <div className="min-h-0 flex-1 rounded-md border border-border/30 bg-bg">
-                <AttentionLines
-                  tokens={displayTokens}
-                  weights={weights}
-                  focusToken={focus}
-                  onFocusToken={setFocus}
-                  height={280}
-                />
-              </div>
-
-              <p className="text-xs text-muted">
-                這些 token 是模型真實的 subword（「␣」表示 token
-                自帶空格）。注意力只指向<span className="font-mono">左邊</span>
-                ，生成模型讀到第 n 個 token 時，右邊的還不存在（causal
-                attention）。很多 head 會把大量權重堆在第一個 token 上（attention
-                sink），也是真實模型的常態。
-              </p>
-            </>
-          )
-        ) : !mech || !schematic ? (
-          <p className="text-sm text-warning">
-            這份 attention 資料還沒有 schematic。請重新執行{" "}
-            <code className="font-mono">uv run camp-precompute transformer</code>。
-          </p>
+          <div className="flex h-full items-center justify-center">
+            <p className="max-w-md text-center text-sm text-warning">
+              載入 pipeline 資料失敗（{error}）。請執行{" "}
+              <code className="font-mono">uv run camp-precompute transformer</code>。
+            </p>
+          </div>
+        ) : !data || !sentence ? (
+          <div className="flex h-full items-center justify-center">
+            <p className="font-mono text-xs text-muted">pipeline 資料載入中…</p>
+          </div>
         ) : (
-          /* ---------- 機制示意 — the five-step walkthrough (canned). ---------- */
-          <>
-            <div>
-              <div className="mb-1 font-mono text-xs uppercase tracking-wide text-muted">
-                機制示意 · <span className="text-warning">非真實模型</span> · d ={" "}
-                {mech.dim}
-              </div>
-              {/* Query-token picker — click a token to make it the query. */}
-              <div className="flex flex-wrap items-center gap-2">
-                <span className="font-mono text-xs uppercase tracking-wide text-muted">
-                  query
-                </span>
-                {schematic.tokens.map((tok, i) => (
-                  <button
-                    key={`pick-${i}`}
-                    type="button"
-                    onClick={() => setQuery(i)}
-                    className={`rounded-md border px-2.5 py-1 font-mono text-sm transition-colors ${
-                      i === mech.qi
-                        ? "border-accent bg-accent text-accent-fg"
-                        : "border-border bg-panel text-muted hover:text-fg"
-                    }`}
-                  >
-                    <span className="mr-1.5 text-[9px] opacity-60">
-                      {String(i).padStart(2, "0")}
-                    </span>
-                    {tok}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            {/* The pipeline table: one row per key token; columns reveal as the
-                student scrubs. The active column's header is the lime mark. */}
-            <div className="overflow-x-auto rounded-md border border-border/30 bg-bg p-4">
-              <div
-                className="grid items-center gap-x-4 gap-y-1.5"
-                style={{
-                  gridTemplateColumns:
-                    "minmax(64px, auto) auto auto auto minmax(110px, 1fr) auto",
-                }}
-              >
-                {/* Column headers */}
-                {(
-                  [
-                    ["token", null],
-                    ["K", 0],
-                    ["Q·K", 0],
-                    ["÷ √d", 1],
-                    ["softmax", 2],
-                    ["w × V", 3],
-                  ] as const
-                ).map(([label, c], idx) => {
-                  const st = c === null ? { cls: "", active: false } : colState(c);
-                  return (
-                    <div
-                      key={`hd-${idx}`}
-                      className={`font-mono text-[10px] uppercase tracking-wide ${fadeCls} ${
-                        st.active ? "text-accent" : "text-muted"
-                      } ${st.cls}`}
-                    >
-                      {label}
-                    </div>
-                  );
-                })}
-
-                {/* Q row: the query token's Q vector sits atop the K column. */}
-                <div className="text-right font-mono text-sm text-accent">
-                  {schematic.tokens[mech.qi]}
-                  <span className="ml-1.5 text-[9px] uppercase tracking-wide opacity-70">
-                    Q
-                  </span>
+          /* The pipeline: one horizontally-scrollable, left-to-right row. */
+          <div className="absolute inset-0 overflow-auto">
+            <div className="flex min-h-full min-w-max items-stretch gap-4 px-10 pt-28 pb-64">
+              {/* 01 — 輸入 */}
+              <Column index="01" title="輸入">
+                <div className="max-w-[200px] rounded-md border border-border/60 bg-panel px-4 py-3 text-sm leading-relaxed text-fg">
+                  {tokens.join("")}
                 </div>
-                <div>
-                  <VectorStrip
-                    values={mech.qRow}
-                    maxAbs={mech.qkMax}
-                    cellSize={14}
-                    highlight={step === 0}
-                    ariaLabel={`Q vector of ${schematic.tokens[mech.qi]}`}
-                  />
+              </Column>
+
+              <Arrow />
+
+              {/* 02 — tokenizer（tokenizer 站的色塊 chips） */}
+              <Column index="02" title="Tokenizer">
+                <div className="flex flex-col">
+                  {tokens.map((_, i) =>
+                    <div key={`tok-${i}`}>
+                      {tokenChip(
+                        i,
+                        <>
+                          模型真正讀到的第 {i} 個 token（真實 Qwen
+                          subword），右邊的數字是它在詞彙表裡的 id，和 Tokenizer
+                          站看到的是同一回事。␣ 代表 token 自帶的空格。
+                        </>,
+                      )}
+                    </div>,
+                  )}
                 </div>
-                <div className="col-span-4 font-mono text-[10px] text-muted">
-                  ↓ 和下面每一列的 K 做內積
-                </div>
+              </Column>
 
-                {/* Divider */}
-                <div className="col-span-6 my-1 border-t border-border/30" />
+              <Arrow />
 
-                {/* One row per key token. */}
-                {schematic.tokens.map((tok, j) => {
-                  const isQuery = j === mech.qi;
-                  const isArgmax = j === mech.argmax;
-                  const wj = mech.w[j] ?? 0;
-                  const dotJ = mech.dots[j] ?? 0;
-                  const scoreJ = mech.scores[j] ?? 0;
-                  return (
-                    <div key={`row-${j}`} className="contents">
-                      <div
-                        className={`text-right font-mono text-sm ${
-                          isQuery ? "text-accent" : "text-muted"
-                        }`}
-                      >
-                        <span className="mr-1.5 text-[9px] opacity-60">
-                          {String(j).padStart(2, "0")}
-                        </span>
-                        {tok}
-                      </div>
-
-                      {/* K vector */}
-                      <div className={`${fadeCls} ${colState(0).cls}`}>
-                        <VectorStrip
-                          values={mech.k[j] ?? []}
-                          maxAbs={mech.qkMax}
-                          cellSize={14}
-                          ariaLabel={`K vector of ${tok}`}
-                        />
-                      </div>
-
-                      {/* Q·K dot product */}
-                      <div className={`${fadeCls} ${colState(0).cls}`}>
-                        <span
-                          className={`font-mono text-xs ${
-                            colState(0).active ? "text-fg" : "text-muted"
-                          }`}
+              {/* 03 — embedding（embedding 站的向量條） */}
+              <Column index="03" title="Embedding">
+                {embVectors ? (
+                  <div className="flex flex-col">
+                    {embVectors.map((vec, i) => {
+                      const role = roleOf(i);
+                      return (
+                        <div
+                          key={`emb-${i}`}
+                          className="group relative flex items-center"
+                          style={{ height: ROW_H }}
                         >
-                          {dotJ >= 0 ? "+" : ""}
-                          {dotJ.toFixed(2)}
-                        </span>
-                      </div>
-
-                      {/* ÷√d scaled score */}
-                      <div className={`${fadeCls} ${colState(1).cls}`}>
-                        <span
-                          className={`font-mono text-xs ${
-                            colState(1).active ? "text-fg" : "text-muted"
-                          }`}
-                        >
-                          {scoreJ >= 0 ? "+" : ""}
-                          {scoreJ.toFixed(2)}
-                        </span>
-                      </div>
-
-                      {/* softmax weight bar — argmax is the lime mark. */}
-                      <div className={`${fadeCls} ${colState(2).cls}`}>
-                        <div className="flex items-center gap-2">
-                          <div className="h-2.5 flex-1 overflow-hidden rounded-sm bg-panel">
-                            <div
-                              className={`h-full rounded-sm ${
-                                isArgmax ? "bg-accent" : "bg-fg/50"
-                              } ${reducedMotion ? "" : "transition-[width] duration-500"}`}
-                              style={{ width: `${Math.round(wj * 100)}%` }}
+                          <div className={role ? "rounded-sm ring-1 ring-white" : ""}>
+                            <VectorStrip
+                              values={vec}
+                              maxAbs={embMaxAbs}
+                              cellSize={10}
+                              ariaLabel={`embedding of ${displayTokens[i]}`}
                             />
                           </div>
+                          <HoverTip>
+                            <span className="font-mono text-accent">
+                              {displayTokens[i]}
+                            </span>{" "}
+                            的 embedding 向量：token id 換成一串數字，語意才有幾何。
+                            全長 {sentence.embedding?.fullDims} 維，這裡只畫得下{" "}
+                            {sentence.embedding?.dims} 維的代表切片。
+                          </HoverTip>
+                        </div>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <p className="max-w-[180px] text-xs text-muted">
+                    這句只有 attention 記錄（伺服器未回傳 embedding）。
+                  </p>
+                )}
+              </Column>
+
+              <Arrow />
+
+              {/* 04 — 迷你模型：attention matrix + MLP，由 layer/head 轉盤驅動 */}
+              <Column
+                index="04"
+                title={
+                  <>
+                    {data.model} ·{" "}
+                    <span className="text-accent">
+                      L{l} · H{h}
+                    </span>
+                  </>
+                }
+              >
+                <div className="flex items-start gap-5">
+                  {/* attention matrix：列 = query，欄 = key */}
+                  <div>
+                    <div className="mb-1 font-mono text-[10px] uppercase tracking-wide text-muted">
+                      self-attention · 列 = query · 欄 = key
+                    </div>
+                    <div style={{ width: matrixW }}>
+                      <Heatmap
+                        matrix={matrix}
+                        rowLabels={displayTokens}
+                        colLabels={displayTokens}
+                        min={0}
+                        max={1}
+                        highlightMax={false}
+                        height={matrixH}
+                        onHoverCell={(c) =>
+                          setHovered(
+                            c && c.col <= c.row ? { q: c.row, k: c.col } : null,
+                          )
+                        }
+                        activeCell={
+                          hovered ? { row: hovered.q, col: hovered.k } : null
+                        }
+                        activeCellStrokeClass="stroke-white"
+                      />
+                    </div>
+                    {/* Constant-size readout box: swapping the default line for
+                        the hover readout must not resize the column (the gap to
+                        the MLP block would snap). */}
+                    <p
+                      className="mt-1 h-8 font-mono text-[10px] leading-snug text-muted"
+                      style={{ width: Math.max(matrixW, 320) }}
+                    >
+                      {hovered && hoveredW !== undefined && Number.isFinite(hoveredW) ? (
+                        <>
+                          <span className="text-accent">{hoveredQTok}</span> 分了{" "}
+                          <span className="text-accent">
+                            {(hoveredW * 100).toFixed(1)}%
+                          </span>{" "}
+                          的注意力給 <span className="text-accent">{hoveredKTok}</span>
+                        </>
+                      ) : (
+                        <> </>
+                      )}
+                    </p>
+                  </div>
+
+                  {/* MLP：attention 混完，MLP 逐 token 變換 */}
+                  <div className="group relative">
+                    <div className="mb-1 font-mono text-[10px] uppercase tracking-wide text-muted">
+                      MLP · <span className="text-accent">L{l}</span>
+                    </div>
+                    {mlpActs ? (
+                      <>
+                        <div className="flex flex-col">
+                          {mlpActs.map((vec, i) => {
+                            const role = roleOf(i);
+                            return (
+                              <div
+                                key={`mlp-${i}`}
+                                className="flex items-center"
+                                style={{ height: ROW_H }}
+                              >
+                                <div
+                                  className={
+                                    role ? "rounded-sm ring-1 ring-white" : ""
+                                  }
+                                >
+                                  <VectorStrip
+                                    values={vec}
+                                    maxAbs={mlpMaxAbs}
+                                    cellSize={10}
+                                    ariaLabel={`MLP activation of ${displayTokens[i]} at layer ${l}`}
+                                  />
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                        <HoverTip>
+                          attention 把整句的資訊混進每個 token 之後，MLP
+                          再對每個 token 各自做一次非線性變換。這是 L{l} 真實的
+                          activation，全長 {sentence.mlp?.fullDims} 維，只畫得下{" "}
+                          {sentence.mlp?.dims} 維的代表切片。
+                        </HoverTip>
+                      </>
+                    ) : (
+                      <p className="max-w-[160px] text-xs text-muted">
+                        這句只有 attention 記錄（伺服器未回傳 MLP）。
+                      </p>
+                    )}
+                  </div>
+                </div>
+              </Column>
+
+              <Arrow />
+
+              {/* 05 — 輸出（next-token 站的機率長條） */}
+              <Column index="05" title="Next Token">
+                {outputProbs.length ? (
+                  <div className="group relative flex w-64 flex-col gap-1.5">
+                    {outputProbs.map((p, i) => {
+                      const isArgmax = i === 0;
+                      return (
+                        <div key={p.token} className="flex items-center gap-2">
                           <span
-                            className={`w-9 shrink-0 text-right font-mono text-xs ${
-                              isArgmax && step >= 2 ? "text-accent" : "text-muted"
+                            className={`w-16 shrink-0 truncate text-left font-mono text-xs ${
+                              isArgmax ? "text-accent" : "text-muted"
                             }`}
                           >
-                            {wj.toFixed(2)}
+                            {displayToken(p.token)}
+                          </span>
+                          <div className="relative h-3.5 flex-1 overflow-hidden rounded-sm bg-panel">
+                            <div
+                              className={`h-full rounded-sm bg-accent ${barCls}`}
+                              style={{
+                                width: `${(p.prob / maxProb) * 100}%`,
+                                opacity: isArgmax ? 1 : 0.35 + 0.5 * p.prob,
+                              }}
+                            />
+                          </div>
+                          <span className="w-11 shrink-0 text-right font-mono text-[10px] text-muted">
+                            {(p.prob * 100).toFixed(1)}%
                           </span>
                         </div>
-                      </div>
-
-                      {/* V vector, faded by its weight (contribution). */}
-                      <div className={`${fadeCls} ${colState(3).cls}`}>
-                        <VectorStrip
-                          values={mech.v[j] ?? []}
-                          maxAbs={mech.vMax}
-                          cellSize={14}
-                          emphasis={step >= 3 ? wj : 1}
-                          ariaLabel={`V vector of ${tok}`}
-                        />
-                      </div>
-                    </div>
-                  );
-                })}
-
-                {/* Output row: Σ w·V, aligned under the V column. */}
-                <div className={`col-span-6 my-1 border-t border-border/30 ${fadeCls} ${colState(3).cls}`} />
-                <div
-                  className={`text-right font-mono text-xs uppercase tracking-wide ${fadeCls} ${
-                    step === LAST_STEP ? "text-accent" : "text-muted"
-                  } ${colState(3).cls}`}
-                >
-                  輸出
-                </div>
-                <div className={`col-span-4 font-mono text-[10px] text-muted ${fadeCls} ${colState(3).cls}`}>
-                  Σ w·V →
-                </div>
-                <div className={`${fadeCls} ${colState(3).cls}`}>
-                  <VectorStrip
-                    values={mech.output}
-                    maxAbs={mech.vMax}
-                    cellSize={14}
-                    highlight={step === LAST_STEP}
-                    ariaLabel={`Output vector of ${schematic.tokens[mech.qi]}`}
-                  />
-                </div>
-              </div>
-            </div>
-
-            {/* Per-step commentary — the narrative tied to what just lit up. */}
-            <div className="rounded-md border border-border/60 bg-panel p-4">
-              <div className="mb-1 font-mono text-xs uppercase tracking-wide text-muted">
-                step {activeStep.label} / {String(STEPS.length).padStart(2, "0")}{" "}
-                <span className="text-accent">· {activeStep.name}</span>
-              </div>
-              <p className="text-sm text-fg/90">
-                {step === 0 ? (
-                  <>
-                    <span className="font-mono text-accent">
-                      {schematic.tokens[mech.qi]}
-                    </span>{" "}
-                    想知道句子裡哪些 token 跟它有關。它拿自己的 Q（query）向量，
-                    和每個 token 的 K（key）向量做內積：對應的格子相乘、加總，
-                    得到一個分數，方向越對齊，分數越大。
-                  </>
-                ) : step === 1 ? (
-                  <>
-                    向量維度 d 越大，內積天生就越大。把每個分數除以 √d（這裡 d ={" "}
-                    {mech.dim}，√d ≈ {mech.scale.toFixed(2)}）壓回穩定的範圍，
-                    等一下 softmax 才不會一面倒。
-                  </>
-                ) : step === 2 ? (
-                  <>
-                    對分數做 softmax：取指數、再除以總和，變成一組加起來等於 1 的
-                    attention weights，一個真正的機率分布。最大的分數被放大
-                    （softmax 是「柔軟版」的 argmax），但其他 token 仍分到一點權重。
-                    最亮的那條就是{" "}
-                    <span className="font-mono text-accent">
-                      {schematic.tokens[mech.qi]}
-                    </span>{" "}
-                    最關注的 token。
-                  </>
-                ) : step === 3 ? (
-                  <>
-                    每個 token 還帶著一個 V（value）向量，也就是它要「提供」的內容。
-                    用剛剛的 weights 加權求和：weight 越大的 token，它的 V
-                    貢獻越多（每列的亮度 ∝ weight）。
-                  </>
+                      );
+                    })}
+                    <HoverTip>
+                      疊完 {nLayers} 層之後，最後一個 token 的向量 softmax
+                      成下一個 token 的機率，和 Next Token 站是同一條長條。
+                      這是真實的 top-{sentence.output?.length ?? 0}
+                      分布，softmax(T=1)。
+                    </HoverTip>
+                  </div>
                 ) : (
-                  <>
-                    加權求和的結果，就是{" "}
-                    <span className="font-mono text-accent">
-                      {schematic.tokens[mech.qi]}
-                    </span>{" "}
-                    在這個 head 的輸出向量：它一步就混入了整句話裡它最關注的資訊，
-                    不必像 RNN 一樣把狀態沿著鏈條傳。切回「真實模型」，
-                    Qwen 的 28 層 × 16 個 head 做的就是這件事，只是 d 是 1024。
-                  </>
+                  <p className="max-w-[180px] text-xs text-muted">
+                    這句只有 attention 記錄（伺服器未回傳 next-token 分布）。
+                  </p>
                 )}
-              </p>
+              </Column>
             </div>
-
-            {/* Final phase payoff: the mechanism ties back to the lines view. */}
-            {step === LAST_STEP ? (
-              <div className="rounded-md border border-border/30 bg-bg">
-                <AttentionLines
-                  tokens={schematic.tokens}
-                  weights={mech.matrix}
-                  focusToken={mech.qi}
-                  height={200}
-                />
-              </div>
-            ) : null}
-          </>
+          </div>
         )}
       </div>
     </StationLayout>

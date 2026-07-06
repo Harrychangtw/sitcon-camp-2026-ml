@@ -10,9 +10,7 @@ from __future__ import annotations
 
 import argparse
 import json
-import math
 import re
-import zlib
 from collections import Counter
 from datetime import datetime, timezone
 from itertools import permutations
@@ -642,100 +640,15 @@ def embedding(out_dir: Path) -> list[Path]:
 
 
 # ---------------------------------------------------------------------------
-# transformer station (wave 3: REAL attention + a canned mechanism schematic)
+# transformer station (pipeline overhaul: the WHOLE forward pass, recorded)
 # ---------------------------------------------------------------------------
-# Two clearly-separated modes:
-#
-#   真實模型 — real per-layer/per-head attention from Qwen3-0.6B
-#   (output_attentions=True), recorded here for the preset sentences and served
-#   live for typed ones. No synthetic head labels: real heads don't carry clean
-#   roles, so the UI shows honest L{n}·H{m} indices.
-#
-#   機制示意 — the five-step Q·K→√d→softmax→ΣwV walkthrough survives as a FIXED
-#   schematic on one hand-picked sentence with tiny (dim-6) vectors, clearly
-#   marked 「示意」. Real 1024-dim Qwen vectors cannot render on screen; this
-#   keeps the mechanism lesson without pretending they do. The Q/K pair is
-#   factored (SVD) so softmax(Q·Kᵀ/√d) reproduces the schematic matrix exactly —
-#   the browser's arithmetic is genuine, the example is hand-designed.
-
-# --- schematic (機制示意 mode only — NOT the live model) ----------------------
-
-SCHEMATIC_DIM = 6
-SCHEMATIC_TOKENS = ["the", "cat", "sat", "on", "the", "mat"]
-
-# Function words get low salience; content words pull attention. This drives
-# the schematic's hand-designed pattern (a "content head" shape — one of the
-# patterns real transformers do learn).
-TRANSFORMER_FUNCTION_WORDS = {
-    "the", "a", "an", "on", "in", "into", "up", "to", "of", "and", "is", "it",
-    "she", "he", "they", "with", "at", "for", "over", "then",
-}
-
-
-def _schematic_logits(tokens: list[str]) -> np.ndarray:
-    """Hand-designed pre-softmax logits: every query attends to salient content
-    tokens, with a small self-attention bump. Sharp (gain 3) so the softmax
-    story reads clearly."""
-    n = len(tokens)
-    sal = np.array(
-        [0.2 if t.lower() in TRANSFORMER_FUNCTION_WORDS else 1.0 for t in tokens]
-    )
-    aff = np.tile(sal, (n, 1)) + 0.25 * np.eye(n)
-    return aff * 3.0
-
-
-def _softmax_rows(logits: np.ndarray) -> np.ndarray:
-    shifted = logits - logits.max(axis=1, keepdims=True)
-    ex = np.exp(shifted)
-    return ex / ex.sum(axis=1, keepdims=True)
-
-
-def _factor_qk(logits: np.ndarray, dim: int) -> tuple[np.ndarray, np.ndarray]:
-    """Factor an n×n logit matrix into per-token Q, K (n×dim) such that
-    Q @ K.T / sqrt(dim) == logits (exactly, up to float precision; n ≤ dim)."""
-    target = logits * math.sqrt(dim)
-    u, s, vt = np.linalg.svd(target)
-    r = min(dim, len(s))
-    root = np.sqrt(s[:r])
-    n = logits.shape[0]
-    q = np.zeros((n, dim))
-    k = np.zeros((n, dim))
-    q[:, :r] = u[:, :r] * root
-    k[:, :r] = vt[:r, :].T * root
-    return q, k
-
-
-def build_schematic() -> dict:
-    """The fixed 機制示意 payload: one sentence, one head, dim-6 Q/K/V, with the
-    factorisation verified against the schematic attention matrix."""
-    tokens = SCHEMATIC_TOKENS
-    dim = SCHEMATIC_DIM
-    logits = _schematic_logits(tokens)
-    q, k = _factor_qk(logits, dim)
-
-    # Deterministic V vectors in [-1, 1], seeded per token so a repeated word
-    # carries the same V.
-    v_rows = []
-    for tok in tokens:
-        rng = np.random.default_rng(zlib.crc32(f"schematic|{tok}".encode("utf-8")))
-        v_rows.append(rng.uniform(-1.0, 1.0, dim))
-
-    q = np.round(q, 4)
-    k = np.round(k, 4)
-    probs = _softmax_rows((q @ k.T) / math.sqrt(dim))
-    if not np.allclose(probs, _softmax_rows(logits), atol=5e-3):
-        raise SystemExit("transformer: schematic Q/K factorisation drifted")
-
-    return {
-        "tokens": tokens,
-        "dim": dim,
-        "q": [[round(float(x), 4) for x in row] for row in q],
-        "k": [[round(float(x), 4) for x in row] for row in k],
-        "v": [[round(float(x), 3) for x in row] for row in v_rows],
-    }
-
-
-# --- real attention (真實模型 mode) --------------------------------------------
+# The station is a left-to-right diagram of one forward pass: tokenizer chips →
+# embedding strips → attention matrix + MLP slice (per layer/head) → next-token
+# bars. EVERY number shown is a real Qwen3-0.6B output, recorded here for the
+# preset sentences by qwen.pipeline_payload() — the same function + settings
+# the live server runs for typed sentences, so a typed preset reproduces the
+# shipped artifact. Embedding/MLP strips are fixed-stride subsamples (the full
+# 1024/3072-dim vectors can't render); the UI labels them representative.
 
 # Preset sentences, recorded through Qwen. Short (≤ ~8 subword tokens) so the
 # all-layer/all-head tensor stays within the JSON size budget.
@@ -747,7 +660,8 @@ TRANSFORMER_SENTENCES = [
 
 
 def build_transformer() -> dict:
-    """Record real Qwen attention for the presets + the fixed schematic."""
+    """Record the full pipeline payload (attention + embedding/MLP slices +
+    next-token output) for the preset sentences."""
     from . import qwen
     from .embedding import _select_device
 
@@ -758,14 +672,18 @@ def build_transformer() -> dict:
     sentences = []
     n_layers = n_heads = 0
     for spec in TRANSFORMER_SENTENCES:
-        att = qwen.attention_payload(tok, model, spec["text"])
-        n_layers, n_heads = att["nLayers"], att["nHeads"]
-        print(f"  {spec['sentenceId']}: tokens {att['tokens']}")
+        pipe = qwen.pipeline_payload(tok, model, spec["text"])
+        n_layers, n_heads = pipe["nLayers"], pipe["nHeads"]
+        print(f"  {spec['sentenceId']}: tokens {pipe['tokens']}")
         sentences.append(
             {
                 "sentenceId": spec["sentenceId"],
-                "tokens": att["tokens"],
-                "layers": att["layers"],
+                "tokens": pipe["tokens"],
+                "tokenIds": pipe["tokenIds"],
+                "layers": pipe["layers"],
+                "embedding": pipe["embedding"],
+                "mlp": pipe["mlp"],
+                "output": pipe["output"],
             }
         )
 
@@ -775,18 +693,19 @@ def build_transformer() -> dict:
         "station": "transformer",
         "model": qwen.MODEL,
         "note": (
-            f"REAL self-attention from {qwen.MODEL} (output_attentions=True, "
-            "same code + settings as the live server — see "
-            "camp_precompute.qwen). sentences[].layers[l].heads[h] is a "
-            "[query][key] matrix; rows are softmax distributions over keys "
-            "(causal: keys ≤ query). Tokens are the model's real subword "
-            "pieces. `schematic` is the SEPARATE hand-designed dim-6 example "
-            "for the 機制示意 walkthrough — clearly not the live model."
+            f"REAL forward-pass numbers from {qwen.MODEL} "
+            "(qwen.pipeline_payload — same code + settings as the live "
+            "server). layers[l].heads[h] is a [query][key] attention matrix; "
+            "rows are softmax distributions over keys (causal: keys ≤ query). "
+            "embedding.vectors / mlp.layers are fixed-stride representative "
+            "slices of the real 1024-dim input embeddings and ~3072-dim MLP "
+            "intermediates (down_proj input, all layers). output is the real "
+            "top-N next-token log-prob distribution. Tokens are the model's "
+            "real subword pieces."
         ),
         "nLayers": n_layers,
         "nHeads": n_heads,
         "sentences": sentences,
-        "schematic": build_schematic(),
     }
 
 
@@ -814,10 +733,10 @@ def transformer(out_dir: Path) -> Path:
             "station": "transformer",
             "bytes": art_path.stat().st_size,
             "description": (
-                "Recorded REAL Qwen3-0.6B self-attention "
-                "([layer][head][query][key]) for the preset sentences, plus "
-                "the fixed dim-6 mechanism schematic. Replayed in-browser; "
-                "no model runs there."
+                "Recorded REAL Qwen3-0.6B forward-pass pipeline for the "
+                "preset sentences: [layer][head][query][key] attention, "
+                "fixed-stride embedding/MLP slices, and the top-N next-token "
+                "distribution. Replayed in-browser; no model runs there."
             ),
         },
     )

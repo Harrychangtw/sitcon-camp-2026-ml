@@ -30,7 +30,7 @@ export const stations: StationMeta[] = [
   { id: "order-shuffle", title: "打亂詞序", blurb: "為什麼詞序重要", group: "lesson", element: <OrderShuffleStation /> },
   { id: "next-token", title: "Next Token", blurb: "預測下一個 token", group: "lesson", element: <NextTokenStation /> },
   { id: "rnn-viz", title: "RNN 視覺化", blurb: "在序列中傳遞狀態", group: "lesson", element: <RnnVizStation /> },
-  { id: "transformer", title: "Transformer", blurb: "一步步拆開 self-attention", group: "lesson", element: <TransformerStation /> },
+  { id: "transformer", title: "Transformer", blurb: "看一句話流過一次 forward pass", group: "lesson", element: <TransformerStation /> },
   { id: "_reference", title: "Reference Station", blurb: "Copy me", group: "dev", element: <ReferenceStation /> },
   { id: "viz-sandbox", title: "Viz Sandbox", blurb: "All @camp/viz primitives", group: "dev", element: <VizSandbox /> },
 ];

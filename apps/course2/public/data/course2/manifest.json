@@ -61,8 +61,8 @@
       "kind": "json",
       "path": "transformer/attention.json",
       "station": "transformer",
-      "bytes": 781013,
-      "description": "Recorded REAL Qwen3-0.6B self-attention ([layer][head][query][key]) for the preset sentences, plus the fixed dim-6 mechanism schematic. Replayed in-browser; no model runs there."
+      "bytes": 1062481,
+      "description": "Recorded REAL Qwen3-0.6B forward-pass pipeline for the preset sentences: [layer][head][query][key] attention, fixed-stride embedding/MLP slices, and the top-N next-token distribution. Replayed in-browser; no model runs there."
     }
   ]
 }
