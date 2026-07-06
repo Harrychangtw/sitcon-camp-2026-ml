@@ -63,8 +63,8 @@ export interface StationLayoutProps {
 
 /**
  * The canonical shell every station renders inside. The canvas fills the whole
- * area; three floating islands sit over it: the title/nav (top-left), the 重點
- * info badge (top-right, expands on hover), and a bottom-center dock holding the
+ * area; two floating islands sit over it: the title/nav with its 重點 info badge
+ * (top-left, the badge expands on hover), and a bottom-center dock holding the
  * primary `input` (left) and `controls` (right). Only controls live in the dock;
  * rich readouts belong on the canvas, placed by the station.
  *
@@ -82,48 +82,47 @@ export function StationLayout({
   const renderTitle = useContext(HeaderTitleContext);
   return (
     <div className="relative flex h-full min-h-0 flex-col overflow-hidden bg-bg text-fg">
-      {/* Title / nav island — top-left, floating over the canvas. */}
-      <div className="pointer-events-none absolute left-4 top-4 z-40 [&>*]:pointer-events-auto">
+      {/* Title / nav island — top-left, floating over the canvas. The 重點 info
+          button sits just to the right of the title: grayed by default, neon on
+          hover, and hovering reveals the takeaway panel (opens downward, left-
+          aligned). Pure CSS, no state, SSR-safe. `subtitle` isn't rendered. */}
+      <div className="pointer-events-none absolute left-4 top-4 z-50 flex items-center gap-2 [&>*]:pointer-events-auto">
         {renderTitle ? (
           renderTitle(title)
         ) : (
           <h1 className="text-lg font-semibold">{title}</h1>
         )}
-      </div>
-
-      {/* 重點 info badge — top-right corner. Grayed by default, neon on hover;
-          hovering reveals the takeaway panel (opens downward). Pure CSS, no
-          state, SSR-safe. `subtitle` is intentionally not rendered. */}
-      {takeaway ? (
-        <div className="group absolute right-4 top-4 z-50">
-          <button
-            type="button"
-            aria-label="重點"
-            className="flex h-9 w-9 items-center justify-center rounded-full border border-border bg-panel text-muted shadow-sm transition-all hover:border-accent hover:text-accent hover:shadow-[0_0_12px] hover:shadow-accent/60"
-          >
-            <svg
-              viewBox="0 0 24 24"
-              className="h-5 w-5"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth={2}
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              aria-hidden="true"
+        {takeaway ? (
+          <div className="group relative">
+            <button
+              type="button"
+              aria-label="重點"
+              className="flex h-6 w-6 items-center justify-center text-muted transition-colors hover:text-accent"
             >
-              <circle cx="12" cy="12" r="10" />
-              <line x1="12" y1="16" x2="12" y2="12" />
-              <line x1="12" y1="8" x2="12.01" y2="8" />
-            </svg>
-          </button>
-          <div className="pointer-events-none absolute right-0 top-full mt-2 w-max max-w-md -translate-y-1 rounded-md border border-border bg-panel px-4 py-3 text-sm opacity-0 shadow-md transition-all duration-150 group-hover:pointer-events-auto group-hover:translate-y-0 group-hover:opacity-100">
-            <div className="mb-1.5 font-mono text-sm font-semibold text-accent">
-              重點
+              <svg
+                viewBox="0 0 24 24"
+                className="h-3.5 w-3.5"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth={2}
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                aria-hidden="true"
+              >
+                <circle cx="12" cy="12" r="10" />
+                <line x1="12" y1="16" x2="12" y2="12" />
+                <line x1="12" y1="8" x2="12.01" y2="8" />
+              </svg>
+            </button>
+            <div className="pointer-events-none absolute left-0 top-full mt-2 w-max max-w-md -translate-y-1 rounded-md border border-border bg-panel px-4 py-3 text-sm opacity-0 shadow-md transition-all duration-150 group-hover:pointer-events-auto group-hover:translate-y-0 group-hover:opacity-100">
+              <div className="mb-1.5 font-mono text-sm font-semibold text-accent">
+                重點
+              </div>
+              {takeaway}
             </div>
-            {takeaway}
           </div>
-        </div>
-      ) : null}
+        ) : null}
+      </div>
 
       {/* Canvas. Full-bleed canvases span edge to edge and the dock floats
           over them; otherwise `pb-28` keeps scrollable content clear of the
@@ -143,7 +142,7 @@ export function StationLayout({
       {/* Bottom-center dock: input (left) · controls (right). */}
       {input || controls ? (
         <div className="pointer-events-none absolute inset-x-0 bottom-4 z-30 flex justify-center px-4">
-          <div className="pointer-events-auto flex max-w-full items-stretch gap-4 rounded-[18px] bg-panel/90 p-3 shadow-lg backdrop-blur">
+          <div className="pointer-events-auto flex max-w-full items-stretch gap-4 rounded-[18px] border border-border bg-panel/90 p-3 shadow-lg backdrop-blur">
             {input ? (
               <div className="flex shrink-0 items-stretch">{input}</div>
             ) : null}

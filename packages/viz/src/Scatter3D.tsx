@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useResizeObserver } from "./useResizeObserver";
 import {
   categoryColorMap,
@@ -76,6 +76,7 @@ function paintColors(
   colorBy: boolean,
   highlight: string[] | undefined,
   colors: ThemeColors,
+  hoverLabel?: string | null,
 ) {
   const { THREE, geometry } = engine;
   const hot = new Set(highlight ?? []);
@@ -90,7 +91,11 @@ function paintColors(
   for (let i = 0; i < data.length; i++) {
     const d = data[i];
     if (!d) continue;
-    const isHot = hasHighlight && d.label != null && hot.has(d.label);
+    // The point under the cursor pops to the focus accent too, so hovering
+    // reads even for a dimmed background point when a search is active.
+    const isHot =
+      (hasHighlight && d.label != null && hot.has(d.label)) ||
+      (hoverLabel != null && d.label === hoverLabel);
     let rgb: RGB;
     if (isHot) {
       rgb = colors.accent;
@@ -129,7 +134,16 @@ export function Scatter3D({
   autoRotate = false,
 }: Scatter3DProps) {
   const { ref: containerRef, size } = useResizeObserver<HTMLDivElement>();
+  // A separate div owns the imperatively-appended <canvas>, so React never
+  // reconciles the GL node against its own children (the hover tooltip).
+  const mountRef = useRef<HTMLDivElement>(null);
   const engineRef = useRef<Engine | null>(null);
+  // The point under the cursor: its word + where to float the label (container px).
+  const [hover, setHover] = useState<{
+    label: string;
+    x: number;
+    y: number;
+  } | null>(null);
   const width = size.width;
   // In fill mode the parent controls height; otherwise use the fixed prop.
   const h = fill ? size.height : height;
@@ -144,10 +158,13 @@ export function Scatter3D({
   // NOT per keystroke). Highlight/colorBy live in the repaint effect below.
   useEffect(() => {
     const container = containerRef.current;
-    if (!container || data.length === 0) return;
+    const mount = mountRef.current;
+    if (!container || !mount || data.length === 0) return;
 
     let disposed = false;
     let frame = 0;
+    // Torn down in cleanup: pointer listeners attached to the canvas below.
+    let detachHover: (() => void) | null = null;
 
     (async () => {
       const THREE = await import("three");
@@ -161,7 +178,7 @@ export function Scatter3D({
       const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
       renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
       renderer.domElement.style.display = "block";
-      container.appendChild(renderer.domElement);
+      mount.appendChild(renderer.domElement);
 
       const controls = new OrbitControls(camera, renderer.domElement);
       controls.enableDamping = true;
@@ -191,7 +208,7 @@ export function Scatter3D({
       );
       const sprite = makeDiscTexture(THREE);
       const material = new THREE.PointsMaterial({
-        size: 0.18,
+        size: 0.1,
         vertexColors: true,
         sizeAttenuation: true,
         alphaMap: sprite,
@@ -265,9 +282,61 @@ export function Scatter3D({
       camera.aspect = w / hpx;
       camera.updateProjectionMatrix();
 
+      // HOVER PICKING — raycast the point cloud on pointer move. The threshold
+      // is the world-space radius around each point that still counts as a hit;
+      // it's a touch larger than the sprite so dense clouds stay easy to target.
+      const raycaster = new THREE.Raycaster();
+      raycaster.params.Points = { threshold: 0.12 };
+      const ndc = new THREE.Vector2();
+      const dom = renderer.domElement;
+      let lastLabel: string | null = null;
+
+      const onPointerMove = (e: PointerEvent) => {
+        const r = dom.getBoundingClientRect();
+        ndc.x = ((e.clientX - r.left) / r.width) * 2 - 1;
+        ndc.y = -((e.clientY - r.top) / r.height) * 2 + 1;
+        raycaster.setFromCamera(ndc, camera);
+        const hits = raycaster.intersectObject(points);
+        // Front-most hit that actually carries a label.
+        const hit = hits.find((it) => {
+          const d = it.index != null ? data[it.index] : undefined;
+          return d?.label != null;
+        });
+        if (hit && hit.index != null) {
+          const label = data[hit.index]!.label!;
+          lastLabel = label;
+          dom.style.cursor = "pointer";
+          setHover({ label, x: e.clientX - r.left, y: e.clientY - r.top });
+        } else if (lastLabel !== null) {
+          lastLabel = null;
+          dom.style.cursor = "";
+          setHover(null);
+        }
+      };
+      const onPointerLeave = () => {
+        if (lastLabel === null) return;
+        lastLabel = null;
+        dom.style.cursor = "";
+        setHover(null);
+      };
+      dom.addEventListener("pointermove", onPointerMove);
+      dom.addEventListener("pointerleave", onPointerLeave);
+      detachHover = () => {
+        dom.removeEventListener("pointermove", onPointerMove);
+        dom.removeEventListener("pointerleave", onPointerLeave);
+      };
+
       const loop = () => {
         frame = requestAnimationFrame(loop);
         controls.update();
+        // Keep the frustum wrapped tight around the cloud as the camera dollies:
+        // the near plane must stay in FRONT of the nearest point or zooming in
+        // clips the closest dots away. Recomputed from the live camera distance
+        // (a small floor lets you push the camera inside the cloud).
+        const dist = camera.position.distanceTo(controls.target);
+        camera.near = Math.max(dist - radius * 1.1, radius / 1000);
+        camera.far = dist + radius * 1.1;
+        camera.updateProjectionMatrix();
         renderer.render(scene, camera);
       };
       loop();
@@ -276,6 +345,8 @@ export function Scatter3D({
     return () => {
       disposed = true;
       cancelAnimationFrame(frame);
+      detachHover?.();
+      setHover(null);
       const e = engineRef.current;
       if (e) {
         e.controls.dispose();
@@ -292,12 +363,15 @@ export function Scatter3D({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [data]);
 
-  // REPAINT — cheap color-buffer update on focus/category/theme changes.
+  // REPAINT — cheap color-buffer update on focus/hover/category/theme changes.
+  // Keyed on the hovered LABEL, not the whole hover object, so the tooltip can
+  // trail the cursor over one point without re-touching the color buffer.
+  const hoverLabel = hover?.label ?? null;
   useEffect(() => {
     const engine = engineRef.current;
     if (!engine) return;
-    paintColors(engine, data, colorBy, highlight, colors);
-  }, [data, colorBy, highlight, colors]);
+    paintColors(engine, data, colorBy, highlight, colors, hoverLabel);
+  }, [data, colorBy, highlight, colors, hoverLabel]);
 
   // Auto-rotate toggles without rebuilding the context.
   useEffect(() => {
@@ -321,6 +395,16 @@ export function Scatter3D({
       ref={containerRef}
       className={fill ? "relative h-full w-full" : "relative w-full"}
       style={fill ? undefined : { height }}
-    />
+    >
+      <div ref={mountRef} className="absolute inset-0" />
+      {hover ? (
+        <div
+          className="pointer-events-none absolute z-10 max-w-[16rem] -translate-x-1/2 -translate-y-full truncate rounded border border-border bg-panel/90 px-2 py-1 font-mono text-sm text-fg shadow-sm backdrop-blur"
+          style={{ left: hover.x, top: hover.y - 12 }}
+        >
+          {hover.label}
+        </div>
+      ) : null}
+    </div>
   );
 }

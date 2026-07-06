@@ -22,14 +22,7 @@ import {
   SuggestInput,
   type LiveState,
 } from "@camp/ui";
-import {
-  Scatter2D,
-  Scatter3D,
-  categoryColorMap,
-  rgbCss,
-  useThemeColors,
-  type Scatter3DPoint,
-} from "@camp/viz";
+import { Scatter2D, Scatter3D, type Scatter3DPoint } from "@camp/viz";
 import { liveInferTimed, loadJSON } from "@camp/data";
 
 type Dim = "2d" | "3d";
@@ -188,7 +181,6 @@ export function EmbeddingStation() {
       x: p.x,
       y: p.y,
       z: p.z,
-      category: p.category,
       label: p.word,
     }));
     if (liveHit) {
@@ -196,7 +188,6 @@ export function EmbeddingStation() {
         x: liveHit.point.x,
         y: liveHit.point.y,
         z: liveHit.point.z,
-        category: liveHit.point.category,
         label: liveHit.point.word,
       });
     }
@@ -213,19 +204,6 @@ export function EmbeddingStation() {
   const highlight = useMemo(
     () => (activeWord ? [activeWord, ...nearest.map((n) => n.word)] : []),
     [activeWord, nearest],
-  );
-
-  // Category legend (colors come straight from the theme palette). Categories
-  // are k-means clusters over the COMBINED vocab — one cluster can span both
-  // languages — each labelled by its most-central word.
-  const colors = useThemeColors();
-  const categories = useMemo(
-    () => Array.from(new Set(points.map((p) => p.category))),
-    [points],
-  );
-  const catColors = useMemo(
-    () => categoryColorMap(colors, categories),
-    [colors, categories],
   );
 
   return (
@@ -284,24 +262,26 @@ export function EmbeddingStation() {
         {/* The point cloud fills the whole canvas. */}
         <div className="absolute inset-0">
           {dim === "3d" ? (
-            <Scatter3D data={scatterData} colorBy highlight={highlight} fill />
+            <Scatter3D
+              data={scatterData}
+              colorBy={false}
+              highlight={highlight}
+              fill
+            />
           ) : (
-            <Scatter2D data={scatterData} colorBy highlight={highlight} fill />
+            <Scatter2D
+              data={scatterData}
+              colorBy={false}
+              highlight={highlight}
+              fill
+            />
           )}
         </div>
 
-        {/* Quiet caption, bottom-left corner (the dock sits bottom-center). */}
-        <div className="pointer-events-none absolute bottom-2 left-3 max-w-xs font-mono text-[11px] leading-relaxed text-muted">
-          {loading
-            ? "載入 embedding 中…"
-            : `${points.length} 個詞（中＋英）· ${dim.toUpperCase()} 投影`}
-          {activeWord ? " · 亮綠色是最近的鄰居" : ""}
-          {dim === "3d" ? " · 拖曳旋轉、滾動縮放" : ""}
-        </div>
 
-        {/* Readouts thrown outside the dock: the neighbour list (the
-            "距離 ≈ 相似度" beat) or the category legend, floating top-right. */}
-        <div className="absolute right-3 top-14 z-20 w-60 max-w-[70vw]">
+        {/* Readout thrown outside the dock: the neighbour list (the
+            "距離 ≈ 相似度" beat), floating top-right when a word is focused. */}
+        <div className="absolute right-3 top-4 z-20 w-60 max-w-[70vw]">
           {activeWord ? (
             <div className="rounded-md border border-border bg-panel/90 p-3 shadow-md backdrop-blur">
               <span className="font-mono text-xs text-accent">
@@ -329,30 +309,6 @@ export function EmbeddingStation() {
                   </li>
                 ))}
               </ol>
-            </div>
-          ) : categories.length > 0 ? (
-            <div className="rounded-md border border-border bg-panel/90 p-3 shadow-md backdrop-blur">
-              <span className="font-mono text-xs text-muted">
-                類別（k-means 群集）
-              </span>
-              <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1">
-                {categories.map((c) => (
-                  <span
-                    key={c}
-                    className="flex items-center gap-1.5 font-mono text-xs text-muted"
-                  >
-                    <span
-                      className="inline-block h-2.5 w-2.5 rounded-sm border border-border"
-                      style={{
-                        backgroundColor: rgbCss(
-                          catColors.get(c) ?? colors.muted,
-                        ),
-                      }}
-                    />
-                    {c}
-                  </span>
-                ))}
-              </div>
             </div>
           ) : null}
         </div>
