@@ -545,10 +545,12 @@ export function TokenizerStation() {
       return;
     }
     let alive = true;
-    setLivePending(true);
     setLiveFailed(false);
-    // Debounced: only ask the server once typing pauses.
+    // Debounced: only ask the server once typing pauses. The pending stopwatch
+    // starts when the request actually fires (not during the debounce), so its
+    // count matches the round-trip the final report shows.
     const timer = setTimeout(() => {
+      setLivePending(true);
       liveInferTimed<LiveEncode>("/tokenizer/encode", { text }).then((r) => {
         if (!alive) return;
         setLivePending(false);
@@ -645,6 +647,8 @@ export function TokenizerStation() {
           ariaLabel="輸入文字"
           placeholder={vocab ? sample : "載入詞彙表中…"}
           maxLength={500}
+          multiline
+          expandOnFocus
           presets={PRESETS}
           status={<LiveStatus state={liveState} />}
         />

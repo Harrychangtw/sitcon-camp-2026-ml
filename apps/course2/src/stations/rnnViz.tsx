@@ -124,9 +124,11 @@ export function RnnVizStation() {
     const tokens = rnnTokens.filter((t) => t.length <= RNN_TOKEN_MAX_LEN);
     if (tokens.length === 0) return;
     let alive = true;
-    setLivePending(true);
-    // Debounced: only forward once typing pauses.
+    // Debounced: only forward once typing pauses. The pending stopwatch starts
+    // when the request actually fires (not during the debounce), so its count
+    // matches the round-trip the final report shows.
     const timer = setTimeout(() => {
+      setLivePending(true);
       liveInferTimed<RnnSequence>("/rnn/forward", { tokens }).then(
         (r) => {
           if (!alive) return;
