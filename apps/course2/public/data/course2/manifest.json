@@ -45,7 +45,7 @@
       "kind": "json",
       "path": "rl-playground/parity.json",
       "station": "rl-playground",
-      "bytes": 304305,
+      "bytes": 638195,
       "description": "Python\u2194TS env determinism fixture: seed + scripted actions + reference trace, replayed by the course2 vitest parity test."
     },
     {
@@ -53,7 +53,7 @@
       "kind": "json",
       "path": "rl-playground/policies.json",
       "station": "rl-playground",
-      "bytes": 364127,
+      "bytes": 385830,
       "description": "PPO-trained MLP policy weights (per reward recipe, per training checkpoint) + return curves for the Critter Arena. The browser runs env + forward pass live; training stays offline."
     },
     {

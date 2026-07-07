@@ -10,11 +10,18 @@
  * knows what it senses.
  */
 
+import { OPP_ABSENT, OPP_START } from "./env";
 import type { PolicyWeights } from "./types";
 
 /** What the agent can perceive/do — one perturbation at a time keeps the
  * cause→effect readable in class. */
-export type Handicap = "none" | "blind_gems" | "blind_lava" | "no_left" | "no_up";
+export type Handicap =
+  | "none"
+  | "blind_gems"
+  | "blind_lava"
+  | "blind_opponent"
+  | "no_left"
+  | "no_up";
 
 // Obs channel groups (indices into OBS_LAYOUT — see env.ts / rl.py).
 const GEM_CHANNELS = [2, 3, 4];
@@ -32,6 +39,10 @@ export function maskObs(obs: number[], handicap: Handicap): number[] {
   } else if (handicap === "blind_lava") {
     for (const i of LAVA_CHANNELS) obs[i] = 0;
     obs[7] = 1;
+  } else if (handicap === "blind_opponent") {
+    // Overwrite the opponent block with the trained "no opponent" sentinel:
+    // the rival vanishes from its senses, so contesting/blocking evaporates.
+    for (let k = 0; k < OPP_ABSENT.length; k++) obs[OPP_START + k] = OPP_ABSENT[k]!;
   }
   return obs;
 }

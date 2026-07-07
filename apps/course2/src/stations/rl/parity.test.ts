@@ -2,12 +2,14 @@
  * Python↔TS environment parity — THE guard on the rl-playground contract.
  *
  * `camp-precompute rl-export` dumps parity.json: a seed, the initial layout,
- * a recorded action script (gem-chasing → eats/respawn RNG, lava-seeking →
- * entry/knockback, wall grinding, idling), and the Python reference env's full
- * per-step trace. This test replays the SAME actions through env.ts from the
- * SAME seed and asserts every traced value matches within 1e-6 (in practice
- * the two implementations agree bit-for-bit — both are IEEE-754 doubles with
- * identical operation order).
+ * a recorded TWO-critter action script (contested gem-chasing → eats/respawn
+ * RNG, lava-seeking → entry/knockback, one critter hunting the other → moving
+ * opponent channels, wall grinding, idling), and the Python reference env's
+ * full per-step trace for both critters. This test replays the SAME actions
+ * through env.ts from the SAME seed — critter A first, then B, each step —
+ * and asserts every traced value (including the egocentric opponent obs
+ * block) matches within 1e-6. In practice the two implementations agree
+ * bit-for-bit: both are IEEE-754 doubles with identical operation order.
  *
  * If this fails, env.ts and camp_precompute/rl.py have drifted: fix the
  * mismatch (or regenerate the fixture with
@@ -17,8 +19,16 @@
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
-import { Mulberry32, envStep, makeWorld, spawnCritter } from "./env";
-import type { ParityArtifact } from "./types";
+import {
+  Mulberry32,
+  OPP_START,
+  envStep,
+  makeWorld,
+  spawnCritter,
+  type Critter,
+  type StepResult,
+} from "./env";
+import type { ParityArtifact, ParityCritterStep } from "./types";
 
 const FIXTURE = fileURLToPath(
   new URL(
@@ -37,64 +47,83 @@ describe("rl env parity (Python reference ↔ env.ts)", () => {
   const fixture = loadFixture();
 
   it("covers the interactions that matter", () => {
-    // A fixture that never eats or touches lava wouldn't test respawn RNG or
-    // knockback — reject it rather than silently passing on easy steps.
-    expect(fixture.stats.eats).toBeGreaterThanOrEqual(2);
+    // A fixture that never eats, never touches lava, or whose opponent
+    // channels sit at the sentinel wouldn't test respawn RNG, knockback, or
+    // the new obs block — reject it rather than silently passing.
+    expect(fixture.stats.eats).toBeGreaterThanOrEqual(4);
     expect(fixture.stats.lavaHits).toBeGreaterThanOrEqual(1);
     expect(fixture.actions).toHaveLength(fixture.trace.length);
+    const oppDists = new Set(
+      fixture.trace.map((t) => t.a.obs[OPP_START + 2]!.toFixed(6)),
+    );
+    expect(oppDists.size).toBeGreaterThanOrEqual(50);
   });
 
   it("reproduces the initial layout from the seed", () => {
     const rng = new Mulberry32(fixture.seed);
     const world = makeWorld(rng, fixture.nGems, fixture.nLava);
-    const critter = spawnCritter(world, rng);
+    const a = spawnCritter(world, rng);
+    const b = spawnCritter(world, rng);
     expect(world.gems).toEqual(fixture.layout.gems);
     expect(world.lavas).toEqual(fixture.layout.lava);
-    expect([critter.x, critter.y]).toEqual(fixture.layout.critter);
+    expect([
+      [a.x, a.y],
+      [b.x, b.y],
+    ]).toEqual(fixture.layout.critters);
   });
 
   it("replays the scripted actions within 1e-6 of the reference trace", () => {
     const rng = new Mulberry32(fixture.seed);
     const world = makeWorld(rng, fixture.nGems, fixture.nLava);
-    const critter = spawnCritter(world, rng);
+    const a = spawnCritter(world, rng);
+    const b = spawnCritter(world, rng);
 
     let maxDrift = 0;
-    const drift = (a: number, b: number) => {
-      const d = Math.abs(a - b);
+    const drift = (x: number, y: number) => {
+      const d = Math.abs(x - y);
       if (d > maxDrift) maxDrift = d;
       return d;
     };
 
-    for (let t = 0; t < fixture.actions.length; t++) {
-      const { obs, reward, events } = envStep(
-        world,
-        critter,
-        fixture.actions[t]!,
-        "forager",
-      );
-      const ref = fixture.trace[t]!;
-
+    const checkSide = (
+      t: number,
+      who: string,
+      c: Critter,
+      res: StepResult,
+      ref: ParityCritterStep,
+    ) => {
       // Events are discrete — a mismatch means the trajectories truly forked.
-      expect(events.ate, `step ${t}: ate`).toBe(ref.ate);
-      expect(events.lavaEnter, `step ${t}: lavaEnter`).toBe(ref.lava);
-
+      expect(res.events.ate, `step ${t} ${who}: ate`).toBe(ref.ate);
+      expect(res.events.lavaEnter, `step ${t} ${who}: lavaEnter`).toBe(ref.lava);
       for (const [ours, theirs, label] of [
-        [critter.x, ref.x, "x"],
-        [critter.y, ref.y, "y"],
-        [critter.vx, ref.vx, "vx"],
-        [critter.vy, ref.vy, "vy"],
-        [reward, ref.reward, "reward"],
+        [c.x, ref.x, "x"],
+        [c.y, ref.y, "y"],
+        [c.vx, ref.vx, "vx"],
+        [c.vy, ref.vy, "vy"],
+        [res.reward, ref.reward, "reward"],
       ] as const) {
-        expect(drift(ours, theirs), `step ${t}: ${label}`).toBeLessThanOrEqual(
-          TOLERANCE,
-        );
+        expect(
+          drift(ours, theirs),
+          `step ${t} ${who}: ${label}`,
+        ).toBeLessThanOrEqual(TOLERANCE);
       }
       for (let k = 0; k < ref.obs.length; k++) {
         expect(
-          drift(obs[k]!, ref.obs[k]!),
-          `step ${t}: obs[${k}]`,
+          drift(res.obs[k]!, ref.obs[k]!),
+          `step ${t} ${who}: obs[${k}]`,
         ).toBeLessThanOrEqual(TOLERANCE);
       }
+    };
+
+    for (let t = 0; t < fixture.actions.length; t++) {
+      const [actA, actB] = fixture.actions[t]!;
+      // A steps seeing B pre-move; B steps seeing A post-move — the exact
+      // order the fixture was recorded in.
+      const resA = envStep(world, a, actA!, "forager", b);
+      const resB = envStep(world, b, actB!, "forager", a);
+      const ref = fixture.trace[t]!;
+      checkSide(t, "A", a, resA, ref.a);
+      checkSide(t, "B", b, resB, ref.b);
       for (let g = 0; g < ref.gems.length; g++) {
         expect(
           drift(world.gems[g]![0]!, ref.gems[g]![0]!),
@@ -109,7 +138,7 @@ describe("rl env parity (Python reference ↔ env.ts)", () => {
 
     // Surface how tight the match actually is (expected: exactly 0).
     console.info(
-      `rl parity: ${fixture.actions.length} steps replayed, max drift ${maxDrift}`,
+      `rl parity: ${fixture.actions.length} two-critter steps replayed, max drift ${maxDrift}`,
     );
   });
 });

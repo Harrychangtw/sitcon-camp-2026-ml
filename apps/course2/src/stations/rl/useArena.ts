@@ -18,6 +18,7 @@ import {
   HORIZON,
   LAVA_R,
   Mulberry32,
+  OPP_STEAL_PENALTY,
   buildObs,
   envStep,
   makeCritterAt,
@@ -209,10 +210,16 @@ export function useArena({ spec, weights, recipeId, mode, handicap }: UseArenaOp
 
   const stepAgent = useCallback((s: Sim) => {
     const w = weightsRef.current;
+    // In race mode the HUMAN is the agent's perceived opponent — the trained
+    // forager senses your position and velocity through the obs's opponent
+    // block and contests you live. Sandbox has no opponent → absent sentinel.
+    const opponent = modeRef.current === "race" ? s.human : null;
     const action = w
-      ? policyAction(w, buildObs(s.world, s.agent), handicapRef.current)
+      ? policyAction(w, buildObs(s.world, s.agent, opponent), handicapRef.current)
       : 0;
-    const { reward, events } = envStep(s.world, s.agent, action, recipeRef.current);
+    const { reward, events } = envStep(
+      s.world, s.agent, action, recipeRef.current, opponent,
+    );
     s.agentReward += reward;
     s.agentGems += events.ate;
     s.statSteps += 1;
@@ -246,6 +253,11 @@ export function useArena({ spec, weights, recipeId, mode, handicap }: UseArenaOp
         const action = lastKey !== undefined ? KEY_ACTIONS[lastKey]! : 0;
         const events = stepCritter(s.world, s.human, action);
         s.humanGems += events.ate;
+        // Mirror the trained objective: your eats cost the agent reward
+        // (the relative-advantage term — see OPP_STEAL_PENALTY in env.ts).
+        if (recipeRef.current === "forager") {
+          s.agentReward -= OPP_STEAL_PENALTY * events.ate;
+        }
         if (events.lavaEnter) s.humanFlash = FLASH_STEPS;
       }
       s.phaseSteps -= 1;

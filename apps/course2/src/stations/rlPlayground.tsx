@@ -2,13 +2,18 @@
  * RL PLAYGROUND — station 07 of Course 2 ("Critter Arena").
  *
  * The demo beat for Course 3's RL segment: an agent that learned to forage
- * gems and dodge lava FROM A REWARD SIGNAL ALONE. The spine is "can you beat
- * the bot?" (race it with the arrow keys), and three walls hang off it:
+ * gems and dodge lava FROM A REWARD SIGNAL ALONE — and, via SELF-PLAY against
+ * frozen copies of itself (à la OpenAI's hide-and-seek), to CONTEST whoever
+ * shares its arena. Its obs carries an egocentric opponent block; in race
+ * mode that opponent is YOU. The spine is "can you beat the bot?" (race it
+ * with the arrow keys), and three walls hang off it:
  *
- *   1. 從零學會 — scrub the checkpoint slider from random flailing → unbeatable.
+ *   1. 從零學會 — scrub the checkpoint slider from random flailing to the
+ *      measured-strongest checkpoint (ladder ordered by head-to-head strength).
  *   2. 獎勵駭客 — swap the reward recipe; the agent optimises the PROXY, not
  *      the intent (couch-camps, orbits gems without eating, spins).
- *   3. 戳戳看 — perturb the world / blindfold or handcuff a FIXED policy.
+ *   3. 戳戳看 — perturb the world / blindfold (gems, lava, or the OPPONENT)
+ *      or handcuff a FIXED policy.
  *
  * Golden rule intact: PPO training happened offline (`camp-precompute
  * train-rl`); the browser loads small JSON weights and runs the env + a tiny
@@ -44,6 +49,7 @@ const HANDICAP_SEGMENTS: { label: string; value: Handicap }[] = [
   { label: "無", value: "none" },
   { label: "遮寶石", value: "blind_gems" },
   { label: "遮岩漿", value: "blind_lava" },
+  { label: "遮對手", value: "blind_opponent" },
   { label: "禁左", value: "no_left" },
   { label: "禁上", value: "no_up" },
 ];
@@ -51,6 +57,8 @@ const HANDICAP_SEGMENTS: { label: string; value: Handicap }[] = [
 const HANDICAP_HINTS: Record<Exclude<Handicap, "none">, string> = {
   blind_gems: "寶石的感官被歸零——牠不是「忘了」寶石,是「感覺不到」了。",
   blind_lava: "牠看不到岩漿了。注意牠會一頭栽進去:知識不在腦裡,在感官裡。",
+  blind_opponent:
+    "對手從牠的感官裡消失了。去比賽模式試試:不管你怎麼貼著牠搶,牠的路線都不再理你。",
   no_left: "「往左」被沒收。看牠怎麼用剩下的動作繞路。",
   no_up: "「往上」被沒收。有些寶石突然變得好遠。",
 };
@@ -138,7 +146,7 @@ export function RlPlaygroundStation() {
             />
             <BlockSlider
               label="訓練進度"
-              info="同一隻 AI 在訓練不同階段的「腦」。0 = 還沒訓練(亂動);拖到最右邊試試打得贏嗎。"
+              info="同一隻 AI 在訓練不同階段的「腦」。0 = 還沒訓練(亂動);最右邊是「實測最會搶」的版本,試試打得贏嗎。"
               min={0}
               max={maxCk}
               step={1}
@@ -183,7 +191,8 @@ export function RlPlaygroundStation() {
       takeaway={
         <span>
           AI 的行為不是寫出來的,是被<strong>獎勵</strong>「長」出來的。獎勵寫歪一點,
-          牠就認真地學會歪掉的事(reward hacking)。而且牠只知道感官裡有的世界——
+          牠就認真地學會歪掉的事(reward hacking)。讓牠跟自己的分身對打(self-play),
+          牠會自己學著把對手納入感官。而且牠只知道感官裡有的世界——
           遮住眼睛,知識就不存在。
         </span>
       }
@@ -235,6 +244,10 @@ export function RlPlaygroundStation() {
                 <p className="mt-1 text-sm text-muted">
                   方向鍵 / WASD 移動,小心岩漿。按「開始」或空白鍵。
                 </p>
+                <p className="mt-1.5 max-w-sm text-xs text-muted/80">
+                  牠感覺得到你的位置和速度,而且是跟自己的分身對打(self-play)
+                  練出來的:搶寶石的本事沒有人教,是自己長出來的。
+                </p>
               </CenterCard>
             ) : null}
             {mode === "race" && hud.phase === "countdown" ? (
@@ -256,7 +269,7 @@ export function RlPlaygroundStation() {
                 <p className="mt-1 text-sm text-muted">
                   {hud.winner === "human"
                     ? "把「訓練進度」拉到最右邊,再試一次?"
-                    : "沒人寫過它的走法——它只是被獎勵訓練出來的。調低訓練進度雪恥一下?"}
+                    : "沒有人教過它怎麼搶:它靠 self-play 跟自己的分身練出來的。調低訓練進度雪恥一下?"}
                 </p>
               </CenterCard>
             ) : null}
@@ -275,6 +288,12 @@ export function RlPlaygroundStation() {
                 <p className="mt-1 text-xs leading-relaxed text-muted">
                   獎勵:{recipe.rewardDesc}
                 </p>
+                {recipe.selfPlay ? (
+                  <p className="mt-1 text-xs leading-relaxed text-muted">
+                    訓練:self-play,跟「過去版本的自己」在同一張地圖搶寶石。
+                    拖訓練進度,可以看到新招一層層長出來。
+                  </p>
+                ) : null}
                 <div className="mt-2">
                   <LossCurve
                     series={[{ label: "每局平均獎勵", values: recipe.returnCurve }]}
@@ -291,6 +310,15 @@ export function RlPlaygroundStation() {
                   <span>
                     寶石/局 <span className="text-fg">{ck.gemsMean}</span>
                   </span>
+                  {ck.vsPanelMargin !== undefined ? (
+                    <span>
+                      對戰{" "}
+                      <span className="text-fg">
+                        {ck.vsPanelMargin > 0 ? "+" : ""}
+                        {ck.vsPanelMargin}
+                      </span>
+                    </span>
+                  ) : null}
                 </div>
                 <div className="mt-1.5 border-t border-border/50 pt-1.5 font-mono text-[11px] text-muted">
                   現在:寶石 <span className="text-accent">{hud.agentGems}</span>

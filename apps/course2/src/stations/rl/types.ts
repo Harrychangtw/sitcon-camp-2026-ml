@@ -7,7 +7,7 @@
 export type RecipeId = "forager" | "couch_potato" | "magnetized" | "speedster";
 
 export interface PolicyWeights {
-  /** [64][12] */ W0: number[][];
+  /** [64][17] */ W0: number[][];
   /** [64] */ b0: number[];
   /** [64][64] */ W1: number[][];
   /** [64] */ b1: number[];
@@ -26,6 +26,9 @@ export interface PolicyCheckpoint {
   returnMean: number;
   /** Mean gems eaten per eval episode. */
   gemsMean: number;
+  /** Mean head-to-head gem margin vs the strength-eval panel (self-play
+   * recipes only — the number the ladder is ordered by). */
+  vsPanelMargin?: number;
   weights: PolicyWeights;
 }
 
@@ -33,6 +36,8 @@ export interface RecipeArtifact {
   id: RecipeId;
   label: string;
   isGood: boolean;
+  /** Trained against frozen copies of itself (forager) — solo otherwise. */
+  selfPlay: boolean;
   rewardDesc: string;
   totalSteps: number;
   /** x values (training steps) for returnCurve, downsampled. */
@@ -62,6 +67,8 @@ export interface EnvSpecArtifact {
   nLava: number;
   horizon: number;
   obsLayout: string[];
+  /** The opponent-absent sentinel (documentation — env.ts owns the value). */
+  oppAbsent: number[];
   actions: string[];
   defaultLayout: DefaultLayout;
 }
@@ -76,8 +83,9 @@ export interface PoliciesArtifact {
   recipes: RecipeArtifact[];
 }
 
-/** parity.json — the Python↔TS determinism fixture. */
-export interface ParityTraceStep {
+/** parity.json — the Python↔TS determinism fixture (two scripted critters,
+ * so the opponent obs channels are exercised, not just physics). */
+export interface ParityCritterStep {
   x: number;
   y: number;
   vx: number;
@@ -86,6 +94,11 @@ export interface ParityTraceStep {
   lava: boolean;
   obs: number[];
   reward: number;
+}
+
+export interface ParityTraceStep {
+  a: ParityCritterStep;
+  b: ParityCritterStep;
   gems: number[][];
 }
 
@@ -93,8 +106,9 @@ export interface ParityArtifact {
   seed: number;
   nGems: number;
   nLava: number;
-  layout: { gems: number[][]; lava: number[][]; critter: number[] };
+  layout: { gems: number[][]; lava: number[][]; critters: number[][] };
   stats: { eats: number; lavaHits: number; steps: number };
-  actions: number[];
+  /** Per step: [actionA, actionB] — replayed A first, then B. */
+  actions: number[][];
   trace: ParityTraceStep[];
 }

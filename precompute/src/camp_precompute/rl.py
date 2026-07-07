@@ -64,7 +64,7 @@ GEM_EATER_CLEAR = 0.2              # respawn keeps clear of the critter that ate
 CRITTER_LAVA_CLEAR = LAVA_R + CRITTER_R + 0.05
 MAX_SAMPLE_TRIES = 40
 
-OBS_SIZE = 12
+OBS_SIZE = 17
 N_ACTIONS = 5        # noop, up, down, left, right (screen coords: up = −y)
 HIDDEN = 64
 
@@ -73,7 +73,18 @@ OBS_LAYOUT = [
     "gemDx", "gemDy", "gemDist",
     "lavaDx", "lavaDy", "lavaDist",
     "wallL", "wallR", "wallU", "wallD",
+    # Egocentric opponent block, APPENDED (never reorder: downstream channel
+    # indices — handicap masks, tests — are positional). Velocity is what lets
+    # the policy anticipate instead of merely react.
+    "oppDx", "oppDy", "oppDist",
+    "oppVx", "oppVy",
 ]
+
+# "No opponent" sentinel (solo recipes, sandbox playback): mirrors
+# nearest_block's empty-world (0, 0, 1) convention, plus zero velocity.
+# MUST equal OPP_ABSENT in env.ts.
+OPP_ABSENT = (0.0, 0.0, 1.0, 0.0, 0.0)
+OPP_DIST_I = OBS_LAYOUT.index("oppDist")  # = OPP_START + 2 in env.ts
 ACTIONS = ["noop", "up", "down", "left", "right"]
 
 # Fixed arrangement the station opens with (training uses random layouts; the
@@ -300,14 +311,24 @@ def step_critter(world: World, c: Critter, action: int) -> dict:
     return {"ate": ate, "lava_enter": lava_enter}
 
 
-def build_obs(world: World, c: Critter) -> list[float]:
+def build_obs(world: World, c: Critter, other: Critter | None = None) -> list[float]:
     gdx, gdy, gdist = nearest_block(world.gems, c.x, c.y)
     ldx, ldy, ldist = nearest_block(world.lavas, c.x, c.y)
+    if other is None:
+        odx, ody, odist, ovx, ovy = OPP_ABSENT
+    else:
+        odx = other.x - c.x
+        ody = other.y - c.y
+        odist = math.sqrt(odx * odx + ody * ody) / math.sqrt(2)
+        ovx = other.vx / VMAX
+        ovy = other.vy / VMAX
     return [
         c.vx / VMAX, c.vy / VMAX,
         gdx, gdy, gdist,
         ldx, ldy, ldist,
         c.x, 1 - c.x, c.y, 1 - c.y,
+        odx, ody, odist,
+        ovx, ovy,
     ]
 
 
@@ -322,13 +343,21 @@ RECIPES = [
         "id": "forager",
         "label": "覓食者",
         "isGood": True,
-        "rewardDesc": "吃到寶石 +1(靠近寶石有引導分);碰到岩漿 −1(貼近也會微扣分);每一步 −0.001",
-        "totalSteps": 1_000_000,
-        # Milestones straddle the learning S-curve (takeoff ≈ 175k–400k, still
-        # climbing at 1M) so every slider rung LOOKS different: frozen → first
-        # steps → a few gems → competent → strong → final.
-        "checkpointSteps": [0, 200_000, 300_000, 400_000, 600_000, 1_000_000],
+        "rewardDesc": "吃到寶石 +1(靠近寶石有引導分);對手吃到 −0.5(搶輸有代價);碰到岩漿 −1(貼近也會微扣分);每一步 −0.001",
+        "totalSteps": 2_000_000,
+        # DENSE checkpoints: the shipped 6-rung ladder is SELECTED from these
+        # at export time by measured head-to-head strength (select_ladder) —
+        # under self-play, strength is non-monotonic in steps, so step
+        # milestones alone can't order the difficulty slider honestly.
+        "checkpointSteps": list(range(0, 2_000_001, 100_000)),
         "entCoef": 0.015,
+        # Multi-seed selection: 4 seeds swept at obs 17 (the forage-vs-freeze
+        # takeoff is init-sensitive); 20260709 gave the strongest, cleanest
+        # lineage (34.6 solo gems/ep @2M, best lava discipline).
+        "seed": 20260709,
+        # Trained BY SELF-PLAY against frozen snapshots of itself in a shared
+        # world (reward unchanged — contesting must EMERGE from gem scarcity).
+        "selfPlay": True,
     },
     {
         "id": "couch_potato",
@@ -367,6 +396,15 @@ COUCH_SPEED = 0.05  # "almost still" threshold for couch_potato (units/s)
 LAVA_ENTER_PENALTY = 1.0
 LAVA_NEAR = 0.21
 LAVA_NEAR_COEF = 0.015
+
+# Relative-advantage term (FLAGGED: the one deliberate competitive nudge).
+# With 4 gems and instant respawn, scarcity alone is too weak for contesting
+# to pay — measured: a forager trained without this plays BETTER with its
+# opponent channels blinded. Charging the learner for the opponent's eats
+# makes racing/denial genuinely valuable without scripting any behavior.
+# Applied where the opponent moves (train loop; useArena race tick in TS) so
+# env_step's traced rewards — and the parity fixture — stay untouched.
+OPP_STEAL_PENALTY = 0.5
 
 
 def recipe_reward(
@@ -410,10 +448,20 @@ def recipe_reward(
     raise ValueError(f"unknown recipe {recipe_id!r}")
 
 
-def env_step(world: World, c: Critter, action: int, recipe_id: str) -> tuple[list[float], float, dict]:
-    """Physics + obs + reward, in the canonical order. Returns (obs, reward, events)."""
+def env_step(
+    world: World,
+    c: Critter,
+    action: int,
+    recipe_id: str,
+    other: Critter | None = None,
+) -> tuple[list[float], float, dict]:
+    """Physics + obs + reward, in the canonical order. Returns (obs, reward, events).
+
+    `other` only feeds the obs's opponent block — reward never depends on it
+    (competition must emerge from shared-gem scarcity, not a scripted bonus).
+    """
     events = step_critter(world, c, action)
-    obs = build_obs(world, c)
+    obs = build_obs(world, c, other)
     speed = math.sqrt(c.vx * c.vx + c.vy * c.vy)
     gem_dist = obs[4]
     lava_dist = obs[7]
@@ -441,53 +489,77 @@ def _greedy_action(dx: float, dy: float) -> int:
 
 
 def build_parity() -> dict:
+    """TWO scripted critters in one world, so the fixture also exercises the
+    egocentric opponent channels (contested gems, one critter tracking the
+    other) — not just physics. Per step: A moves, then B (playback's order)."""
     rng = Mulberry32(PARITY_SEED)
     world = make_world(rng)
-    critter = spawn_critter(world, rng)
+    ca = spawn_critter(world, rng)
+    cb = spawn_critter(world, rng)
     layout = {
         "gems": [[g[0], g[1]] for g in world.gems],
         "lava": [[l[0], l[1]] for l in world.lavas],
-        "critter": [critter.x, critter.y],
+        "critters": [[ca.x, ca.y], [cb.x, cb.y]],
     }
 
-    actions: list[int] = []
+    actions: list[list[int]] = []
     trace: list[dict] = []
 
-    def run(n: int, pick) -> None:
+    def side(c: Critter, obs: list[float], reward: float, events: dict) -> dict:
+        return {
+            "x": c.x,
+            "y": c.y,
+            "vx": c.vx,
+            "vy": c.vy,
+            "ate": events["ate"],
+            "lava": events["lava_enter"],
+            "obs": obs,
+            "reward": reward,
+        }
+
+    def run(n: int, pick_a, pick_b) -> None:
         for _ in range(n):
-            a = pick()
-            obs, reward, events = env_step(world, critter, a, "forager")
-            actions.append(a)
+            aa = pick_a()
+            ab = pick_b()
+            # A steps seeing B pre-move; B steps seeing A post-move — the
+            # exact order the TS test replays.
+            obs_a, rew_a, ev_a = env_step(world, ca, aa, "forager", cb)
+            obs_b, rew_b, ev_b = env_step(world, cb, ab, "forager", ca)
+            actions.append([aa, ab])
             trace.append(
                 {
-                    "x": critter.x,
-                    "y": critter.y,
-                    "vx": critter.vx,
-                    "vy": critter.vy,
-                    "ate": events["ate"],
-                    "lava": events["lava_enter"],
-                    "obs": obs,
-                    "reward": reward,
+                    "a": side(ca, obs_a, rew_a, ev_a),
+                    "b": side(cb, obs_b, rew_b, ev_b),
                     "gems": [[g[0], g[1]] for g in world.gems],
                 }
             )
 
-    # 1) chase gems — eats + RNG-consuming respawns
-    run(300, lambda: _greedy_action(*nearest_block(world.gems, critter.x, critter.y)[:2]))
-    # 2) seek lava — entry penalty + knockback (repeatedly: knocked out, dives back)
-    run(120, lambda: _greedy_action(*nearest_block(world.lavas, critter.x, critter.y)[:2]))
-    # 3) grind the walls — clamped position + zeroed velocity
-    run(60, lambda: 4)
-    run(45, lambda: 1)
-    # 4) idle — drag decay to rest
-    run(30, lambda: 0)
+    def chase_gems(c: Critter):
+        return lambda: _greedy_action(*nearest_block(world.gems, c.x, c.y)[:2])
 
-    eats = sum(t["ate"] for t in trace)
-    lava_hits = sum(1 for t in trace if t["lava"])
-    if eats < 2 or lava_hits < 1:
+    # 1) both chase gems — contested eats + RNG-consuming respawns
+    run(300, chase_gems(ca), chase_gems(cb))
+    # 2) A seeks lava (entry penalty + knockback); B hunts A (opponent channels
+    #    track a mover on both sides)
+    run(
+        120,
+        lambda: _greedy_action(*nearest_block(world.lavas, ca.x, ca.y)[:2]),
+        lambda: _greedy_action(ca.x - cb.x, ca.y - cb.y),
+    )
+    # 3) A grinds the walls (clamped position + zeroed velocity); B forages
+    run(60, lambda: 4, chase_gems(cb))
+    run(45, lambda: 1, chase_gems(cb))
+    # 4) idle — drag decay to rest
+    run(30, lambda: 0, lambda: 0)
+
+    eats = sum(t["a"]["ate"] + t["b"]["ate"] for t in trace)
+    lava_hits = sum(1 for t in trace if t["a"]["lava"] or t["b"]["lava"])
+    opp_dists = {round(t["a"]["obs"][OPP_DIST_I], 6) for t in trace}
+    if eats < 4 or lava_hits < 1 or len(opp_dists) < 50:
         raise SystemExit(
-            f"rl parity: script too tame (eats={eats}, lava={lava_hits}) — "
-            "it must exercise respawn RNG and lava knockback."
+            f"rl parity: script too tame (eats={eats}, lava={lava_hits}, "
+            f"distinct oppDist={len(opp_dists)}) — it must exercise respawn "
+            "RNG, lava knockback, and non-trivial opponent channels."
         )
 
     return {
@@ -495,9 +567,10 @@ def build_parity() -> dict:
         "station": STATION,
         "note": (
             "Cross-language determinism fixture: seed + initial layout + a "
-            "recorded action script + the full per-step trace (state, obs, "
-            "forager reward, gem positions) from the Python reference env. "
-            "apps/course2 replays `actions` through env.ts from the same seed "
+            "recorded two-critter action script + the full per-step trace "
+            "(state, obs incl. opponent channels, forager reward, gem "
+            "positions) from the Python reference env. apps/course2 replays "
+            "`actions` through env.ts from the same seed (A then B each step) "
             "and asserts every traced value matches within 1e-6. Regenerate "
             "with `camp-precompute rl-export` whenever env dynamics change."
         ),
@@ -523,6 +596,13 @@ def mlp_forward(w: dict[str, np.ndarray], obs: np.ndarray) -> np.ndarray:
     return w["W2"] @ h + w["b2"]
 
 
+def greedy_action(w: dict[str, np.ndarray], obs: list[float]) -> int:
+    """Deterministic argmax playback — THE decision rule the browser uses.
+    One definition so training opponents, checkpoint evals, and ladder
+    strength scoring can never disagree about it."""
+    return int(np.argmax(mlp_forward(w, np.asarray(obs))))
+
+
 def _round_weights(w: dict[str, np.ndarray], decimals: int = 4) -> dict[str, np.ndarray]:
     return {k: np.round(v.astype(np.float64), decimals) for k, v in w.items()}
 
@@ -540,11 +620,118 @@ def evaluate_policy(
         c = spawn_critter(world, rng)
         obs = build_obs(world, c)
         for _ in range(HORIZON):
-            a = int(np.argmax(mlp_forward(w, np.asarray(obs))))
+            a = greedy_action(w, obs)
             obs, r, events = env_step(world, c, a, recipe_id)
             total_r += r
             total_g += events["ate"]
     return total_r / episodes, total_g / episodes
+
+
+VS_SEED = 884_001
+
+
+def versus_eval(
+    w_a: dict[str, np.ndarray],
+    w_b: dict[str, np.ndarray],
+    episodes: int = 4,
+    seed: int = VS_SEED,
+) -> tuple[float, float]:
+    """Head-to-head in the two-critter env: both argmax, shared gems — exactly
+    the race regime minus the human. Returns (mean gem margin a−b, win rate
+    of a, ties = ½). Seeded and deterministic."""
+    margin = 0.0
+    wins = 0.0
+    for ep in range(episodes):
+        rng = Mulberry32(seed + ep)
+        world = make_world(rng)
+        ca = spawn_critter(world, rng)
+        cb = spawn_critter(world, rng)
+        obs_a = build_obs(world, ca, cb)
+        obs_b = build_obs(world, cb, ca)
+        ga = gb = 0
+        for _ in range(HORIZON):
+            aa = greedy_action(w_a, obs_a)
+            ab = greedy_action(w_b, obs_b)
+            ga += step_critter(world, ca, aa)["ate"]
+            gb += step_critter(world, cb, ab)["ate"]
+            obs_a = build_obs(world, ca, cb)
+            obs_b = build_obs(world, cb, ca)
+        margin += ga - gb
+        wins += 1.0 if ga > gb else (0.5 if ga == gb else 0.0)
+    return margin / episodes, wins / episodes
+
+
+LADDER_SIZE = 6
+
+
+def select_ladder(cks: list[dict]) -> tuple[list[int], list[float]]:
+    """Order the training-progress ladder by MEASURED strength, not step count.
+
+    Under self-play, strength is non-monotonic in training steps (late
+    checkpoints overfit to the recent pool; the end-of-run anneal can leave
+    the last one brittle), so "slider fully right = hardest" must be earned:
+    round-robin every dense checkpoint against a spread panel, rematch the top
+    finalists seat-averaged to crown the final rung, and pick middle rungs as
+    the earliest checkpoints crossing evenly spaced strength thresholds —
+    monotone in BOTH steps and strength, so dragging the slider right is
+    honestly harder.
+
+    `cks`: [{"target": int, "weights": {...}}, ...] in step order (0 first).
+    Returns (chosen indices, per-candidate mean gem margin vs the panel).
+    """
+    n = len(cks)
+    panel = sorted({round(k * (n - 1) / 4) for k in range(5)})
+    scores: list[float] = []
+    for ck in cks:
+        # Every candidate faces the SAME panel, self-matches included —
+        # skipping the self-match would give panel members one fewer (often
+        # the hardest) opponent and systematically inflate their scores.
+        margins = [
+            versus_eval(ck["weights"], cks[j]["weights"])[0] for j in panel
+        ]
+        scores.append(float(np.mean(margins)))
+    # Stage 2 — the coarse scores are noisy (20 episodes, one seating, and
+    # seat A has a real first-mover edge on contested gems), so don't crown
+    # the raw argmax: rematch the top finalists all-vs-all with more episodes
+    # and BOTH seatings (seat-averaged margins cancel the bias).
+    finalists = sorted(
+        sorted(range(n), key=lambda i: scores[i], reverse=True)[:5]
+    )
+    duels: dict[int, list[float]] = {i: [] for i in finalists}
+    for a in finalists:
+        for b in finalists:
+            if a >= b:
+                continue
+            m_ab = versus_eval(cks[a]["weights"], cks[b]["weights"], episodes=8)[0]
+            m_ba = versus_eval(cks[b]["weights"], cks[a]["weights"], episodes=8)[0]
+            seat_avg = (m_ab - m_ba) / 2
+            duels[a].append(seat_avg)
+            duels[b].append(-seat_avg)
+    final_i = max(finalists, key=lambda i: float(np.mean(duels[i])))
+    print(
+        "  finalists (seat-averaged all-vs-all): "
+        + ", ".join(
+            f"@{cks[i]['target']}={float(np.mean(duels[i])):+.2f}" for i in finalists
+        )
+    )
+    chosen = [0]
+    lo, hi = scores[0], scores[final_i]
+    for k in range(1, LADDER_SIZE - 1):
+        thr = lo + (hi - lo) * k / (LADDER_SIZE - 1)
+        for i in range(chosen[-1] + 1, final_i):
+            if scores[i] >= thr and scores[i] > scores[chosen[-1]]:
+                chosen.append(i)
+                break
+    if chosen[-1] != final_i:
+        chosen.append(final_i)
+    if len(chosen) < 4:
+        raise SystemExit(
+            f"rl: select_ladder picked only {len(chosen)} rungs "
+            f"(scores {['%.2f' % s for s in scores]}) — the strength curve is "
+            "too flat/cliff-shaped for a training-progress slider. Retrain "
+            "(more steps, denser checkpoints) before exporting."
+        )
+    return chosen, scores
 
 
 # ---------------------------------------------------------------------------
@@ -564,13 +751,30 @@ ENT_COEF = 0.01
 VF_COEF = 0.5
 MAX_GRAD_NORM = 0.5
 
+# Self-play (forager only) — fictitious self-play against a POOL of frozen
+# past snapshots. Naive latest-vs-latest cycles and collapses; the pool keeps
+# the progression stable and the checkpoints meaningfully different.
+OPP_ABSENT_P = 0.25      # domain randomization: fraction of SOLO episodes, so
+                         # the shipped policy stays in-distribution in sandbox
+OPP_PAST_P = 0.60        # given present: a frozen pool snapshot
+OPP_CURRENT_P = 0.25     # given present: the live current policy (no grad)
+                         # remaining 0.15: noop baseline (static, perceivable)
+POOL_SIZE = 8
+POOL_EVERY_ITERS = 25    # snapshot cadence: 25 iters × 2048 ≈ every 51k steps
+
 STATE_NPZ = "rl_{recipe}.npz"
 
 
 class _EnvSlot:
-    """One training env instance: world + critter + episode bookkeeping."""
+    """One training env instance: world + critter + episode bookkeeping.
+    `opp`/`opp_w` are the self-play opponent (forager only): a second critter
+    in the SAME world driven by frozen weights ("current" resolves to the live
+    policy at step time; None with opp present = noop baseline)."""
 
-    __slots__ = ("rng", "world", "critter", "obs", "ep_return", "ep_steps", "ep_gems")
+    __slots__ = (
+        "rng", "world", "critter", "obs", "ep_return", "ep_steps", "ep_gems",
+        "opp", "opp_w",
+    )
 
     def __init__(self, seed: int):
         self.rng = Mulberry32(seed)
@@ -583,24 +787,28 @@ class _EnvSlot:
         self.ep_return = 0.0
         self.ep_steps = 0
         self.ep_gems = 0
+        self.opp = None
+        self.opp_w = None
 
 
 def _actor_weights(actor) -> dict[str, np.ndarray]:
+    """Snapshot the actor as numpy COPIES. `.numpy()` on a CPU tensor returns
+    a VIEW of live parameter storage — without `.copy()`, self-play pool
+    entries would silently track every optimizer step (i.e. degenerate to the
+    latest-vs-latest self-play the pool exists to prevent)."""
     sd = actor.state_dict()
-    return {
-        "W0": sd["net.0.weight"].detach().cpu().numpy(),
-        "b0": sd["net.0.bias"].detach().cpu().numpy(),
-        "W1": sd["net.2.weight"].detach().cpu().numpy(),
-        "b1": sd["net.2.bias"].detach().cpu().numpy(),
-        "W2": sd["net.4.weight"].detach().cpu().numpy(),
-        "b2": sd["net.4.bias"].detach().cpu().numpy(),
+    keys = {
+        "W0": "net.0.weight", "b0": "net.0.bias",
+        "W1": "net.2.weight", "b1": "net.2.bias",
+        "W2": "net.4.weight", "b2": "net.4.bias",
     }
+    return {k: sd[v].detach().cpu().numpy().copy() for k, v in keys.items()}
 
 
 def train_recipe(recipe: dict, artifacts_dir: Path) -> Path:
     """Train one reward recipe with PPO; save checkpoints + return curve npz.
 
-    CPU on purpose: the nets are tiny (obs 12 → 64 → 64 → 5), so device
+    CPU on purpose: the nets are tiny (obs 17 → 64 → 64 → 5), so device
     transfer would dominate GPU compute, and seeded CPU torch is deterministic.
     """
     import torch
@@ -611,8 +819,12 @@ def train_recipe(recipe: dict, artifacts_dir: Path) -> Path:
     total_steps = recipe["totalSteps"]
     targets = sorted(set(recipe["checkpointSteps"]))
 
-    torch.manual_seed(TRAIN_SEED)
-    np.random.seed(TRAIN_SEED)
+    # Per-recipe seed override: the forage-vs-freeze takeoff is init-sensitive
+    # (the noop attractor is close — see the reward-economics comments), so the
+    # forager's seed was SELECTED by a small sweep, multi-seed-selection style.
+    seed = int(recipe.get("seed", TRAIN_SEED))
+    torch.manual_seed(seed)
+    np.random.seed(seed)
     device = "cpu"
 
     def make_net(out: int, final_gain: float) -> nn.Module:
@@ -648,7 +860,32 @@ def train_recipe(recipe: dict, artifacts_dir: Path) -> Path:
         list(actor.parameters()) + list(critic.parameters()), lr=LR, eps=1e-5
     )
 
-    envs = [_EnvSlot(TRAIN_SEED + 1000 * i + 1) for i in range(N_ENVS)]
+    envs = [_EnvSlot(seed + 1000 * i + 1) for i in range(N_ENVS)]
+
+    selfplay = bool(recipe.get("selfPlay", False))
+    pool: list[dict[str, np.ndarray]] = []  # frozen actor snapshots (ring)
+    cur_w = _actor_weights(actor)           # refreshed once per iteration
+
+    def assign_opponent(e: _EnvSlot) -> None:
+        """Sample this episode's opponent (np.random is seeded → deterministic).
+        Mostly a frozen PAST snapshot; sometimes the current policy; sometimes
+        a noop baseline; and a solo fraction so sandbox stays in-distribution."""
+        if not selfplay:
+            return
+        if float(np.random.random()) < OPP_ABSENT_P:
+            return  # reset() already left opp/opp_w as None (sentinel obs)
+        e.opp = spawn_critter(e.world, e.rng)
+        v = float(np.random.random())
+        if v < OPP_PAST_P and pool:
+            e.opp_w = pool[int(np.random.random() * len(pool))]
+        elif v < OPP_PAST_P + OPP_CURRENT_P or not pool:
+            e.opp_w = "current"
+        else:
+            e.opp_w = None  # noop baseline: stands still, still perceivable
+        e.obs = build_obs(e.world, e.critter, e.opp)
+
+    for e in envs:
+        assign_opponent(e)
 
     checkpoints: list[dict] = []  # {"step": int, "target": int, "weights": {...}}
     next_target = 0
@@ -676,6 +913,15 @@ def train_recipe(recipe: dict, artifacts_dir: Path) -> Path:
 
     while steps_done < total_steps:
         snapshot(steps_done)
+
+        if selfplay:
+            cur_w = _actor_weights(actor)
+            # Ring of past selves — refreshed on a fixed cadence. Iteration 0
+            # seeds it with the untrained policy (the early curriculum).
+            if len(curve_steps) % POOL_EVERY_ITERS == 0:
+                pool.append(cur_w)
+                if len(pool) > POOL_SIZE:
+                    pool.pop(0)
 
         # Linear anneal (standard PPO trick): explore early, converge crisply —
         # matters because playback is deterministic argmax.
@@ -721,17 +967,39 @@ def train_recipe(recipe: dict, artifacts_dir: Path) -> Path:
             val_buf[t] = vals.cpu().numpy()
 
             for i, e in enumerate(envs):
-                obs, r, events = env_step(e.world, e.critter, int(act_buf[t, i]), recipe_id)
+                obs, r, events = env_step(
+                    e.world, e.critter, int(act_buf[t, i]), recipe_id, e.opp
+                )
+                steal = 0.0
+                if e.opp is not None:
+                    # The FROZEN opponent moves after the learner (playback's
+                    # order: agent then human). Argmax, no gradient — only the
+                    # learner's transitions enter the PPO buffer.
+                    ow = cur_w if e.opp_w == "current" else e.opp_w
+                    if ow is None:
+                        oa = 0  # noop baseline
+                    else:
+                        oa = greedy_action(ow, build_obs(e.world, e.opp, e.critter))
+                    opp_events = step_critter(e.world, e.opp, oa)
+                    if recipe_id == "forager":
+                        steal = OPP_STEAL_PENALTY * opp_events["ate"]
+                    # Rebuild the learner's obs post-opponent-move: its next
+                    # decision (and any truncation bootstrap) must see where
+                    # the opponent actually is — and which gems it just ate.
+                    obs = build_obs(e.world, e.critter, e.opp)
                 e.obs = obs
-                e.ep_return += r  # curve records the TRUE recipe reward
+                e.ep_return += r - steal  # the curve records the TRUE objective
                 e.ep_gems += events["ate"]
                 e.ep_steps += 1
-                rew_buf[t, i] = r + (lava_refund if events["lava_enter"] else 0.0)
+                rew_buf[t, i] = (
+                    r - steal + (lava_refund if events["lava_enter"] else 0.0)
+                )
                 if e.ep_steps >= HORIZON:
                     done_buf[t, i] = 1.0
                     trunc_obs.append((t, i, obs))
                     finished_returns.append(e.ep_return)
                     e.reset()
+                    assign_opponent(e)
         steps_done += ROLLOUT_T * N_ENVS
 
         with torch.no_grad():
@@ -853,7 +1121,7 @@ def _steps_label(target: int, is_final: bool) -> str:
     if target == 0:
         return "0(隨機)"
     if target >= 1_000_000:
-        base = f"{target // 1_000_000}M"
+        base = f"{target / 1_000_000:g}M"
     elif target >= 1000:
         base = f"{target // 1000}k"
     else:
@@ -895,32 +1163,71 @@ def rl_export(out_dir: Path, artifacts_dir: Path) -> list[Path]:
             )
         z = np.load(path, allow_pickle=False)
         n_ck = int(z["n_checkpoints"])
-        targets = [int(z[f"ck{i}_target"]) for i in range(n_ck)]
-        final_target = max(targets)
-        checkpoints = []
+        if int(z["ck0_W0"].shape[1]) != OBS_SIZE:
+            raise SystemExit(
+                f"rl: {path} was trained at obs width {z['ck0_W0'].shape[1]}, "
+                f"but OBS_SIZE is now {OBS_SIZE} — a stale artifact would ship "
+                "a policy blind to the new channels. Rerun `train-rl`."
+            )
+        raw = []
         for i in range(n_ck):
-            target = int(z[f"ck{i}_target"])
-            checkpoints.append(
+            raw.append(
                 {
                     "step": int(z[f"ck{i}_step"]),
-                    "target": target,
-                    "label": _steps_label(target, target == final_target and target > 0),
+                    "target": int(z[f"ck{i}_target"]),
                     "returnMean": float(z[f"ck{i}_return_mean"]),
                     "gemsMean": float(z[f"ck{i}_gems_mean"]),
-                    "weights": _weights_json(
-                        {k: z[f"ck{i}_{k}"] for k in ("W0", "b0", "W1", "b1", "W2", "b2")}
-                    ),
+                    "weights": {
+                        k: z[f"ck{i}_{k}"] for k in ("W0", "b0", "W1", "b1", "W2", "b2")
+                    },
                 }
             )
+        if recipe.get("selfPlay"):
+            if n_ck <= LADDER_SIZE:
+                raise SystemExit(
+                    f"rl: {path} has only {n_ck} checkpoints — a self-play "
+                    "recipe needs the dense grid for strength-ordered ladder "
+                    "selection. Rerun `train-rl` (stale npz?)."
+                )
+            # Self-play strength is non-monotonic in steps: measure it, ship
+            # the argmax as the final rung, order the ladder by strength.
+            print(f"rl: {recipe['id']}: round-robin strength eval over {n_ck} checkpoints…")
+            chosen, scores = select_ladder(raw)
+            for i, ck in enumerate(raw):
+                mark = " ← ladder" if i in chosen else ""
+                print(f"  @{ck['target']}: vs-panel margin {scores[i]:+.2f}{mark}")
+            picked = [raw[i] for i in chosen]
+            for i, ck in zip(chosen, picked):
+                ck["vsPanelMargin"] = round(scores[i], 2)
+        else:
+            picked = raw
+        checkpoints = []
+        for i, ck in enumerate(picked):
+            is_final = i == len(picked) - 1 and ck["target"] > 0
+            checkpoints.append(
+                {
+                    **ck,
+                    "label": _steps_label(ck["target"], is_final),
+                    "weights": _weights_json(ck["weights"]),
+                }
+            )
+        # Trim the curve at the shipped final rung (the strength argmax can sit
+        # well before totalSteps): the slider's rightmost position must reach
+        # the END of the plotted curve, not strand a dangling tail.
+        shipped_end = picked[-1]["target"]
+        raw_steps = [int(s) for s in z["curve_steps"]]
+        raw_returns = [round(float(r), 3) for r in z["curve_returns"]]
+        kept = [k for k, s in enumerate(raw_steps) if s <= shipped_end]
         curve_steps, curve_returns = _downsample(
-            [int(s) for s in z["curve_steps"]],
-            [round(float(r), 3) for r in z["curve_returns"]],
+            [raw_steps[k] for k in kept],
+            [raw_returns[k] for k in kept],
         )
         recipes_out.append(
             {
                 "id": recipe["id"],
                 "label": recipe["label"],
                 "isGood": recipe["isGood"],
+                "selfPlay": bool(recipe.get("selfPlay", False)),
                 "rewardDesc": recipe["rewardDesc"],
                 "totalSteps": recipe["totalSteps"],
                 "curveSteps": curve_steps,
@@ -954,6 +1261,7 @@ def rl_export(out_dir: Path, artifacts_dir: Path) -> list[Path]:
             "nLava": N_LAVA,
             "horizon": HORIZON,
             "obsLayout": OBS_LAYOUT,
+            "oppAbsent": list(OPP_ABSENT),
             "actions": ACTIONS,
             "defaultLayout": DEFAULT_LAYOUT,
         },

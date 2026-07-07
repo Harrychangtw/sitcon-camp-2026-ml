@@ -42,8 +42,17 @@ const GEM_EATER_CLEAR = 0.2;
 const CRITTER_LAVA_CLEAR = LAVA_R + CRITTER_R + 0.05;
 const MAX_SAMPLE_TRIES = 40;
 
-export const OBS_SIZE = 12;
+export const OBS_SIZE = 17;
 export const N_ACTIONS = 5;
+
+/** First index of the egocentric opponent block (appended after the original
+ * 12 channels — see OBS_LAYOUT in rl.py; order is positional and load-bearing). */
+export const OPP_START = 12;
+/** "No opponent" sentinel (sandbox, solo recipes): mirrors nearestBlock's
+ * empty-world (0, 0, 1) convention plus zero velocity. MUST equal rl.py's
+ * OPP_ABSENT. */
+export const OPP_ABSENT: readonly [number, number, number, number, number] =
+  [0, 0, 1, 0, 0];
 
 /** Screen coords: up = −y. Index IS the action id. */
 export const ACTION_NOOP = 0;
@@ -57,6 +66,11 @@ const COUCH_SPEED = 0.05;
 const LAVA_ENTER_PENALTY = 1.0;
 const LAVA_NEAR = 0.21;
 const LAVA_NEAR_COEF = 0.015;
+/** Relative-advantage term the forager was TRAINED with when an opponent is
+ * present: each gem the rival eats costs this much (makes contesting pay —
+ * see rl.py). Applied where the opponent moves (useArena's race tick), NOT
+ * in recipeReward, so the parity fixture's traced rewards are unaffected. */
+export const OPP_STEAL_PENALTY = 0.5;
 
 // --- mulberry32 — the shared deterministic RNG -------------------------------
 
@@ -267,14 +281,28 @@ export function stepCritter(world: WorldState, c: Critter, action: number): Step
   return { ate, lavaEnter };
 }
 
-export function buildObs(world: WorldState, c: Critter): number[] {
+export function buildObs(
+  world: WorldState,
+  c: Critter,
+  other: Critter | null = null,
+): number[] {
   const [gdx, gdy, gdist] = nearestBlock(world.gems, c.x, c.y);
   const [ldx, ldy, ldist] = nearestBlock(world.lavas, c.x, c.y);
+  let [odx, ody, odist, ovx, ovy] = OPP_ABSENT;
+  if (other !== null) {
+    odx = other.x - c.x;
+    ody = other.y - c.y;
+    odist = Math.sqrt(odx * odx + ody * ody) / Math.sqrt(2);
+    ovx = other.vx / VMAX;
+    ovy = other.vy / VMAX;
+  }
   return [
     c.vx / VMAX, c.vy / VMAX,
     gdx, gdy, gdist,
     ldx, ldy, ldist,
     c.x, 1 - c.x, c.y, 1 - c.y,
+    odx, ody, odist,
+    ovx, ovy,
   ];
 }
 
@@ -320,15 +348,17 @@ export interface StepResult {
   events: StepEvents;
 }
 
-/** Physics + obs + reward in the canonical order (mirrors env_step). */
+/** Physics + obs + reward in the canonical order (mirrors env_step).
+ * `other` only feeds the obs's opponent block — reward never depends on it. */
 export function envStep(
   world: WorldState,
   c: Critter,
   action: number,
   recipeId: RecipeId,
+  other: Critter | null = null,
 ): StepResult {
   const events = stepCritter(world, c, action);
-  const obs = buildObs(world, c);
+  const obs = buildObs(world, c, other);
   const speed = Math.sqrt(c.vx * c.vx + c.vy * c.vy);
   const gemDist = obs[4]!;
   const lavaDist = obs[7]!;
