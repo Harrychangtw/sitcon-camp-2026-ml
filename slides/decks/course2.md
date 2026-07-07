@@ -308,6 +308,7 @@ TEXT (verbatim)
 - Setup line (white): 「先看看：機器是怎麼『讀』一句話的。」
 - Task line (white, one lime run): 「把一段字丟進去，看它被切成哪些 **[lime: Token]**」
 - Follow-up (grey): 「輪到你動手 → 換不同的字、不同語言，看看切法怎麼變。」
+- Station link (grey, 🔗): 「開啟站台 · /tokenizer」 (clickable — Affinity hyperlink → https://sitconcamp-gpu-v100x4.boreray-hippocampus.ts.net/tokenizer)
 
 LAYOUT
 - Archetype skeleton: statement (hand-off framing)
@@ -418,6 +419,7 @@ TEXT (verbatim)
 - Setup line (white): 「這排『有語意的數字』，就住在一個空間裡。」
 - Task line (white, one lime run): 「逛一逛，看看哪些字 **[lime: 靠在一起]**。」
 - Follow-up (grey): 「輪到你動手 → 挑一個字，找出離它最近的鄰居。」
+- Station link (grey, 🔗): 「開啟站台 · /embedding」 (clickable — Affinity hyperlink → https://sitconcamp-gpu-v100x4.boreray-hippocampus.ts.net/embedding)
 
 LAYOUT
 - Archetype skeleton: statement (hand-off framing)
@@ -630,6 +632,7 @@ TEXT (verbatim)
 - Setup line (white): 「先別急著下結論。」
 - Task line (white, one lime run): 「同一句話，把字 **[lime: 打散順序]** 再丟一次。」
 - Follow-up (grey): 「輪到你動手 → 開關 shuffle、切換 MLP(bag) 與 RNN，看兩邊輸出怎麼變。」
+- Station link (grey, 🔗): 「開啟站台 · /order-shuffle」 (clickable — Affinity hyperlink → https://sitconcamp-gpu-v100x4.boreray-hippocampus.ts.net/order-shuffle)
 
 LAYOUT
 - Archetype skeleton: statement (hand-off framing)
@@ -741,6 +744,7 @@ TEXT (verbatim)
 - Setup line (white): 「換模型來猜：給它目前的字，看它押哪個。」
 - Task line (white, one lime run): 「慢慢放寬它能看的前文，看它的把握 **[lime: 怎麼變]**。」
 - Follow-up (grey): 「輪到你動手 → 調 context 視窗大小、決定要不要看更前面的字。」
+- Station link (grey, 🔗): 「開啟站台 · /next-token」 (clickable — Affinity hyperlink → https://sitconcamp-gpu-v100x4.boreray-hippocampus.ts.net/next-token)
 
 LAYOUT
 - Archetype skeleton: statement (hand-off framing)
@@ -806,6 +810,7 @@ TEXT (verbatim)
 - Setup line (white): 「剛剛是靜態圖，現在讓記憶動起來。」
 - Task line (white, one lime run): 「看 hidden state 一站一站 **[lime: 沿著句子往後流]**。」
 - Follow-up (grey): 「輪到你動手 → 看記憶怎麼流動，也看訓練時的 loss。」
+- Station link (grey, 🔗): 「開啟站台 · /rnn-viz」 (clickable — Affinity hyperlink → https://sitconcamp-gpu-v100x4.boreray-hippocampus.ts.net/rnn-viz)
 
 LAYOUT
 - Archetype skeleton: statement (hand-off framing)
@@ -892,6 +897,7 @@ TEXT (verbatim)
 - Setup line (white): 「先看看：一個字到底把注意力放在哪些字上。」
 - Task line (white, one lime run): 「點一個字，看它的 **[lime: attention]** 連到哪些字。」
 - Follow-up (grey): 「輪到你動手 → 點不同的字，看連線怎麼跳。」
+- Station link (grey, 🔗): 「開啟站台 · /transformer」 (clickable — Affinity hyperlink → https://sitconcamp-gpu-v100x4.boreray-hippocampus.ts.net/transformer)
 
 LAYOUT
 - Archetype skeleton: statement (hand-off framing)
@@ -1081,6 +1087,26 @@ INTERACTIVE / STATION: none
 ---
 
 ## Notes back to Harry (writer fills as they go)
+
+**Addendum (2026-07-07 · station hyperlinks).** Stations are deployed and
+polished. Added a **clickable「開啟站台」link** to each of the six hand-off slides
+(05 · 09 · 15 · 20 · 23 · 27) so students jump straight into the live station.
+Base URL is the deployment `https://sitconcamp-gpu-v100x4.boreray-hippocampus.ts.net/`;
+each link appends the station's route slug (from
+`apps/course2/src/stations/registry.tsx`):
+
+| Slide | Station | URL |
+|-------|---------|-----|
+| 05 | Tokenizer 探索站 | …ts.net/**tokenizer** |
+| 09 | Embedding 探索站 | …ts.net/**embedding** |
+| 15 | 順序撞牆站 | …ts.net/**order-shuffle** |
+| 20 | next-token 站 | …ts.net/**next-token** |
+| 23 | RNN 視覺化 | …ts.net/**rnn-viz** |
+| 27 | Transformer 站 | …ts.net/**transformer** |
+
+In Affinity: set each「開啟站台 · /slug」line as a hyperlink to the full URL in the
+parenthetical. If the projector screen can't be clicked live, consider a small QR
+of the same URL beside the link.
 
 **Addendum (2026-07-02 · build-sync pass).** Harry is laying the deck out off a
 prior ~49-slide keynote and is currently through page 9; per Harry, **slide

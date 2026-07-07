@@ -66,8 +66,13 @@ sync from `slides/marp/`:
 ```bash
 node scripts/build-web.mjs \
   --base=/slides/sitcon-camp-26-ml-course2 \
-  ~/…/portfolio-monorepo/apps/harrychang-me/public/slides/sitcon-camp-26-ml-course2
+  ~/Documents/01_dev-project/portfolio-monorepo/apps/harrychang-me/public/slides/sitcon-camp-26-ml-course2
 ```
+
+Use the **full deploy path** — the script does not resolve placeholders. A
+literal `~/…/portfolio-monorepo/...` is a valid but bogus path, so the sync
+silently "succeeds" into a junk `~/…/` dir and the real bundle never updates.
+If a rebuild doesn't show up on the site, check the dest arg first.
 
 That writes `public/slides/sitcon-camp-26-ml-course2/{index.html,assets/}`. A
 rewrite in the portfolio's `next.config.mjs` maps the bare pretty URL to the
@@ -77,6 +82,50 @@ bundle's `index.html`, so the deck lives at:
 
 The bundle is a static artifact — commit it in the portfolio repo (it does not
 rebuild there). Re-run the command above whenever `deck/course2.md` changes.
+
+## Live stations short URL (camp.harrychang.me)
+
+The Course 2 live stations run on the camp GPU box behind a Tailscale Funnel:
+`https://sitconcamp-gpu-v100x4.boreray-hippocampus.ts.net/<station>`. That
+hostname is unmemorable and miserable to type off a slide, so the portfolio
+fronts it with a short, phone-typeable domain:
+
+> **camp.harrychang.me/&lt;station&gt;** → `…ts.net/<station>` (307)
+
+| Short URL | Forwards to |
+|---|---|
+| `camp.harrychang.me` | `…ts.net/` (the Funnel base) |
+| `camp.harrychang.me/tokenizer` | `…ts.net/tokenizer` |
+| `camp.harrychang.me/embedding` | `…ts.net/embedding` |
+| `camp.harrychang.me/order-shuffle` | `…ts.net/order-shuffle` |
+| `camp.harrychang.me/next-token` | `…ts.net/next-token` |
+| `camp.harrychang.me/rnn-viz` | `…ts.net/rnn-viz` |
+| `camp.harrychang.me/transformer` | `…ts.net/transformer` |
+
+The forward is path-agnostic (`/<anything>` → `…ts.net/<anything>`, query
+string preserved), so a new station works with no code change.
+
+**Where the forward lives (portfolio repo, `apps/harrychang-me`):**
+
+- `middleware.ts` — the `isCamp` block. `CAMP_STATION_BASE_URL` is the **single
+  source of truth** for the Funnel address (root included — the bare host
+  forwards to `…ts.net/`).
+
+**If the Funnel address changes** (it is *not* stable across `tailscale funnel`
+restarts): edit `CAMP_STATION_BASE_URL` in `middleware.ts` (one line, no
+trailing slash), commit, and redeploy the portfolio. Nothing else references
+the tunnel host, so this is the only edit.
+
+**One-time DNS/Vercel setup** (required before the short URL resolves — the
+`middleware.ts` change alone does nothing until the host reaches Vercel):
+
+1. Add `camp.harrychang.me` as a domain to the portfolio's Vercel project.
+2. Point the DNS record at Vercel per its instructions (CNAME → `cname.vercel-dns.com`).
+
+The deck's station chips still link the raw `…ts.net/<station>` URL directly
+(clicking works either way); `camp.harrychang.me/<station>` is the short form
+you read aloud for students to type. Keep the two in sync if you ever change the
+Funnel host.
 
 ## Where things live
 
