@@ -302,17 +302,6 @@ export function TransformerStation() {
   const [liveRejected, setLiveRejected] = useState(false);
   const [liveShown, setLiveShown] = useState(false);
 
-  // Context-window knob (shared with the Next Token station): null = 全部 / full.
-  // A reduced window re-runs the CURRENT sentence on the GPU over just its last
-  // N tokens, so the whole pipeline (attention / embedding / MLP / output)
-  // reflects what the model can actually see.
-  const [contextTokens, setContextTokens] = useState<number | null>(null);
-  const [windowed, setWindowed] = useState<{
-    forId: string;
-    ctx: number;
-    sentence: PipelineSentence;
-  } | null>(null);
-
   const sentences = useMemo<PipelineSentence[]>(() => {
     const base = data?.sentences ?? [];
     return customSentence ? [...base, customSentence] : base;
@@ -335,9 +324,6 @@ export function TransformerStation() {
     setLiveMs(r.ms);
     setLiveShown(true);
     setSentenceId(r.data.sentenceId);
-    // A fresh sentence starts at full context.
-    setContextTokens(null);
-    setWindowed(null);
   };
 
   // The recorded sentences surface as the input's presets. A submitted text
@@ -357,77 +343,29 @@ export function TransformerStation() {
     const presetId = presetByText.get(t);
     if (presetId) {
       setSentenceId(presetId);
-      setContextTokens(null);
-      setWindowed(null);
       return;
     }
     void submitCustom(t);
   };
 
-  // The user's chosen base sentence (a recorded preset or a full typed live
-  // run) — always full context. Its source text drives windowed re-runs, and
-  // its token count sizes the context slider.
-  const baseSentence = useMemo(
+  const sentence = useMemo(
     () => sentences.find((s) => s.sentenceId === sentenceId) ?? null,
     [sentences, sentenceId],
   );
-  const baseText = baseSentence?.text ?? baseSentence?.tokens.join("") ?? "";
-
-  // The windowed override wins only when it belongs to exactly the current
-  // (sentence, window); otherwise the full base shows (e.g. while it loads).
-  const showingWindowed =
-    contextTokens !== null &&
-    windowed !== null &&
-    windowed.forId === sentenceId &&
-    windowed.ctx === contextTokens;
-  const sentence = showingWindowed && windowed ? windowed.sentence : baseSentence;
-
-  // Reduced window → re-run the base sentence's text on the GPU over its last N
-  // tokens. Full (null) just shows the base (recorded preset or full typed run).
-  useEffect(() => {
-    if (contextTokens === null || !baseText || !sentenceId) return;
-    const forId = sentenceId;
-    let alive = true;
-    setLivePending(true);
-    setLiveFailed(false);
-    setLiveRejected(false);
-    liveInferOutcome<LivePipeline>("/transformer/attention", {
-      text: baseText,
-      contextTokens,
-    }).then((r) => {
-      if (!alive) return;
-      setLivePending(false);
-      if (!r.ok) {
-        if (r.reason === "rejected") setLiveRejected(true);
-        else setLiveFailed(true);
-        return;
-      }
-      setWindowed({ forId, ctx: contextTokens, sentence: { ...r.data, text: baseText } });
-      setLiveMs(r.ms);
-      setLiveShown(true);
-    });
-    return () => {
-      alive = false;
-    };
-  }, [contextTokens, sentenceId, baseText]);
-
-  // A view is "live" when it shows a windowed re-run or a full typed sentence.
-  const isLiveView =
-    showingWindowed ||
-    (contextTokens === null && Boolean(sentence?.sentenceId.startsWith("live-")));
+  const showingLive = Boolean(sentence?.sentenceId.startsWith("live-"));
 
   const liveState = useMemo<LiveState>(() => {
     if (livePending) return { kind: "pending" };
     if (liveRejected) return { kind: "rejected" };
     if (liveFailed) return { kind: "cached" };
-    if (liveShown && isLiveView) return { kind: "live", ms: liveMs };
+    if (liveShown && showingLive) return { kind: "live", ms: liveMs };
     return { kind: "idle" };
-  }, [livePending, liveRejected, liveFailed, liveShown, isLiveView, liveMs]);
+  }, [livePending, liveRejected, liveFailed, liveShown, showingLive, liveMs]);
 
-  // A new sentence or window has different tokens — reset the hover.
+  // A new sentence has different tokens — reset the hover.
   useEffect(() => {
     setHovered(null);
-  }, [sentenceId, contextTokens, showingWindowed]);
+  }, [sentenceId]);
 
   // 3. DERIVED — the picked (layer, head) slice, indices clamped so a stale
   //    dial position is safe.
@@ -439,12 +377,6 @@ export function TransformerStation() {
   const tokens = useMemo(() => sentence?.tokens ?? [], [sentence]);
   const n = tokens.length;
   const displayTokens = useMemo(() => tokens.map(displayToken), [tokens]);
-
-  // Context slider extent: the base (full) sentence's token count. The max end
-  // is 全部 / full (contextTokens === null); attention needs ≥ 2 tokens, so the
-  // slider bottoms out at 2.
-  const sliderMax = Math.max(baseSentence?.tokens.length ?? 2, 2);
-  const sliderValue = Math.min(contextTokens ?? sliderMax, sliderMax);
 
   // Attention matrix for the Heatmap: upper triangle (key > query) → NaN so
   // the causal mask renders as visibly EMPTY cells, not zero-weight ones.
@@ -594,16 +526,6 @@ export function TransformerStation() {
       }
       controls={
         <DockControls>
-          <BlockSlider
-            label="context 視窗"
-            info="模型只看得到句子最後幾個 token。縮小視窗，attention、MLP 到最後的預測都只根據這幾個 token；放到「全部」就看整句。縮小後會即時重跑一次 GPU。"
-            min={2}
-            max={sliderMax}
-            step={1}
-            value={sliderValue}
-            onChange={(v) => setContextTokens(v >= sliderMax ? null : v)}
-            format={(v) => (v >= sliderMax ? "全部" : `${v}`)}
-          />
           <BlockSlider
             label="Layer"
             info="選看第幾層。attention matrix 和 MLP 切片都會跟著換層。淺層多半關注鄰近、表面的關係，越深的層才逐漸組合出比較抽象的語意。"

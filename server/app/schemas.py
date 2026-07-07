@@ -169,10 +169,6 @@ class RnnForwardResponse(BaseModel):
 # Sized so ~50 English tokens fit before the char cap bites.
 class TransformerRequest(BaseModel):
     text: str = Field(min_length=1, max_length=280)
-    # Context-window knob: how many TRAILING tokens the forward pass may see.
-    # None/absent = the whole sentence (unchanged behaviour). ge=2 because the
-    # attention matrix needs at least two tokens.
-    contextTokens: Optional[int] = Field(default=None, ge=2)
 
 
 class TransformerLayer(BaseModel):

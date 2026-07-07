@@ -205,7 +205,6 @@ def pipeline_payload(
     text: str,
     max_tokens: int = ATTENTION_MAX_TOKENS,
     top_n: int = NEXT_TOKEN_TOP_N,
-    context_tokens: int | None = None,
 ) -> dict:
     """ONE forward pass → everything the transformer station's pipeline diagram
     shows: token pieces + ids, a per-token input-embedding slice, the full
@@ -227,13 +226,6 @@ def pipeline_payload(
         raise ValueError("need at least 2 tokens")
     if n > max_tokens:
         raise ValueError(f"too many tokens ({n} > max {max_tokens})")
-    # Context window: keep only the last `window` tokens (the tail is what the
-    # forward pass conditions on). None = the whole sentence (the max_tokens cap
-    # still applies above). Attention needs at least 2 tokens to draw a matrix.
-    window = min(context_tokens or max_tokens, max_tokens)
-    ids = ids[:, -window:]
-    if int(ids.shape[1]) < 2:
-        raise ValueError("context window too small (need at least 2 tokens)")
     id_list = [int(i) for i in ids[0].tolist()]
     ids = ids.to(model.device)
 
