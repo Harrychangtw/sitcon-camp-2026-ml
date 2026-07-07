@@ -4,6 +4,8 @@ export interface BlockSliderProps {
   label: string;
   /** Optional hover tooltip on the label (e.g. what this control does). */
   info?: string;
+  /** Always-visible one-line plain-language identity under the label. */
+  gloss?: string;
   value: number;
   min: number;
   max: number;
@@ -22,12 +24,14 @@ export interface BlockSliderProps {
  * on hover the gradient fills in, the handle thickens, and the exact value folds
  * out above the handle. The outline and handle stay at full weight regardless.
  *
- * Renders as a `[label | control]` pair (two grid cells) so it aligns inside
- * `DockControls`.
+ * Renders as one `group/control` row spanning both `DockControls` columns
+ * (subgrid keeps the `[label | control]` cells aligned with sibling rows), so
+ * hovering anywhere on the row — track included — reveals the `info` panel.
  */
 export function BlockSlider({
   label,
   info,
+  gloss,
   value,
   min,
   max,
@@ -43,8 +47,8 @@ export function BlockSlider({
   const steps = Math.round((max - min) / step);
   const tickCount = steps > 0 && steps <= 40 ? steps + 1 : 0;
   return (
-    <>
-      <InfoLabel label={label} info={info} disabled={disabled} />
+    <div className="group/control col-span-2 grid grid-cols-subgrid items-center">
+      <InfoLabel label={label} info={info} gloss={gloss} disabled={disabled} />
       <div
         className={`group/blockslider relative flex h-7 items-center ${
           disabled ? "opacity-50" : ""
@@ -89,6 +93,6 @@ export function BlockSlider({
           className="relative h-7 w-full cursor-pointer appearance-none rounded-md bg-transparent disabled:cursor-not-allowed [&::-moz-range-thumb]:h-7 [&::-moz-range-thumb]:w-1 [&::-moz-range-thumb]:rounded-[1px] [&::-moz-range-thumb]:border-0 [&::-moz-range-thumb]:bg-fg [&::-moz-range-thumb]:transition-[width] [&::-moz-range-thumb]:duration-150 group-hover/blockslider:[&::-moz-range-thumb]:w-2 [&::-moz-range-track]:bg-transparent [&::-webkit-slider-runnable-track]:h-full [&::-webkit-slider-runnable-track]:rounded-md [&::-webkit-slider-runnable-track]:bg-transparent [&::-webkit-slider-thumb]:h-7 [&::-webkit-slider-thumb]:w-1 [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:rounded-[1px] [&::-webkit-slider-thumb]:bg-fg [&::-webkit-slider-thumb]:transition-[width] [&::-webkit-slider-thumb]:duration-150 group-hover/blockslider:[&::-webkit-slider-thumb]:w-2"
         />
       </div>
-    </>
+    </div>
   );
 }

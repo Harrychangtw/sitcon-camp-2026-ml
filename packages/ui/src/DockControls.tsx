@@ -6,9 +6,11 @@ export interface DockControlsProps {
 
 /**
  * Lays out dock controls as a vertical stack of `[label | control]` rows in a
- * shared two-column grid, so every control lines up on both edges. Each child
- * control (`BlockToggle` / `BlockSlider`) emits exactly its label cell + control
- * cell, and the grid auto-flows them into the columns.
+ * shared two-column grid, so every control lines up on both edges. A child
+ * either emits its label cell + control cell as flat siblings (`BlockButtons`)
+ * or wraps them in a `col-span-2` subgrid row (`BlockToggle` / `BlockSlider`,
+ * which use the row as a shared hover scope for the `info` panel); both
+ * auto-flow into the same column tracks.
  */
 export function DockControls({ children }: DockControlsProps) {
   return (
