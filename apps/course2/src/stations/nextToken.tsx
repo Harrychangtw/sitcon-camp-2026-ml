@@ -3,10 +3,12 @@
  *
  * The unifying idea: every language task is just "predict the next token."
  * The student types ANY prompt and watches a REAL next-token distribution —
- * Qwen3-0.6B computed live on the GPU server — then reshapes it with
- * temperature and top-k. The tokens are the model's real subword pieces
- * (a leading space is part of the token — the "␣" mark), which ties straight
- * back to the tokenizer station.
+ * Qwen3-0.6B computed live on the GPU server. The primary knob is the CONTEXT
+ * WINDOW (how many trailing tokens of the prompt the model may see): shrink it
+ * and the prediction goes vague, widen it and the distribution sharpens.
+ * Temperature and top-k stay as secondary knobs that reshape the distribution.
+ * The tokens are the model's real subword pieces (a leading space is part of
+ * the token, the "␣" mark), which ties straight back to the tokenizer station.
  *
  * The browser NEVER runs the model. Preset prompts are RECORDED Qwen outputs
  * (distributions.json, written by `camp-precompute next-token` with the same
@@ -26,6 +28,7 @@ import {
   type LiveState,
 } from "@camp/ui";
 import { liveInferTimed, loadJSON } from "@camp/data";
+import { CATEGORY_COLORS } from "../palette";
 
 interface TokenLogit {
   token: string;
@@ -40,6 +43,14 @@ interface LivePredict {
   model: string;
   topN: number;
   entries: TokenLogit[];
+  /** Total tokens in the prompt before truncation. Clamps the slider max. */
+  promptTokens: number;
+  /** How many trailing tokens the model actually saw (the effective window). */
+  contextTokens: number;
+  /** The prompt's decoded pieces in read order (len === promptTokens). */
+  promptPieces: string[];
+  /** Matching vocab ids (parallel to promptPieces). */
+  promptTokenIds: number[];
 }
 
 interface Distributions {
@@ -48,6 +59,10 @@ interface Distributions {
   suggestions: string[];
   /** Recorded real-model outputs for the preset prompts. */
   prompts: Record<string, TokenLogit[]>;
+  /** Recorded prompt pieces (read order) for each preset's context strip. */
+  pieces: Record<string, string[]>;
+  /** Matching vocab ids per preset (parallel to `pieces`). */
+  tokenIds: Record<string, number[]>;
 }
 
 type Decoding = "sampling" | "greedy";
@@ -86,7 +101,10 @@ export function NextTokenStation() {
   // 1. STATE — everything the canvas needs is plain component state.
   const [dist, setDist] = useState<Distributions | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [prompt, setPrompt] = useState("the cat sat on the");
+  const [prompt, setPrompt] = useState("台灣最高的山是玉");
+  // The primary knob: how many trailing tokens of the prompt the model may see.
+  // `null` = 全部 / full context (the top of the slider).
+  const [contextTokens, setContextTokens] = useState<number | null>(null);
   const [temperature, setTemperature] = useState(1);
   const [topK, setTopK] = useState(8);
   const [decoding, setDecoding] = useState<Decoding>("sampling");
@@ -102,14 +120,19 @@ export function NextTokenStation() {
     };
   }, []);
 
-  // A preset prompt already has its recorded distribution — no round-trip.
+  // A preset prompt has its recorded distribution — but only at FULL context.
+  // The recorded presets are full-context outputs (they back the offline
+  // fallback at the 全部 slider position); any REDUCED window must be served
+  // live, since only the server tokenizes and truncates.
   const trimmed = prompt.trim();
   const presetEntries = dist?.prompts[trimmed] ?? null;
+  const atFull = contextTokens === null;
+  const usePreset = atFull && presetEntries != null;
 
-  // ALWAYS-PREDICT — any non-preset prompt goes to the GPU server, which runs
-  // the SAME model that recorded the presets. On any failure `liveInferTimed`
-  // yields null and the station keeps the last good distribution (LiveStatus
-  // says so honestly).
+  // ALWAYS-PREDICT — anything not served by a full-context preset goes to the
+  // GPU server, which runs the SAME model that recorded the presets. On any
+  // failure `liveInferTimed` yields null and the station keeps the last good
+  // distribution (LiveStatus says so honestly).
   const [live, setLive] = useState<LivePredict | null>(null);
   const [liveMs, setLiveMs] = useState(0);
   const [livePending, setLivePending] = useState(false);
@@ -118,64 +141,96 @@ export function NextTokenStation() {
   useEffect(() => {
     setLive(null);
     setLiveFailed(false);
-    if (!trimmed || presetEntries) return;
+    if (!trimmed || usePreset) return;
     let alive = true;
     // Debounced: only ask the server once typing pauses. The pending stopwatch
     // starts when the request actually fires (not during the debounce), so its
-    // count matches the round-trip the final report shows.
+    // count matches the round-trip the final report shows. `contextTokens` is
+    // sent as-is (null → server uses the full cap); the server truncates.
     const timer = setTimeout(() => {
       setLivePending(true);
-      liveInferTimed<LivePredict>("/next-token/predict", { prompt: trimmed }).then(
-        (r) => {
-          if (!alive) return;
-          setLivePending(false);
-          if (r && r.data.prompt === trimmed) {
-            setLive(r.data);
-            setLiveMs(r.ms);
-          } else {
-            setLiveFailed(true);
-          }
-        },
-      );
+      liveInferTimed<LivePredict>("/next-token/predict", {
+        prompt: trimmed,
+        contextTokens,
+      }).then((r) => {
+        if (!alive) return;
+        setLivePending(false);
+        if (r && r.data.prompt === trimmed) {
+          setLive(r.data);
+          setLiveMs(r.ms);
+        } else {
+          setLiveFailed(true);
+        }
+      });
     }, 350);
     return () => {
       alive = false;
       clearTimeout(timer);
       setLivePending(false);
     };
-  }, [trimmed, presetEntries]);
+  }, [trimmed, usePreset, contextTokens]);
 
   const liveHit = live && live.prompt === trimmed ? live : null;
 
   const liveState = useMemo<LiveState>(() => {
-    if (!trimmed || presetEntries) return { kind: "idle" };
+    if (!trimmed || usePreset) return { kind: "idle" };
     if (livePending) return { kind: "pending" };
     if (liveHit) return { kind: "live", ms: liveMs };
     if (liveFailed) return { kind: "cached" };
     return { kind: "idle" };
-  }, [trimmed, presetEntries, livePending, liveHit, liveMs, liveFailed]);
+  }, [trimmed, usePreset, livePending, liveHit, liveMs, liveFailed]);
 
   // 3. DERIVED CANVAS DATA — preset and live answers flow through the SAME
   //    path. When both are missing (offline, non-preset prompt) the last good
   //    distribution stays on screen, labelled with the prompt it belongs to.
-  const lastGood = useRef<{ prompt: string; entries: TokenLogit[] } | null>(null);
+  const lastGood = useRef<{
+    prompt: string;
+    entries: TokenLogit[];
+    pieces: string[];
+    ids: number[];
+    /** How many trailing pieces the model saw for this distribution. */
+    context: number;
+  } | null>(null);
 
-  const { base, basePrompt } = useMemo(() => {
-    if (presetEntries) {
-      lastGood.current = { prompt: trimmed, entries: presetEntries };
-      return { base: presetEntries, basePrompt: trimmed };
+  const { base, basePrompt, basePieces, baseIds, baseContext } = useMemo(() => {
+    if (usePreset && presetEntries) {
+      // Full-context preset: every recorded piece is in-window (nothing trimmed).
+      const pieces = dist?.pieces[trimmed] ?? [];
+      const ids = dist?.tokenIds[trimmed] ?? [];
+      lastGood.current = { prompt: trimmed, entries: presetEntries, pieces, ids, context: pieces.length };
+      return { base: presetEntries, basePrompt: trimmed, basePieces: pieces, baseIds: ids, baseContext: pieces.length };
     }
     if (liveHit) {
-      lastGood.current = { prompt: liveHit.prompt, entries: liveHit.entries };
-      return { base: liveHit.entries, basePrompt: liveHit.prompt };
+      lastGood.current = {
+        prompt: liveHit.prompt,
+        entries: liveHit.entries,
+        pieces: liveHit.promptPieces,
+        ids: liveHit.promptTokenIds,
+        context: liveHit.contextTokens,
+      };
+      return {
+        base: liveHit.entries,
+        basePrompt: liveHit.prompt,
+        basePieces: liveHit.promptPieces,
+        baseIds: liveHit.promptTokenIds,
+        baseContext: liveHit.contextTokens,
+      };
     }
     if (lastGood.current) {
-      return { base: lastGood.current.entries, basePrompt: lastGood.current.prompt };
+      return {
+        base: lastGood.current.entries,
+        basePrompt: lastGood.current.prompt,
+        basePieces: lastGood.current.pieces,
+        baseIds: lastGood.current.ids,
+        baseContext: lastGood.current.context,
+      };
     }
     const first = dist?.suggestions[0];
     const entries = first ? dist?.prompts[first] ?? [] : [];
-    return { base: entries, basePrompt: first ?? "" };
-  }, [dist, trimmed, presetEntries, liveHit]);
+    const pieces = first ? dist?.pieces[first] ?? [] : [];
+    const ids = first ? dist?.tokenIds[first] ?? [] : [];
+    return { base: entries, basePrompt: first ?? "", basePieces: pieces, baseIds: ids, baseContext: pieces.length };
+  }, [dist, trimmed, usePreset, presetEntries, liveHit]);
 
   const stale = basePrompt !== trimmed;
 
@@ -192,6 +247,14 @@ export function NextTokenStation() {
 
   const argmaxToken = probs.length ? probs[0]!.token : null;
   const maxProb = probs.length ? probs[0]!.prob : 1;
+
+  // Slider extent. Until a live/preset response reports the real prompt length,
+  // fall back to a sensible fixed max so the slider is usable; once known (from
+  // the live promptTokens or the recorded preset pieces), clamp to it so the
+  // slider never promises more context than the prompt has. The max end is the
+  // 全部 / full position (contextTokens === null).
+  const sliderMax = (liveHit?.promptTokens ?? basePieces.length) || 16;
+  const sliderValue = Math.min(contextTokens ?? sliderMax, sliderMax);
 
   return (
     <StationLayout
@@ -211,6 +274,16 @@ export function NextTokenStation() {
       }
       controls={
         <DockControls>
+          <BlockSlider
+            label="context 視窗"
+            info="模型只看得到前文的最後幾個 token。視窗越小，可用線索越少、預測越不確定；放到「全部」就看整段前文。"
+            min={1}
+            max={sliderMax}
+            step={1}
+            value={sliderValue}
+            onChange={(v) => setContextTokens(v >= sliderMax ? null : v)}
+            format={(v) => (v >= sliderMax ? "全部" : `${v}`)}
+          />
           <BlockToggle<Decoding>
             label="解碼方式"
             info="決定怎麼從機率分布挑下一個 token。「取樣」依機率隨機抽，同樣的輸入每次可能不一樣；「貪婪」永遠選機率最高的那個，穩定但容易重複。"
@@ -247,8 +320,8 @@ export function NextTokenStation() {
       }
       takeaway={
         <span>
-          一個訓練好的 next token 預測器，加上一個 temperature 旋鈕，就是完整的
-          生成迴圈。這裡的每一條長條都是真的：GPU 上的{" "}
+          模型能看到的前文越多，對下一個 token 越有把握，機率越集中。這裡的每一
+          條長條都是真的：GPU 上的{" "}
           <span className="font-mono">Qwen3-0.6B</span>{" "}
           對你打的字算出來的分布。注意它預測的是 token，不是單字，「␣」表示
           token 自帶空格。
@@ -273,6 +346,78 @@ export function NextTokenStation() {
           // header labels name what each column is; no caption, no heatmap.
           <div className="absolute inset-0 overflow-auto px-8 pt-16 pb-28">
             <div className="mx-auto flex min-h-full max-w-xl flex-col justify-center">
+              {/* Context strip: the prompt's real pieces, in read order. The
+                  ones the window trims off are dimmed + struck through (the
+                  model can't see them); the in-window tail is solid and wires
+                  down into the distribution below. Makes "what context length
+                  does" literal. */}
+              {basePieces.length > 0 ? (
+                <div className="mb-4">
+                  <div className="mb-2 flex items-center justify-between">
+                    <span className="font-mono text-[10px] uppercase tracking-wide text-muted">
+                      前文 token
+                    </span>
+                    <span className="font-mono text-[10px] uppercase tracking-wide text-muted">
+                      {baseContext} / {basePieces.length} 看得到
+                    </span>
+                  </div>
+                  {/* Chips echo the Tokenizer station: a colored block per
+                      token with its vocab id beneath (same token, same id). The
+                      trimmed tail drops its color and greys out, so "the model
+                      can't see this" is unmistakable. */}
+                  <div className="flex flex-wrap items-start gap-1.5">
+                    {basePieces.map((piece, i) => {
+                      const inWindow = i >= basePieces.length - baseContext;
+                      const color = CATEGORY_COLORS[i % CATEGORY_COLORS.length];
+                      return (
+                        <div
+                          key={i}
+                          style={inWindow ? { backgroundColor: color } : undefined}
+                          className={`flex flex-col items-center rounded-md px-2 py-1 transition-opacity duration-200 ${
+                            inWindow ? "" : "bg-panel opacity-40"
+                          }`}
+                        >
+                          <span
+                            className={`whitespace-pre font-mono text-xs leading-none ${
+                              inWindow ? "text-white" : "text-muted line-through"
+                            }`}
+                          >
+                            {displayToken(piece)}
+                          </span>
+                          <span
+                            className={`mt-1 font-mono text-[0.5625rem] leading-none ${
+                              inWindow ? "text-white/70" : "text-muted/70"
+                            }`}
+                          >
+                            {baseIds[i] ?? ""}
+                          </span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                  {/* The wire: a small arrow from the in-window context down to
+                      the prediction. */}
+                  <div className="mt-2 flex justify-center">
+                    <svg
+                      width="16"
+                      height="18"
+                      viewBox="0 0 16 18"
+                      fill="none"
+                      aria-hidden
+                      className="text-accent"
+                    >
+                      <path
+                        d="M8 1 V13 M3.5 8.5 L8 13 L12.5 8.5"
+                        stroke="currentColor"
+                        strokeWidth="1.5"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                      />
+                    </svg>
+                  </div>
+                </div>
+              ) : null}
+
               {/* Column headers — light, mono, aligned to the row structure. */}
               <div className="mb-3 flex items-center gap-3">
                 <span className="w-24 shrink-0 text-left font-mono text-[10px] uppercase tracking-wide text-muted">

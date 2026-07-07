@@ -31,7 +31,7 @@
       "kind": "json",
       "path": "next-token/distributions.json",
       "station": "next-token",
-      "bytes": 5725
+      "bytes": 8929
     },
     {
       "id": "order-shuffle-predictions",
@@ -61,7 +61,7 @@
       "kind": "json",
       "path": "transformer/attention.json",
       "station": "transformer",
-      "bytes": 1062481,
+      "bytes": 1062588,
       "description": "Recorded REAL Qwen3-0.6B forward-pass pipeline for the preset sentences: [layer][head][query][key] attention, fixed-stride embedding/MLP slices, and the top-N next-token distribution. Replayed in-browser; no model runs there."
     }
   ]

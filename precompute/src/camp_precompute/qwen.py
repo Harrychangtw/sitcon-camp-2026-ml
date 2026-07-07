@@ -109,23 +109,52 @@ def _top_entries(tok, logprobs, top_n: int) -> list[dict]:
     return entries
 
 
-def next_token_entries(tok, model, prompt: str, top_n: int = NEXT_TOKEN_TOP_N) -> list[dict]:
+def next_token_entries(
+    tok,
+    model,
+    prompt: str,
+    top_n: int = NEXT_TOKEN_TOP_N,
+    context_tokens: int | None = None,
+) -> list[dict]:
     """Top-N next-token log-probs for a prompt: [{token, logit}, ...].
 
     ``logit`` is log P(token | prompt) over the FULL vocab (log-softmax), so the
     browser's softmax(logit / T) over the top-N recovers the renormalised
     distribution at T=1 — the same light transform the station always did.
+
+    ``context_tokens`` caps how many TRAILING tokens of the prompt the model may
+    see (the context-window knob: shrink it and the prediction loses its
+    long-range cues). ``None`` = today's behaviour (the full NEXT_TOKEN_MAX_TOKENS
+    tail), and it is always clamped to that hard cap, so no existing caller
+    changes.
     """
     import torch
 
     ids = tok(prompt, return_tensors="pt").input_ids
     if ids.shape[1] == 0:
         return []
-    ids = ids[:, -NEXT_TOKEN_MAX_TOKENS:]
+    window = min(context_tokens or NEXT_TOKEN_MAX_TOKENS, NEXT_TOKEN_MAX_TOKENS)
+    ids = ids[:, -window:]
     with torch.no_grad():
         logits = model(ids.to(model.device)).logits[0, -1]
     logprobs = torch.log_softmax(logits.float(), dim=-1)
     return _top_entries(tok, logprobs, top_n)
+
+
+def prompt_pieces(tok, prompt: str) -> list[str]:
+    """The prompt's real subword pieces, decoded per id in the ORDER the model
+    reads them (so ``len(prompt_pieces) == promptTokens`` and matches the ids
+    ``next_token_entries`` feeds in). The station draws these as the context
+    strip and dims the ones the window trims off — the honest "this is what the
+    model can and can't see" picture. Leading spaces survive (rendered as ␣)."""
+    return [tok.decode([i]) for i in tok(prompt).input_ids]
+
+
+def prompt_token_ids(tok, prompt: str) -> list[int]:
+    """The prompt's real vocab ids, in read order (parallel to prompt_pieces).
+    Shown under each context-strip chip so it reads as the SAME token the
+    Tokenizer station met (same piece, same id)."""
+    return [int(i) for i in tok(prompt).input_ids]
 
 
 def attention_payload(
@@ -176,6 +205,7 @@ def pipeline_payload(
     text: str,
     max_tokens: int = ATTENTION_MAX_TOKENS,
     top_n: int = NEXT_TOKEN_TOP_N,
+    context_tokens: int | None = None,
 ) -> dict:
     """ONE forward pass → everything the transformer station's pipeline diagram
     shows: token pieces + ids, a per-token input-embedding slice, the full
@@ -197,6 +227,13 @@ def pipeline_payload(
         raise ValueError("need at least 2 tokens")
     if n > max_tokens:
         raise ValueError(f"too many tokens ({n} > max {max_tokens})")
+    # Context window: keep only the last `window` tokens (the tail is what the
+    # forward pass conditions on). None = the whole sentence (the max_tokens cap
+    # still applies above). Attention needs at least 2 tokens to draw a matrix.
+    window = min(context_tokens or max_tokens, max_tokens)
+    ids = ids[:, -window:]
+    if int(ids.shape[1]) < 2:
+        raise ValueError("context window too small (need at least 2 tokens)")
     id_list = [int(i) for i in ids[0].tolist()]
     ids = ids.to(model.device)
 

@@ -1,267 +1,267 @@
 {
   "generator": "camp-precompute next-token",
-  "generatedAt": "2026-07-04T10:17:02.792892+00:00",
+  "generatedAt": "2026-07-07T02:56:12.697688+00:00",
   "station": "next-token",
   "model": "Qwen/Qwen3-0.6B",
   "topN": 12,
   "note": "Recorded real next-token distributions from Qwen/Qwen3-0.6B for the preset prompts (same code + decoding settings as the live server — see camp_precompute.qwen). logit = log P(token|prompt); the browser applies softmax(logit / temperature) and top-k. Tokens are the model's real subword pieces (a leading space is part of the token).",
   "suggestions": [
-    "the cat sat on the",
-    "once upon a time",
-    "to be or not to",
-    "從前從前有一隻",
-    "下雨天記得帶",
+    "She spent ten years living in Japan, so she speaks fluent",
+    "I was born and grew up in Italy, so my mother tongue is",
+    "The password is banana. Please do not forget it. The password is",
+    "他從小在日本長大，所以他能說一口流利的",
+    "我最喜歡的水果是香蕉，因為它的顏色是",
     "台灣最高的山是玉"
   ],
   "prompts": {
-    "the cat sat on the": [
+    "She spent ten years living in Japan, so she speaks fluent": [
       {
-        "token": " floor",
-        "logit": -2.2995
+        "token": " Japanese",
+        "logit": -0.3586
       },
       {
-        "token": " bench",
-        "logit": -2.8133
+        "token": " English",
+        "logit": -1.7662
       },
       {
-        "token": " bed",
-        "logit": -3.2125
-      },
-      {
-        "token": " chair",
-        "logit": -3.399
-      },
-      {
-        "token": " edge",
-        "logit": -3.6557
-      },
-      {
-        "token": " window",
-        "logit": -3.6562
-      },
-      {
-        "token": " couch",
-        "logit": -3.7044
-      },
-      {
-        "token": " table",
-        "logit": -3.7642
-      },
-      {
-        "token": " windows",
-        "logit": -3.792
-      },
-      {
-        "token": " grass",
-        "logit": -3.8201
-      },
-      {
-        "token": " cat",
-        "logit": -3.9217
-      },
-      {
-        "token": " shelf",
-        "logit": -4.0746
-      }
-    ],
-    "once upon a time": [
-      {
-        "token": ",",
-        "logit": -0.5556
-      },
-      {
-        "token": " the",
-        "logit": -2.9952
+        "token": " Chinese",
+        "logit": -3.2837
       },
       {
         "token": " in",
-        "logit": -3.4874
+        "logit": -4.3191
       },
       {
-        "token": " a",
-        "logit": -3.7935
-      },
-      {
-        "token": "\n\n",
-        "logit": -3.944
-      },
-      {
-        "token": " there",
-        "logit": -3.9799
-      },
-      {
-        "token": ":",
-        "logit": -4.2517
-      },
-      {
-        "token": "...",
-        "logit": -4.2523
-      },
-      {
-        "token": " -",
-        "logit": -4.4096
-      },
-      {
-        "token": "\n",
-        "logit": -4.638
+        "token": " (",
+        "logit": -5.1493
       },
       {
         "token": ".",
-        "logit": -4.8009
+        "logit": -5.2184
+      },
+      {
+        "token": "...",
+        "logit": -5.6894
+      },
+      {
+        "token": " 日",
+        "logit": -5.716
       },
       {
         "token": " ",
-        "logit": -4.9302
+        "logit": -5.9347
+      },
+      {
+        "token": " two",
+        "logit": -6.1804
+      },
+      {
+        "token": " both",
+        "logit": -6.4566
+      },
+      {
+        "token": ",",
+        "logit": -6.4945
       }
     ],
-    "to be or not to": [
+    "I was born and grew up in Italy, so my mother tongue is": [
       {
-        "token": " be",
-        "logit": -0.8948
+        "token": " Italian",
+        "logit": -0.2
       },
       {
-        "token": " tax",
-        "logit": -3.4601
+        "token": " the",
+        "logit": -3.8859
       },
       {
-        "token": " have",
-        "logit": -3.4683
+        "token": " also",
+        "logit": -3.9832
       },
       {
-        "token": " make",
-        "logit": -3.7086
+        "token": " Spanish",
+        "logit": -4.0619
       },
       {
-        "token": " build",
-        "logit": -3.746
-      },
-      {
-        "token": " act",
-        "logit": -3.946
-      },
-      {
-        "token": " take",
-        "logit": -4.2019
-      },
-      {
-        "token": " create",
-        "logit": -4.2237
-      },
-      {
-        "token": " rule",
-        "logit": -4.3914
-      },
-      {
-        "token": " ...",
-        "logit": -4.4192
+        "token": " in",
+        "logit": -4.3921
       },
       {
         "token": " a",
-        "logit": -4.6551
+        "logit": -4.7616
       },
       {
-        "token": " go",
-        "logit": -4.6779
+        "token": " my",
+        "logit": -4.8281
+      },
+      {
+        "token": " English",
+        "logit": -4.8282
+      },
+      {
+        "token": " spoken",
+        "logit": -5.0572
+      },
+      {
+        "token": " very",
+        "logit": -5.3686
+      },
+      {
+        "token": " not",
+        "logit": -5.6041
+      },
+      {
+        "token": " Catalan",
+        "logit": -5.7254
       }
     ],
-    "從前從前有一隻": [
+    "The password is banana. Please do not forget it. The password is": [
       {
-        "token": "小",
-        "logit": -2.9371
+        "token": " banana",
+        "logit": -1.5919
       },
       {
-        "token": "車",
-        "logit": -3.6164
+        "token": " a",
+        "logit": -1.7259
       },
       {
-        "token": "羊",
-        "logit": -3.9225
+        "token": " ",
+        "logit": -2.1073
       },
       {
-        "token": "狗",
-        "logit": -3.937
+        "token": " also",
+        "logit": -3.0981
       },
       {
-        "token": "貓",
-        "logit": -4.0447
+        "token": " not",
+        "logit": -3.3374
       },
       {
-        "token": "兔子",
-        "logit": -4.1837
+        "token": " in",
+        "logit": -3.8305
       },
       {
-        "token": "會",
-        "logit": -4.1987
+        "token": " bananas",
+        "logit": -3.8566
       },
       {
-        "token": "�",
-        "logit": -4.491
+        "token": " made",
+        "logit": -4.0868
       },
       {
-        "token": "腳",
-        "logit": -4.5805
+        "token": " the",
+        "logit": -4.0913
       },
       {
-        "token": "機",
-        "logit": -4.6074
+        "token": " for",
+        "logit": -4.1969
       },
       {
-        "token": "大",
-        "logit": -4.6498
+        "token": " to",
+        "logit": -4.5665
       },
       {
-        "token": "動物",
-        "logit": -4.7426
+        "token": " given",
+        "logit": -4.6946
       }
     ],
-    "下雨天記得帶": [
+    "他從小在日本長大，所以他能說一口流利的": [
       {
-        "token": "雨",
-        "logit": -0.6546
+        "token": "英文",
+        "logit": -0.5126
       },
       {
-        "token": "水",
-        "logit": -3.381
+        "token": "中文",
+        "logit": -1.7912
       },
       {
-        "token": "ё",
-        "logit": -3.6463
+        "token": "英语",
+        "logit": -2.6749
       },
       {
-        "token": "點",
-        "logit": -3.9185
+        "token": "英",
+        "logit": -3.4893
       },
       {
-        "token": "防",
-        "logit": -3.9301
+        "token": "日",
+        "logit": -4.3855
       },
       {
-        "token": "伞",
-        "logit": -4.1673
+        "token": "母",
+        "logit": -4.4231
       },
       {
-        "token": "好",
-        "logit": -4.2258
+        "token": "語",
+        "logit": -4.7269
       },
       {
-        "token": "鞋",
-        "logit": -4.4605
+        "token": "法",
+        "logit": -4.849
       },
       {
-        "token": "帽子",
-        "logit": -4.5737
+        "token": "外",
+        "logit": -4.9888
       },
       {
-        "token": "遮",
-        "logit": -4.8552
+        "token": "國際",
+        "logit": -5.227
       },
       {
-        "token": "濕",
-        "logit": -4.8834
+        "token": "日本",
+        "logit": -5.2656
       },
       {
-        "token": "個",
-        "logit": -4.9054
+        "token": "德",
+        "logit": -5.3625
+      }
+    ],
+    "我最喜歡的水果是香蕉，因為它的顏色是": [
+      {
+        "token": "黃",
+        "logit": -1.2674
+      },
+      {
+        "token": "紅",
+        "logit": -1.8787
+      },
+      {
+        "token": "橙",
+        "logit": -2.1511
+      },
+      {
+        "token": "金",
+        "logit": -2.4905
+      },
+      {
+        "token": "橘",
+        "logit": -2.9961
+      },
+      {
+        "token": "金色",
+        "logit": -3.1036
+      },
+      {
+        "token": "棕色",
+        "logit": -3.5657
+      },
+      {
+        "token": "淡",
+        "logit": -3.6714
+      },
+      {
+        "token": "綠",
+        "logit": -3.8825
+      },
+      {
+        "token": "什麼",
+        "logit": -4.2538
+      },
+      {
+        "token": "粉色",
+        "logit": -4.3824
+      },
+      {
+        "token": "粉",
+        "logit": -4.4853
       }
     ],
     "台灣最高的山是玉": [
@@ -303,7 +303,7 @@
       },
       {
         "token": "兔",
-        "logit": -7.0248
+        "logit": -7.0249
       },
       {
         "token": "女",
@@ -313,6 +313,178 @@
         "token": "皇",
         "logit": -7.1451
       }
+    ]
+  },
+  "pieces": {
+    "She spent ten years living in Japan, so she speaks fluent": [
+      "She",
+      " spent",
+      " ten",
+      " years",
+      " living",
+      " in",
+      " Japan",
+      ",",
+      " so",
+      " she",
+      " speaks",
+      " fluent"
+    ],
+    "I was born and grew up in Italy, so my mother tongue is": [
+      "I",
+      " was",
+      " born",
+      " and",
+      " grew",
+      " up",
+      " in",
+      " Italy",
+      ",",
+      " so",
+      " my",
+      " mother",
+      " tongue",
+      " is"
+    ],
+    "The password is banana. Please do not forget it. The password is": [
+      "The",
+      " password",
+      " is",
+      " banana",
+      ".",
+      " Please",
+      " do",
+      " not",
+      " forget",
+      " it",
+      ".",
+      " The",
+      " password",
+      " is"
+    ],
+    "他從小在日本長大，所以他能說一口流利的": [
+      "他",
+      "從",
+      "小",
+      "在日本",
+      "長",
+      "大",
+      "，",
+      "所以他",
+      "能",
+      "說",
+      "一口",
+      "流",
+      "利",
+      "的"
+    ],
+    "我最喜歡的水果是香蕉，因為它的顏色是": [
+      "我",
+      "最",
+      "喜歡",
+      "的",
+      "水果",
+      "是",
+      "香蕉",
+      "，",
+      "因為",
+      "它的",
+      "顏",
+      "色",
+      "是"
+    ],
+    "台灣最高的山是玉": [
+      "台灣",
+      "最高的",
+      "山",
+      "是",
+      "玉"
+    ]
+  },
+  "tokenIds": {
+    "She spent ten years living in Japan, so she speaks fluent": [
+      7941,
+      7391,
+      5779,
+      1635,
+      5382,
+      304,
+      6323,
+      11,
+      773,
+      1340,
+      21191,
+      57768
+    ],
+    "I was born and grew up in Italy, so my mother tongue is": [
+      40,
+      572,
+      9223,
+      323,
+      13938,
+      705,
+      304,
+      15344,
+      11,
+      773,
+      847,
+      6554,
+      24459,
+      374
+    ],
+    "The password is banana. Please do not forget it. The password is": [
+      785,
+      3552,
+      374,
+      43096,
+      13,
+      5209,
+      653,
+      537,
+      10667,
+      432,
+      13,
+      576,
+      3552,
+      374
+    ],
+    "他從小在日本長大，所以他能說一口流利的": [
+      42411,
+      104031,
+      30709,
+      110839,
+      100435,
+      26288,
+      3837,
+      113106,
+      26232,
+      100379,
+      106380,
+      88653,
+      59532,
+      9370
+    ],
+    "我最喜歡的水果是香蕉，因為它的顏色是": [
+      35946,
+      31235,
+      107373,
+      9370,
+      104618,
+      20412,
+      112622,
+      3837,
+      104344,
+      104121,
+      119283,
+      38035,
+      20412
+    ],
+    "台灣最高的山是玉": [
+      105144,
+      106667,
+      57811,
+      20412,
+      100658
     ]
   }
 }

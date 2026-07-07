@@ -86,12 +86,26 @@ def make_data(out_dir: Path) -> Path:
 # Curated preset prompts — the station's suggestion chips AND the offline
 # fallback's lookup keys. zh + en on purpose: the model is multilingual and
 # typing either should feel first-class.
+#
+# CONTEXT-WINDOW curation: each of these carries a LONG-RANGE cue set early in
+# the sentence, so shrinking the context window (the station's primary knob)
+# visibly changes the top token — the effect the Loop 2 slide asks students to
+# find. Verified with Qwen3-0.6B at window=2 vs full (top-1 token):
+#   "…living in Japan, so she speaks fluent" : English (wrong) → Japanese
+#   "…grew up in Italy, so my mother tongue is": a → Italian
+#   "The password is banana. … The password is": correct → banana (copy cue)
+#   "他從小在日本長大，所以他能說一口流利的"      : 「，」→ 英文 (sharpens)
+#   "我最喜歡的水果是香蕉，因為它的顏色是"        : 的 → 黃 (banana → yellow)
+#   "台灣最高的山是玉"                            : 的 → 山 (玉山)
+# The narrow-window predictions come from the live server (only it tokenizes);
+# these recorded entries are the FULL-context outputs that back the 全部
+# position and the offline fallback.
 NEXT_TOKEN_PROMPTS = [
-    "the cat sat on the",
-    "once upon a time",
-    "to be or not to",
-    "從前從前有一隻",
-    "下雨天記得帶",
+    "She spent ten years living in Japan, so she speaks fluent",
+    "I was born and grew up in Italy, so my mother tongue is",
+    "The password is banana. Please do not forget it. The password is",
+    "他從小在日本長大，所以他能說一口流利的",
+    "我最喜歡的水果是香蕉，因為它的顏色是",
     "台灣最高的山是玉",
 ]
 
@@ -106,8 +120,12 @@ def make_next_token(out_dir: Path) -> Path:
     tok, model = qwen.load_qwen(device)
 
     prompts: dict[str, list[dict]] = {}
+    pieces: dict[str, list[str]] = {}
+    token_ids: dict[str, list[int]] = {}
     for p in NEXT_TOKEN_PROMPTS:
         prompts[p] = qwen.next_token_entries(tok, model, p)
+        pieces[p] = qwen.prompt_pieces(tok, p)
+        token_ids[p] = qwen.prompt_token_ids(tok, p)
         print(f"  {p!r} → {[e['token'] for e in prompts[p][:3]]}…")
 
     station_dir = out_dir / "next-token"
@@ -128,6 +146,11 @@ def make_next_token(out_dir: Path) -> Path:
         ),
         "suggestions": NEXT_TOKEN_PROMPTS,
         "prompts": prompts,
+        # Per-preset context strip: the prompt's decoded pieces (+ matching vocab
+        # ids) in read order (len == promptTokens). Backs the token strip offline
+        # at 全部; reduced windows are served live. Same tokenization as the server.
+        "pieces": pieces,
+        "tokenIds": token_ids,
     }
 
     path = station_dir / "distributions.json"
@@ -678,6 +701,9 @@ def build_transformer() -> dict:
         sentences.append(
             {
                 "sentenceId": spec["sentenceId"],
+                # Verbatim source, so a windowed re-run sends the exact text
+                # (joining tokens can mangle CJK byte-fallback pieces).
+                "text": spec["text"],
                 "tokens": pipe["tokens"],
                 "tokenIds": pipe["tokenIds"],
                 "layers": pipe["layers"],

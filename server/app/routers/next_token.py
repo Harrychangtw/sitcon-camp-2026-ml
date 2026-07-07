@@ -30,13 +30,32 @@ def predict(req: NextTokenRequest, request: Request) -> NextTokenResponse:
         raise HTTPException(status_code=422, detail="empty prompt")
 
     with store.lm_lock:
-        entries = qwen.next_token_entries(store.qwen_tok, store.qwen_model, req.prompt)
+        # Decode the prompt's pieces + ids once (this also gives the honest
+        # token count), then run the windowed prediction.
+        pieces = qwen.prompt_pieces(store.qwen_tok, req.prompt)
+        token_ids = qwen.prompt_token_ids(store.qwen_tok, req.prompt)
+        entries = qwen.next_token_entries(
+            store.qwen_tok,
+            store.qwen_model,
+            req.prompt,
+            context_tokens=req.contextTokens,
+        )
     if not entries:
         raise HTTPException(status_code=422, detail="prompt produced no tokens")
+
+    # Effective window: the requested cap (or the hard cap) but never more than
+    # the prompt actually has.
+    prompt_tokens = len(pieces)
+    window = min(req.contextTokens or qwen.NEXT_TOKEN_MAX_TOKENS, qwen.NEXT_TOKEN_MAX_TOKENS)
+    context_tokens = min(window, prompt_tokens)
 
     return NextTokenResponse(
         prompt=req.prompt,
         model=qwen.MODEL,
         topN=qwen.NEXT_TOKEN_TOP_N,
         entries=[TokenLogit(**e) for e in entries],
+        promptTokens=prompt_tokens,
+        contextTokens=context_tokens,
+        promptPieces=pieces,
+        promptTokenIds=token_ids,
     )

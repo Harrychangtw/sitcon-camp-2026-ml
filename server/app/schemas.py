@@ -107,6 +107,9 @@ class EmbeddingLookupResponse(BaseModel):
 
 class NextTokenRequest(BaseModel):
     prompt: str = Field(min_length=1, max_length=500)
+    # Context-window knob: how many TRAILING prompt tokens the model may see.
+    # None/absent = the full NEXT_TOKEN_MAX_TOKENS tail (unchanged behaviour).
+    contextTokens: Optional[int] = Field(default=None, ge=1)
 
 
 class TokenLogit(BaseModel):
@@ -122,6 +125,17 @@ class NextTokenResponse(BaseModel):
     model: str
     topN: int
     entries: list[TokenLogit]
+    # promptTokens: total tokens in the prompt BEFORE truncation (lets the UI
+    # clamp the slider so it never promises more context than the prompt has).
+    # contextTokens: how many were ACTUALLY used (the effective window).
+    promptTokens: int
+    contextTokens: int
+    # The prompt's decoded subword pieces, in read order (len == promptTokens).
+    # The station draws them as the context strip and dims the trimmed tail.
+    promptPieces: list[str]
+    # The matching vocab ids (parallel to promptPieces) — shown under each chip
+    # so the strip reads as the same tokens the Tokenizer station met.
+    promptTokenIds: list[int]
 
 
 # --- rnn -----------------------------------------------------------------------
@@ -155,6 +169,10 @@ class RnnForwardResponse(BaseModel):
 # Sized so ~50 English tokens fit before the char cap bites.
 class TransformerRequest(BaseModel):
     text: str = Field(min_length=1, max_length=280)
+    # Context-window knob: how many TRAILING tokens the forward pass may see.
+    # None/absent = the whole sentence (unchanged behaviour). ge=2 because the
+    # attention matrix needs at least two tokens.
+    contextTokens: Optional[int] = Field(default=None, ge=2)
 
 
 class TransformerLayer(BaseModel):

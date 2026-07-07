@@ -42,7 +42,12 @@ def attention(req: TransformerRequest, request: Request) -> TransformerResponse:
 
     try:
         with store.lm_lock:
-            pipe = qwen.pipeline_payload(store.qwen_tok, store.qwen_model, req.text)
+            pipe = qwen.pipeline_payload(
+                store.qwen_tok,
+                store.qwen_model,
+                req.text,
+                context_tokens=req.contextTokens,
+            )
     except ValueError as e:
         # Over the token cap (or under 2) — the input, not the server, is the
         # problem. Log it so an over-cap field isn't a silent 422.
