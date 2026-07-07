@@ -19,6 +19,7 @@ from pathlib import Path
 import numpy as np
 
 from .embedding import build_embedding, export_server_state
+from .rl import export_parity_only, rl_export, train_rl
 from .rnn import rnn_viz, train_rnn
 
 COURSE = "course2"
@@ -887,6 +888,47 @@ def main(argv: list[str] | None = None) -> int:
         help="Directory holding rnn_state.npz (defaults to precompute/artifacts).",
     )
 
+    p_train_rl = sub.add_parser(
+        "train-rl",
+        help="Train the Critter Arena PPO policies (all reward recipes) and "
+        "export their checkpoint npz files for rl-export.",
+    )
+    p_train_rl.add_argument(
+        "--artifacts",
+        type=Path,
+        default=None,
+        help="Where to write the npz files (defaults to precompute/artifacts).",
+    )
+    p_train_rl.add_argument(
+        "--recipe",
+        default=None,
+        help="Train only this recipe id (default: all).",
+    )
+
+    p_rl_exp = sub.add_parser(
+        "rl-export",
+        help="Write the rl-playground station's policies.json + parity.json "
+        "from the trained npz files (run train-rl first) and register them.",
+    )
+    p_rl_exp.add_argument(
+        "--out",
+        type=Path,
+        default=None,
+        help="Output directory (defaults to apps/course2/public/data/course2).",
+    )
+    p_rl_exp.add_argument(
+        "--artifacts",
+        type=Path,
+        default=None,
+        help="Directory holding rl_*.npz (defaults to precompute/artifacts).",
+    )
+    p_rl_exp.add_argument(
+        "--parity-only",
+        action="store_true",
+        help="Write just parity.json (no trained npz needed) — for iterating "
+        "on env dynamics before retraining.",
+    )
+
     p_tf = sub.add_parser(
         "transformer",
         help="Write the Transformer station's attention.json and register it in "
@@ -977,6 +1019,22 @@ def main(argv: list[str] | None = None) -> int:
         artifacts_dir = args.artifacts or default_artifacts_dir()
         path = rnn_viz(out_dir, artifacts_dir)
         print(f"wrote {path}")
+        print(f"updated {out_dir / 'manifest.json'}")
+        return 0
+
+    if args.command == "train-rl":
+        artifacts_dir = args.artifacts or default_artifacts_dir()
+        train_rl(artifacts_dir, only=args.recipe)
+        return 0
+
+    if args.command == "rl-export":
+        out_dir = args.out or default_out_dir()
+        if args.parity_only:
+            export_parity_only(out_dir)
+        else:
+            artifacts_dir = args.artifacts or default_artifacts_dir()
+            for path in rl_export(out_dir, artifacts_dir):
+                print(f"registered {path.name}")
         print(f"updated {out_dir / 'manifest.json'}")
         return 0
 

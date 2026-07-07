@@ -5,6 +5,7 @@ import { OrderShuffleStation } from "./orderShuffle";
 import { NextTokenStation } from "./nextToken";
 import { RnnVizStation } from "./rnnViz";
 import { TransformerStation } from "./transformer";
+import { RlPlaygroundStation } from "./rlPlayground";
 import { ReferenceStation } from "./reference";
 import { VizSandbox } from "./vizSandbox";
 
@@ -31,6 +32,7 @@ export const stations: StationMeta[] = [
   { id: "next-token", title: "Next Token", blurb: "預測下一個 token", group: "lesson", element: <NextTokenStation /> },
   { id: "rnn-viz", title: "RNN 視覺化", blurb: "在序列中傳遞狀態", group: "lesson", element: <RnnVizStation /> },
   { id: "transformer", title: "Transformer", blurb: "看一句話流過一次 forward pass", group: "lesson", element: <TransformerStation /> },
+  { id: "rl-playground", title: "RL 競技場", blurb: "只靠獎勵訊號,牠自己學會玩", group: "lesson", element: <RlPlaygroundStation /> },
   { id: "_reference", title: "Reference Station", blurb: "Copy me", group: "dev", element: <ReferenceStation /> },
   { id: "viz-sandbox", title: "Viz Sandbox", blurb: "All @camp/viz primitives", group: "dev", element: <VizSandbox /> },
 ];

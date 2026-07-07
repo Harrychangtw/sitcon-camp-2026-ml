@@ -41,6 +41,22 @@
       "bytes": 76045
     },
     {
+      "id": "rl-playground-parity",
+      "kind": "json",
+      "path": "rl-playground/parity.json",
+      "station": "rl-playground",
+      "bytes": 304305,
+      "description": "Python\u2194TS env determinism fixture: seed + scripted actions + reference trace, replayed by the course2 vitest parity test."
+    },
+    {
+      "id": "rl-playground-policies",
+      "kind": "json",
+      "path": "rl-playground/policies.json",
+      "station": "rl-playground",
+      "bytes": 364127,
+      "description": "PPO-trained MLP policy weights (per reward recipe, per training checkpoint) + return curves for the Critter Arena. The browser runs env + forward pass live; training stays offline."
+    },
+    {
       "id": "rnn-viz-activations",
       "kind": "json",
       "path": "rnn-viz/activations.json",
