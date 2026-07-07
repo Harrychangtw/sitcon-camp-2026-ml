@@ -79,6 +79,53 @@ notes**: any HTML comment on the slide that is not a directive.
 Every content slide gets a note. Write notes as full sentences; they are the
 reviewable layer Harry reads later.
 
+### Verbatim spine (presentability)
+
+Trial-run feedback: minimal faces alone are hard to present from live. The
+reconciliation: every **key teaching beat** carries a **verbatim spine** on the
+face - the one or two sentences Harry actually says, as a lead or takeaway
+line - so he can present from the slide without reading notes. Notes keep the
+deeper explanation.
+
+- One spine per beat, one or two lines max; it is a lead line, **not** a wall
+  of text. Everything else on the face stays cue-like.
+- When a slide has a spine, open its presenter note with
+  `verbatim spine：「…」` quoting it, so the reviewable layer and the face
+  stay in sync.
+- Dividers are exempt (their 問句 is baked into the art); hand-off slides get
+  their spine on the paired screenshot slide (§2.12).
+
+### Step reveals (fragments)
+
+Multi-part beats reveal step by step in the **web/HTML player** (bespoke);
+PDF/PNG exports show the final state - never rely on a step for meaning.
+
+- Bullet lists: write `*` instead of `-` and each item becomes a step
+  (Marpit's native fragmented list).
+- Anything else (capsule rows, contrast columns, prose blocks): add
+  `data-marpit-fragment="N"` to the HTML block. The player steps elements in
+  DOM order; number them 1, 2, 3… in that order anyway, for the reader.
+  Hidden steps keep their layout space (`visibility`, not `display`), so the
+  slide never reflows mid-reveal.
+
+```markdown
+<div class="cols">
+<div>
+
+### One-hot（先出現）
+
+</div>
+<div data-marpit-fragment="1">
+
+### Embedding（按一下才出現）
+
+</div>
+</div>
+```
+
+Use steps only where the reveal IS the pedagogy (contrast-then-answer,
+candidate reveal, parts-list recap). Default is still everything at once.
+
 ### Copy rules
 
 - **zh-primary** (Traditional, TW high-schoolers). English only where the term
@@ -301,6 +348,38 @@ Default to plain text; reach for capsules only when boxing adds meaning
 
 Do: at most 3 capsules per slide; keep each to one line.
 Don't: use capsules as generic paragraph wrappers; most slides need none.
+
+### 2.12 station screenshot -「畫面長這樣」
+
+Follows every station hand-off (§2.9). Trial-run feedback: describing the
+interface aloud loses students - they find the control just as the
+explanation moves past it. This slide shows the **actual station screen**
+with the control to touch **annotated** (lime box + pill label), before
+students switch over.
+
+```markdown
+# 畫面長這樣 _Tokenizer 探索站_
+
+<div class="shot">
+
+![h:1250](../assets/stations/tokenizer.png)
+
+<div class="anno" style="left:6%; top:20%; width:40%; height:12%;"><span>切分方式在這裡切換</span></div>
+
+</div>
+
+###### 上面輸入文字，切換切分方式，下面就是切出來的 token 與編號
+```
+
+- Screenshots live in `assets/stations/<station-id>.png` (committed, ~1920px
+  wide); recapture when a station's UI changes.
+- `.anno` positions in **% of the image**, so coords survive `h:` resizes.
+  Label sits above the box; add class `below` if the box hugs the top edge.
+- One box per slide (two only if the task truly needs two controls); the
+  caption reads the screen layout left-to-right / top-to-bottom.
+- The slide's verbatim spine is the hand-off sentence:「畫面長這樣，你要動的
+  旋鈕在這裡」- give students a beat to locate the control before opening
+  the station.
 
 ---
 

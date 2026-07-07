@@ -605,6 +605,58 @@ section:has(.station) .chip {
   z-index: 5;
 }
 
+/* ---- annotated station screenshot (COOKBOOK §2.12) ----------------------
+ * A real station screenshot with a lime call-out box over the control the
+ * student must touch. Markup:
+ *   <div class="shot">
+ *
+ *   ![h:1250](../assets/stations/foo.png)
+ *
+ *   <div class="anno" style="left:8%; top:12%; width:30%; height:10%;"><span>旋鈕在這裡</span></div>
+ *
+ *   </div>
+ * The .anno box positions in % of the image, so the same coords survive any
+ * h:<px> resize. Label sits above the box by default; add class `below` when
+ * the box hugs the top edge.
+ */
+.shot {
+  position: relative;
+  width: fit-content;
+  max-width: 100%;
+  margin: 0 auto;
+}
+.shot p {
+  margin: 0; /* kill the paragraph gap so % coords map to the image exactly */
+}
+.shot img {
+  display: block;
+  border: 2px solid var(--grey-mid);
+  border-radius: 24px;
+}
+.anno {
+  position: absolute;
+  border: 8px solid var(--lime);
+  border-radius: 24px;
+  pointer-events: none;
+}
+.anno span {
+  position: absolute;
+  left: -8px;
+  bottom: calc(100% + 20px);
+  white-space: nowrap;
+  padding: 10px 36px;
+  border-radius: 999px;
+  background: var(--lime);
+  color: var(--bg);
+  font-size: 44px;
+  font-weight: 700;
+  line-height: 1.4;
+}
+.anno.below span {
+  bottom: auto;
+  top: calc(100% + 20px);
+}
+
 /* one-line self-check, Denny-style — lime left rule on a card strip
    (legacy; station pages now use `<div class="st check">` inside .station) */
 .checkpoint {
