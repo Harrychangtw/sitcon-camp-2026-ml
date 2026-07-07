@@ -282,6 +282,7 @@ export function EmbeddingStation() {
         <DockControls>
           <BlockToggle<Dim>
             label="投影"
+            gloss="把很多維的數字壓成平面或立體來看"
             info="把高維詞向量壓到 2D 或 3D 來看。維度越高保留越多結構，但也越難一眼看懂。"
             value={dim}
             onChange={setDim}
@@ -291,20 +292,21 @@ export function EmbeddingStation() {
             ]}
           />
           <BlockSlider
-            label="Top K"
-            info="顯示與查詢詞距離最近的前 k 個鄰居。k 越大看到越多相關詞，也越容易混進比較遠的詞。"
+            label="鄰居數 Top K"
+            gloss="顯示距離最近的前 K 個詞"
+            info="顯示與查詢詞距離最近的前 K 個鄰居。K 越大看到越多相關詞，也越容易混進比較遠的詞。"
             min={1}
             max={MAX_K}
             step={1}
             value={k}
             onChange={setK}
-            ariaLabel="鄰居數 k"
+            ariaLabel="鄰居數 K"
           />
         </DockControls>
       }
       takeaway={
         <span>
-          中文和英文的詞由<em>同一個</em>多語模型變成 vector，落在
+          中文和英文的詞由<em>同一個</em>多語模型變成向量，落在
           <em>同一個</em>空間裡。距離 ≈ 相似度，而且跨語言也成立：搜尋{" "}
           <span className="font-mono text-accent">貓</span>，旁邊是 貓咪、
           <span className="font-mono">cat</span>、
@@ -318,6 +320,21 @@ export function EmbeddingStation() {
       }
     >
       <div className="relative h-full w-full">
+        {/* Always-visible glossary caption (no hover needed): the plain-language
+            identity of the two jargon terms students meet here, floating just
+            under the title island. Quiet secondary text; the deeper
+            how-embeddings-are-learned story is out of scope for this station. */}
+        <div className="pointer-events-none absolute left-4 top-14 z-20 flex max-w-md flex-col gap-1">
+          <p className="text-xs leading-relaxed text-muted">
+            <span className="font-mono">embedding</span>
+            ：把每個 token 變成一排數字（向量），意思相近的字，數字也相近
+          </p>
+          <p className="text-xs leading-relaxed text-muted">
+            <span className="font-mono">token</span>
+            ：模型把句子切成的小單位，可能比一個字還小
+          </p>
+        </div>
+
         {/* The point cloud fills the whole canvas. */}
         <div className="absolute inset-0">
           {dim === "3d" ? (

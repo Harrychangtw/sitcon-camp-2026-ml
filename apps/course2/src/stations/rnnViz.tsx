@@ -238,7 +238,8 @@ export function RnnVizStation() {
       controls={
         <DockControls>
           <BlockSlider
-            label="拖曳"
+            label="閱讀進度"
+            gloss="往右拖，RNN 一次多讀一個 token"
             info="拖曳看 RNN 讀到第幾個 token 時的狀態。往後拖，觀察早期 token 的影響怎麼被逐漸沖淡。"
             min={0}
             max={lastStep}
@@ -254,8 +255,7 @@ export function RnnVizStation() {
       }
       takeaway={
         <span>
-          往後走得夠遠，最早那個 token 的痕跡就會淡去。把所有東西塞進一個
-          vector 裡是行不通的。
+          往後走得夠遠，最早那個 token 的痕跡就會淡去。把所有東西塞進一排數字（向量）裡是行不通的。
         </span>
       }
     >
@@ -281,7 +281,26 @@ export function RnnVizStation() {
           // view.
           <div className="absolute inset-0 overflow-auto pt-16 pb-28">
             <div className="flex min-h-full flex-col justify-center px-8">
-              <div ref={scrollRef} className="overflow-x-auto">
+              {/* Visible glosses: the canonical wording, once, before the grid. */}
+              <div className="mx-auto mb-3 max-w-2xl space-y-1 text-center">
+                <p className="text-xs leading-relaxed text-muted">
+                  hidden state（隱藏狀態）：RNN 的記憶：一排數字，把讀過的內容壓縮存起來
+                </p>
+                <p className="text-[11px] leading-relaxed text-muted/70">
+                  token：模型把句子切成的小單位，可能比一個字還小
+                </p>
+              </div>
+
+              <div className="flex items-center justify-center gap-3">
+                {/* Row axis title: vertical, so the "one row = one dim" read is
+                    explicit even before hovering anything. */}
+                <span
+                  className="shrink-0 font-mono text-[10px] tracking-wide text-muted"
+                  style={{ writingMode: "vertical-rl" }}
+                >
+                  hidden state（隱藏狀態）的各維度 ↓
+                </span>
+                <div ref={scrollRef} className="min-w-0 max-w-full overflow-x-auto">
                 <div
                   className="mx-auto grid gap-0.5"
                   style={{
@@ -289,6 +308,16 @@ export function RnnVizStation() {
                     width: "max-content",
                   }}
                 >
+                  {/* Column axis title: sits above the token headers, spanning
+                      the token columns. */}
+                  <div className="sticky left-0 z-10 h-5 border-r border-border/40 bg-bg" />
+                  <div
+                    className="flex h-5 items-center font-mono text-[10px] tracking-wide text-muted"
+                    style={{ gridColumn: "2 / -1" }}
+                  >
+                    一次讀進一個字 →
+                  </div>
+
                   {/* Header: frozen gutter + every token. Active step in lime,
                       tokens the slider hasn't reached yet are dimmed. */}
                   <div className="sticky left-0 z-10 h-6 border-r border-border/40 bg-bg" />
@@ -300,12 +329,12 @@ export function RnnVizStation() {
                         key={`head-${c}`}
                         ref={active ? activeCellRef : undefined}
                         title={tok}
-                        className={`flex h-6 items-end justify-center truncate px-0.5 font-mono text-[10px] uppercase leading-none tracking-wide ${
+                        className={`flex h-6 items-end justify-center truncate px-0.5 font-mono text-[11px] uppercase leading-none tracking-wide ${
                           active
                             ? "text-accent"
                             : reached
                               ? "text-fg"
-                              : "text-muted/40"
+                              : "text-muted"
                         }`}
                       >
                         {tok}
@@ -318,7 +347,7 @@ export function RnnVizStation() {
                       label sits in the frozen gutter. */}
                   {Array.from({ length: data.hiddenSize }).map((_, d) => (
                     <Fragment key={`dim-${d}`}>
-                      <div className="sticky left-0 z-10 flex h-3.5 items-center border-r border-border/40 bg-bg pr-2 font-mono text-[9px] leading-none text-muted">
+                      <div className="sticky left-0 z-10 flex h-3.5 items-center border-r border-border/40 bg-bg pr-2 font-mono text-[10px] leading-none text-muted">
                         {`h${String(d).padStart(2, "0")}`}
                       </div>
                       {seq.tokens.map((_, c) => {
@@ -359,7 +388,7 @@ export function RnnVizStation() {
                       the most recent token reads full and the first token fades as
                       generation advances. Frozen label + hover tooltip. */}
                   <div className="group sticky left-0 z-20 mt-1 flex h-4 items-center border-r border-border/40 bg-bg">
-                    <span className="cursor-help font-mono text-[9px] leading-none text-accent underline decoration-dotted underline-offset-2">
+                    <span className="cursor-help font-mono text-[10px] leading-none text-accent underline decoration-dotted underline-offset-2">
                       影響
                     </span>
                     <div className="pointer-events-none absolute bottom-full left-0 z-40 mb-1.5 w-max max-w-xs rounded-md border border-border bg-panel px-3 py-2 text-xs leading-relaxed text-fg opacity-0 shadow-md transition-opacity duration-150 group-hover:opacity-100">
@@ -397,6 +426,55 @@ export function RnnVizStation() {
                       />
                     );
                   })}
+                </div>
+                </div>
+              </div>
+
+              {/* Watch-here caption: eyes go to the big top grid, but the
+                  lesson lives in the bottom influence row. */}
+              <div className="mx-auto mt-3 flex max-w-xl items-baseline gap-2">
+                <span className="shrink-0 font-mono text-[10px] uppercase tracking-wide text-accent">
+                  看這裡
+                </span>
+                <p className="text-xs leading-relaxed text-muted">
+                  重點是最下面的「影響」列：一格越綠，代表那個字對現在這一步的影響越大。
+                  往後拖，綠色格子越來越少、越來越淡，表示 RNN 正在忘記最早的字。
+                </p>
+              </div>
+
+              {/* Colour legend: same theme colours as the cells (accent3 →
+                  zero grey → accent for the diverging hidden-state fill,
+                  accent opacity ramp for the influence row). */}
+              <div className="mx-auto mt-4 flex flex-wrap items-center justify-center gap-x-8 gap-y-2">
+                <div className="flex items-center gap-2">
+                  <span className="text-[10px] text-muted">
+                    上方格子：hidden state 的值
+                  </span>
+                  <div className="flex flex-col items-center gap-0.5">
+                    <div
+                      className="h-2 w-32 rounded-sm"
+                      style={{
+                        background: `linear-gradient(to right, ${rgbCss(theme.accent3)}, ${rgbCss(zeroColor)}, ${rgbCss(theme.accent)})`,
+                      }}
+                    />
+                    <div className="flex w-32 justify-between font-mono text-[10px] leading-none text-muted">
+                      <span>負值</span>
+                      <span>0</span>
+                      <span>正值</span>
+                    </div>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="text-[10px] text-muted">影響列</span>
+                  <div
+                    className="h-2 w-16 rounded-sm"
+                    style={{
+                      background: `linear-gradient(to right, ${rgbCss(theme.accent, 0.12)}, ${rgbCss(theme.accent)})`,
+                    }}
+                  />
+                  <span className="text-[10px] text-muted">
+                    越綠，這個字對現在的影響越大
+                  </span>
                 </div>
               </div>
             </div>

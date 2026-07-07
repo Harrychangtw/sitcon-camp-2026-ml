@@ -169,6 +169,38 @@ function meanPool(words: string[], vectors: Map<string, number[]>): number[] | n
   return mean;
 }
 
+/**
+ * A readout label with the shared InfoLabel idiom (persistent (i) marker +
+ * fold-out panel on hover), replicated locally because these sit inside the
+ * station's meter panel, not the dock. CSS-only, theme tokens only.
+ */
+function ReadoutInfo({ label, info }: { label: string; info: string }) {
+  return (
+    <span className="group/readout relative inline-flex cursor-help items-center gap-1 text-fg">
+      {label}
+      <svg
+        aria-hidden
+        viewBox="0 0 16 16"
+        className="h-3 w-3 shrink-0 text-muted transition-colors duration-150 group-hover/readout:text-accent"
+      >
+        <circle
+          cx="8"
+          cy="8"
+          r="6.75"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="1.5"
+        />
+        <circle cx="8" cy="4.9" r="1.1" fill="currentColor" />
+        <rect x="7.3" y="7" width="1.4" height="4.6" rx="0.7" fill="currentColor" />
+      </svg>
+      <span className="pointer-events-none absolute bottom-full left-0 z-40 mb-1.5 w-max max-w-[16rem] rounded-md border border-border bg-panel px-3 py-2 font-sans text-xs font-normal leading-relaxed text-fg opacity-0 shadow-md transition-opacity duration-150 group-hover/readout:opacity-100">
+        {info}
+      </span>
+    </span>
+  );
+}
+
 // --- station -----------------------------------------------------------------
 
 export function OrderShuffleStation() {
@@ -526,7 +558,7 @@ export function OrderShuffleStation() {
       return;
     }
     setCustomNote(
-      all.length > MAX_CHIPS ? `太長了——只取前 ${MAX_CHIPS} 個詞。` : null,
+      all.length > MAX_CHIPS ? `太長了，只取前 ${MAX_CHIPS} 個詞。` : null,
     );
     setDragPos(null);
     setOverPos(null);
@@ -621,8 +653,8 @@ export function OrderShuffleStation() {
       controls={null}
       takeaway={
         <span>
-          打亂這些詞，<strong>bag-of-words</strong>{" "}
-          的平均池化指紋動也不動——它眼裡只有一堆詞。
+          打亂這些詞，<strong>詞袋指紋（bag-of-words）</strong>
+          動也不動，它眼裡只有一堆詞。
           <span className="text-accent">順序感知</span>的模型（真的 Qwen）
           立刻察覺：通順的句子機率高，打亂的句子機率暴跌。
           語意藏在順序裡，這就是我們需要能讀懂序列的模型的原因。
@@ -747,7 +779,7 @@ export function OrderShuffleStation() {
                               values={row.vec}
                               maxAbs={stripMax}
                               cellSize={12}
-                              ariaLabel={`${row.word} embedding`}
+                              ariaLabel={`${row.word} 的向量`}
                             />
                           </span>
                         ) : (
@@ -766,11 +798,8 @@ export function OrderShuffleStation() {
               <div className="flex flex-col items-center">
                 <div
                   ref={nodeRef}
-                  className="flex h-20 w-20 flex-col items-center justify-center rounded-full border-2 border-accent/50 bg-panel text-center"
+                  className="flex h-20 w-20 items-center justify-center rounded-full border-2 border-accent/50 bg-panel text-center"
                 >
-                  <span className="font-mono text-[10px] uppercase tracking-wide text-muted">
-                    mean
-                  </span>
                   <span className="font-sans text-sm text-fg">平均</span>
                 </div>
               </div>
@@ -790,6 +819,11 @@ export function OrderShuffleStation() {
                       怎麼排都一樣
                     </span>
                   </div>
+                  {/* On-face gloss (no hover needed): this is where students
+                      first meet 詞袋指紋. Canonical glossary wording. */}
+                  <span className="max-w-[16rem] text-[11px] leading-snug text-muted">
+                    詞袋指紋（bag-of-words）：只數每個字出現幾次、完全不管順序的統計
+                  </span>
                   {/* Fixed-height AND -width slot so the strip ↔ message swap
                       (custom words still fetching their vectors) doesn't nudge
                       the panel or re-center the whole row. */}
@@ -802,7 +836,7 @@ export function OrderShuffleStation() {
                         values={fingerprint}
                         maxAbs={stripMax}
                         cellSize={12}
-                        ariaLabel="Bag-of-words mean-pooled fingerprint"
+                        ariaLabel="詞袋指紋（平均向量）"
                       />
                     ) : (
                       <span className="text-xs text-muted">
@@ -814,15 +848,17 @@ export function OrderShuffleStation() {
 
                 <div
                   ref={meterRef}
-                  className="relative flex flex-col gap-2 overflow-hidden rounded-2xl border border-accent/40 bg-panel px-4 py-3"
+                  className="relative flex flex-col gap-2 rounded-2xl border border-accent/40 bg-panel px-4 py-3"
                 >
                   {/* Top-edge loading signal: an indeterminate sweep while the
                       live GPU score is in flight. Sits on the panel's top border
-                      (clipped to the rounded corners) so it never nudges layout —
-                      the bars below stay put and refresh when the result lands. */}
+                      (rounded-t clips it to the corners — the capsule itself is
+                      NOT overflow-hidden, so the hover fold-outs can escape) so
+                      it never nudges layout — the bars below stay put and
+                      refresh when the result lands. */}
                   {isPending ? (
                     <span
-                      className="pointer-events-none absolute inset-x-0 top-0 h-0.5 overflow-hidden"
+                      className="pointer-events-none absolute inset-x-0 top-0 h-0.5 overflow-hidden rounded-t-2xl"
                       aria-hidden="true"
                     >
                       <span className="block h-full w-1/4 animate-indeterminate rounded-full bg-accent" />
@@ -839,14 +875,30 @@ export function OrderShuffleStation() {
                   {/* Fixed-height slot: bars whenever we have (or are fetching) a
                       score, message otherwise — both occupy the same height so
                       the panel never grows or shrinks. */}
-                  <div className="flex min-h-[3.75rem] flex-col justify-center gap-2">
+                  <div className="flex min-h-[5.25rem] flex-col justify-center gap-2">
                     {shownFluency || isPending ? (
                       <>
                         <div className="flex flex-col gap-1">
                           <div className="flex items-baseline justify-between font-mono text-[11px]">
-                            <span className="text-fg">通順度</span>
+                            <ReadoutInfo
+                              label="通順度"
+                              info="通順度：模型覺得這句話有多像人話，越高越順。這裡換算成 0 到 100 分方便讀，小字的平均 logP 是模型的原始分數。"
+                            />
+                            {/* Headline is the NORMALISED 0-100 score (from
+                                fluencyPct), so a good sentence reads HIGH; the
+                                raw avg log-prob (always negative) is demoted to
+                                the small sub-value below. */}
                             <span className="text-accent">
-                              {shownFluency ? shownFluency.avgLogProb.toFixed(2) : "—"}
+                              {/* No "/ 100" while first score is in flight:
+                                  an ellipsis with a denominator reads broken. */}
+                              {shownFluency ? (
+                                <>
+                                  {Math.round(fluencyPct * 100)}
+                                  <span className="text-muted"> / 100</span>
+                                </>
+                              ) : (
+                                "…"
+                              )}
                             </span>
                           </div>
                           <div className="h-2 w-full overflow-hidden rounded-md bg-fg/10">
@@ -855,6 +907,10 @@ export function OrderShuffleStation() {
                               style={{ width: `${fluencyPct * 100}%` }}
                             />
                           </div>
+                          <div className="text-right font-mono text-[10px] text-muted">
+                            平均 logP{" "}
+                            {shownFluency ? shownFluency.avgLogProb.toFixed(2) : "…"}
+                          </div>
                         </div>
                         {/* 困惑度: lower = more fluent, so this bar fills as the
                             sentence gets WORSE — the visual opposite of 通順度.
@@ -862,9 +918,12 @@ export function OrderShuffleStation() {
                             is exactly 1 - fluencyPct. */}
                         <div className="flex flex-col gap-1">
                           <div className="flex items-baseline justify-between font-mono text-[11px]">
-                            <span className="text-fg">困惑度 ppl</span>
+                            <ReadoutInfo
+                              label="困惑度（PPL）"
+                              info="困惑度（PPL）：模型看這句話有多困惑，越低越好；和通順度是同一個數字的兩種看法（數學上 ln(困惑度) = −平均 logP）。"
+                            />
                             <span className="text-fg">
-                              {shownFluency ? shownFluency.ppl.toLocaleString() : "—"}
+                              {shownFluency ? shownFluency.ppl.toLocaleString() : "…"}
                             </span>
                           </div>
                           <div className="h-2 w-full overflow-hidden rounded-md bg-fg/10">

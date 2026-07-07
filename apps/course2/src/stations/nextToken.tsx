@@ -74,10 +74,60 @@ interface Prob {
 
 const DATA_URL = "/data/course2/next-token/distributions.json";
 
+/** The quiet placeholder for a code point that can't render as text. Reads as
+ * "a byte fragment of a character", not a bug. */
+const FRAGMENT_MARK = "▢";
+
+/** True for code points that can't render as normal text: U+FFFD (the JSON
+ * decoder hit a partial/invalid UTF-8 sequence — Qwen BPE tokens are often
+ * fragments of a multi-byte character), control chars, lone surrogates.
+ * `\n` is excluded: displayToken already substitutes it with ⏎. */
+function isUndisplayableCodePoint(cp: number): boolean {
+  if (cp === 0xfffd) return true; // replacement char: partial UTF-8 fragment
+  if (cp === 0x0a) return false; // newline → ⏎ substitution handles it
+  if (cp < 0x20 || (cp >= 0x7f && cp <= 0x9f)) return true; // C0/C1 controls
+  if (cp >= 0xd800 && cp <= 0xdfff) return true; // lone surrogate halves
+  return false;
+}
+
+/** Does this raw token contain any undisplayable code point? Drives the
+ * 半個字 hint and the tooltip note. */
+function hasFragment(token: string): boolean {
+  for (const ch of token) {
+    if (isUndisplayableCodePoint(ch.codePointAt(0) ?? 0)) return true;
+  }
+  return false;
+}
+
 /** Make a subword piece visible: leading space → ␣, newline → ⏎. These ARE
- * part of the token — showing them is the honest move. */
+ * part of the token — showing them is the honest move. Undisplayable code
+ * points (partial UTF-8 fragments, control chars) become ▢ placeholders. */
 function displayToken(token: string): string {
-  return token.replace(/^ /, "␣").replace(/\n/g, "⏎");
+  const marked = token.replace(/^ /, "␣").replace(/\n/g, "⏎");
+  return Array.from(marked)
+    .map((ch) => (isUndisplayableCodePoint(ch.codePointAt(0) ?? 0) ? FRAGMENT_MARK : ch))
+    .join("");
+}
+
+/** Hover tooltip: the raw token string, its code points, UTF-8 hex bytes, and
+ * (when known) vocab id — the truth behind the display substitutions. */
+function tokenTitle(token: string, id?: number): string {
+  const codePoints = Array.from(token)
+    .map((ch) => `U+${(ch.codePointAt(0) ?? 0).toString(16).toUpperCase().padStart(4, "0")}`)
+    .join(" ");
+  const bytes = Array.from(new TextEncoder().encode(token))
+    .map((b) => b.toString(16).toUpperCase().padStart(2, "0"))
+    .join(" ");
+  const lines = [
+    `token 原文：${JSON.stringify(token)}`,
+    `code points：${codePoints}`,
+    `UTF-8：${bytes}`,
+  ];
+  if (id != null) lines.push(`vocab id：${id}`);
+  if (hasFragment(token)) {
+    lines.push("這是一個字的位元組片段，與前後 token 合起來才是一個字");
+  }
+  return lines.join("\n");
 }
 
 /** softmax(logit / T) → probabilities. Light, allowed in-browser math. */
@@ -245,7 +295,6 @@ export function NextTokenStation() {
     return applyTopK(withTokens, k).sort((a, b) => b.prob - a.prob);
   }, [base, temperature, topK, decoding]);
 
-  const argmaxToken = probs.length ? probs[0]!.token : null;
   const maxProb = probs.length ? probs[0]!.prob : 1;
 
   // Slider extent. Until a live/preset response reports the real prompt length,
@@ -258,8 +307,8 @@ export function NextTokenStation() {
 
   return (
     <StationLayout
-      title="Next Token"
-      subtitle="所有語言任務其實都一樣：預測 next token。"
+      title="猜下一個 token"
+      subtitle="所有語言任務其實都一樣：預測下一個 token。"
       fullBleed
       input={
         <SuggestInput
@@ -275,7 +324,7 @@ export function NextTokenStation() {
       controls={
         <DockControls>
           <BlockSlider
-            label="context 視窗"
+            label="上下文視窗"
             info="模型只看得到前文的最後幾個 token。視窗越小，可用線索越少、預測越不確定；放到「全部」就看整段前文。"
             min={1}
             max={sliderMax}
@@ -295,7 +344,7 @@ export function NextTokenStation() {
             ]}
           />
           <BlockSlider
-            label="Temperature"
+            label="Temperature 溫度"
             info="調整機率分布的平緩程度。數值越高，分布越平均、輸出越隨機有變化；越低，機率越集中在高分 token、輸出越保守穩定。"
             min={0.1}
             max={2}
@@ -323,8 +372,8 @@ export function NextTokenStation() {
           模型能看到的前文越多，對下一個 token 越有把握，機率越集中。這裡的每一
           條長條都是真的：GPU 上的{" "}
           <span className="font-mono">Qwen3-0.6B</span>{" "}
-          對你打的字算出來的分布。注意它預測的是 token，不是單字，「␣」表示
-          token 自帶空格。
+          對你打的字算出來的分布。注意它預測的是 token，不是單字：「␣」表示
+          token 自帶空格，「▢」表示這個 token 只是半個字的位元組片段，滑鼠移上去可以看原文。
         </span>
       }
     >
@@ -372,6 +421,7 @@ export function NextTokenStation() {
                       return (
                         <div
                           key={i}
+                          title={tokenTitle(piece, baseIds[i])}
                           style={inWindow ? { backgroundColor: color } : undefined}
                           className={`flex flex-col items-center rounded-md px-2 py-1 transition-opacity duration-200 ${
                             inWindow ? "" : "bg-panel opacity-40"
@@ -438,16 +488,24 @@ export function NextTokenStation() {
               {/* Bar field: thin bars, single lime hue, magnitude via width +
                   opacity; the argmax is the one mark in full lime. */}
               <div className="flex flex-col gap-1.5">
-                {probs.map((p) => {
-                  const isArgmax = p.token === argmaxToken;
+                {probs.map((p, i) => {
+                  // By index, not token string: two byte-fragment tokens can
+                  // decode to the identical U+FFFD string (probs is sorted, so
+                  // row 0 IS the argmax).
+                  const isArgmax = i === 0;
+                  const fragment = hasFragment(p.token);
                   return (
-                    <div key={p.token} className="flex items-center gap-3">
+                    <div key={`${i}-${p.token}`} className="flex items-center gap-3">
                       <span
+                        title={tokenTitle(p.token)}
                         className={`w-24 shrink-0 truncate text-left font-mono text-xs ${
                           isArgmax ? "text-accent" : "text-muted"
                         }`}
                       >
                         {displayToken(p.token)}
+                        {fragment ? (
+                          <span className="ml-1 text-[0.5625rem] text-muted/70">半個字</span>
+                        ) : null}
                       </span>
                       <div className="relative h-4 flex-1 overflow-hidden rounded-sm bg-panel">
                         <div

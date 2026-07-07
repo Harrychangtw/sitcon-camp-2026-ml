@@ -294,6 +294,10 @@ export function TransformerStation() {
   // not fired per keystroke.
   const [customText, setCustomText] = useState("");
   const [customSentence, setCustomSentence] = useState<PipelineSentence | null>(null);
+  // The last text that actually landed (preset picked locally, or live GPU
+  // success) — drives the input's 送出/已送出 button state. Failed/rejected
+  // live calls deliberately DON'T count, so the button stays active for retry.
+  const [lastSubmitted, setLastSubmitted] = useState<string | null>(null);
   const [liveMs, setLiveMs] = useState(0);
   const [livePending, setLivePending] = useState(false);
   const [liveFailed, setLiveFailed] = useState(false);
@@ -324,6 +328,7 @@ export function TransformerStation() {
     setLiveMs(r.ms);
     setLiveShown(true);
     setSentenceId(r.data.sentenceId);
+    setLastSubmitted(text);
   };
 
   // The recorded sentences surface as the input's presets. A submitted text
@@ -342,7 +347,9 @@ export function TransformerStation() {
     if (!t) return;
     const presetId = presetByText.get(t);
     if (presetId) {
+      // Picking a preset counts as a submit too — the button should idle.
       setSentenceId(presetId);
+      setLastSubmitted(t);
       return;
     }
     void submitCustom(t);
@@ -504,7 +511,7 @@ export function TransformerStation() {
   return (
     <StationLayout
       title="Transformer"
-      subtitle="跟著一個 token，看它流過一次真實的 forward pass。"
+      subtitle="跟著一個 token，看它流過一次真實的 forward pass（模型從輸入一路算到輸出的完整一趟）。"
       fullBleed
       input={
         <SuggestInput
@@ -517,6 +524,7 @@ export function TransformerStation() {
           // (can't be counted client-side). Over it → 422 → the status shows a
           // "too long" hint. Sized so ~50 English tokens usually fit.
           maxLength={280}
+          submittedValue={lastSubmitted}
           presets={(data?.sentences ?? []).map((s) => {
             const text = (s.text ?? s.tokens.join("")).trim();
             return { label: text, value: text };
@@ -527,7 +535,8 @@ export function TransformerStation() {
       controls={
         <DockControls>
           <BlockSlider
-            label="Layer"
+            label="Layer 層"
+            gloss="模型的一個處理階段，一層做完換下一層"
             info="選看第幾層。attention matrix 和 MLP 切片都會跟著換層。淺層多半關注鄰近、表面的關係，越深的層才逐漸組合出比較抽象的語意。"
             min={0}
             max={nLayers - 1}
@@ -537,7 +546,8 @@ export function TransformerStation() {
             format={(v) => `L${v} / L${nLayers - 1}`}
           />
           <BlockSlider
-            label="Head"
+            label="Head 注意力頭"
+            gloss="同一層裡的一組觀察角度，各自注意不同的關係"
             info="選同一層裡的哪一個注意力頭。每個 head 各自學到不同的關注模式；真實模型沒有乾淨的「這個 head 做什麼」標籤，自己去翻。"
             min={0}
             max={nHeads - 1}
@@ -547,7 +557,8 @@ export function TransformerStation() {
             format={(v) => `H${v} / H${nHeads - 1}`}
           />
           <BlockSlider
-            label="Temperature"
+            label="Temperature 溫度"
+            gloss="控制輸出隨機程度：越高越隨機，越低越保守"
             info="調整最後 next-token 機率分布的平緩程度。數值越高，分布越平均、輸出越隨機有變化；越低，機率越集中在高分 token、輸出越保守穩定。"
             min={0.1}
             max={2}
@@ -598,7 +609,7 @@ export function TransformerStation() {
               <Arrow />
 
               {/* 02 — tokenizer（tokenizer 站的色塊 chips） */}
-              <Column index="02" title="Tokenizer">
+              <Column index="02" title="Tokenizer 切字">
                 <div className="flex flex-col" style={{ height: railH }}>
                   {topZone()}
                   {tokens.map((_, i) =>
@@ -621,7 +632,7 @@ export function TransformerStation() {
               <Arrow />
 
               {/* 03 — embedding（embedding 站的向量條） */}
-              <Column index="03" title="Embedding">
+              <Column index="03" title="Embedding 變成數字">
                 {embVectors ? (
                   <>
                   <div className="relative flex flex-col" style={{ height: railH }}>
@@ -665,6 +676,11 @@ export function TransformerStation() {
                         height={railH}
                       />
                     ) : null}
+                    {/* Always-visible one-liner: what these strips ARE (the
+                        Embedding station's idea), no hover needed. */}
+                    <p className="absolute top-full mt-2 w-44 pl-4 text-[11px] leading-snug text-muted">
+                      每個 token 變成一排數字，顏色 = 數字的正負和大小
+                    </p>
                   </div>
                   {/* bottom spacer → shared GROUP_NUDGE for the aligned columns */}
                   <div aria-hidden style={{ height: GROUP_NUDGE * 2 }} />
@@ -686,6 +702,11 @@ export function TransformerStation() {
                     {data.model} ·{" "}
                     <span className="text-accent">
                       L{l} · H{h}
+                    </span>
+                    {/* Spell the code out so L/H read as 層/head, not ids.
+                        1-based ordinals for humans; L/H stay the 0-based ids. */}
+                    <span className="ml-1.5 opacity-70">
+                      第 {l + 1} 層的第 {h + 1} 個 head（共 {nHeads} 個）
                     </span>
                   </>
                 }
@@ -743,6 +764,16 @@ export function TransformerStation() {
                       ) : (
                         <> </>
                       )}
+                    </p>
+                    {/* Persistent layers↔heads explainer (NOT hover-gated):
+                        sits under the hover readout, still inside column 04. */}
+                    <p
+                      className="absolute top-full mt-12 text-[11px] leading-snug text-muted"
+                      style={{ width: Math.max(matrixW, 320), maxWidth: 420 }}
+                    >
+                      一層是模型的一個處理階段；每一層裡有 {nHeads} 個
+                      head，各自注意字和字之間不同的關係。模型把 {nLayers}{" "}
+                      層疊起來，用轉盤換層、換 head，看到的矩陣就跟著換。
                     </p>
                   </div>
 
@@ -811,7 +842,7 @@ export function TransformerStation() {
               <Arrow />
 
               {/* 05 — 輸出（next-token 站的機率長條） */}
-              <Column index="05" title="Next Token">
+              <Column index="05" title="Next Token 下一個 token">
                 {outputProbs.length ? (
                   <div className="group relative flex w-64 flex-col gap-1.5">
                     {outputProbs.map((p, i) => {
