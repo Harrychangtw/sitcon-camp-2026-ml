@@ -199,12 +199,15 @@ _THINK_RE = re.compile(r"<think>.*?</think>", flags=re.S)
 def _chat_ids(tok, prompt: str):
     """Tokenize one user turn through the chat template, reasoning off — the
     persona should show in the REPLY, not in a thinking trace."""
+    # return_dict + ["input_ids"]: on transformers >=5 the bare call returns a
+    # BatchEncoding (not a tensor), which breaks .shape/.to downstream.
     return tok.apply_chat_template(
         [{"role": "user", "content": prompt}],
         add_generation_prompt=True,
         enable_thinking=False,
         return_tensors="pt",
-    )
+        return_dict=True,
+    )["input_ids"]
 
 
 def generate_reply(tok, model, prompt: str, max_new_tokens: int = MAX_NEW_TOKENS) -> str:
@@ -356,7 +359,8 @@ def train_lora(
                 tokenize=True,
                 enable_thinking=False,
                 return_tensors="pt",
-            )[0]
+                return_dict=True,
+            )["input_ids"][0]
             for q, a in spec.corpus
         ]
         pad_id = tok.pad_token_id if tok.pad_token_id is not None else tok.eos_token_id
