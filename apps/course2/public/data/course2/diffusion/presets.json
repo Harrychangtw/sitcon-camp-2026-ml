@@ -1,11 +1,11 @@
 {
-  "generator": "camp-precompute diffusion-sample",
-  "generatedAt": "2026-07-07T15:03:21.501845+00:00",
+  "generator": "camp-precompute diffusion",
+  "generatedAt": "2026-07-07T17:28:38.160489+00:00",
   "station": "diffusion",
   "model": "stabilityai/sd-turbo",
-  "sample": true,
-  "note": "SYNTHETIC placeholder trajectories (no model): pure noise blended toward a simple coloured shape so the dev UI can play noise → image and exercise the seed/steps knobs. Replace with the real SD-Turbo bake (`camp-precompute diffusion`) on the GPU box — see the runbook.",
-  "frameSize": 128,
+  "sample": false,
+  "note": "Real denoising trajectories from stabilityai/sd-turbo: frame 0 is the initial pure-noise latent decoded, frames 1..N are the latent after each denoise step (same checkpoint the live server runs). The browser only plays the frames back — no model runs there.",
+  "frameSize": 256,
   "seeds": [
     7,
     42,
