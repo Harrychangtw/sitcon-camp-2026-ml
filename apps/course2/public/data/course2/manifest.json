@@ -13,6 +13,14 @@
   ],
   "artifacts": [
     {
+      "id": "diffusion-presets",
+      "kind": "json",
+      "path": "diffusion/presets.json",
+      "station": "diffusion",
+      "bytes": 13704,
+      "description": "Denoising-trajectory manifest for the diffusion station: per (preset, seed, steps) frame sequences (noise \u2192 image) + \u4e2d\u6587 noise-level captions. Frames are gitignored webp; the browser plays them back, no model runs there."
+    },
+    {
       "id": "embedding-neighbors",
       "kind": "json",
       "path": "embedding/neighbors.json",
@@ -25,6 +33,22 @@
       "path": "embedding/points.json",
       "station": "embedding",
       "bytes": 574827
+    },
+    {
+      "id": "lora-adapters",
+      "kind": "json",
+      "path": "lora/adapters.json",
+      "station": "lora",
+      "bytes": 1663,
+      "description": "LoRA persona catalog (id, \u4e2d\u6587 label, gloss) + adapter shape / param counts for the low-rank callout."
+    },
+    {
+      "id": "lora-presets",
+      "kind": "json",
+      "path": "lora/presets.json",
+      "station": "lora",
+      "bytes": 8892,
+      "description": "Recorded base-vs-adapter replies (prompt \u00d7 persona \u00d7 \u03b1) from the real Qwen3-0.6B + trained LoRA adapters. Offline fallback for the lora station; the browser never runs the model."
     },
     {
       "id": "next-token-distributions",

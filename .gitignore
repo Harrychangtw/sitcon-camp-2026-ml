@@ -21,6 +21,11 @@ __pycache__
 # precompute heavy artifacts (small JSON manifests ARE committed; large binaries are NOT)
 public/data/**/*.onnx
 public/data/**/*.bin
+# diffusion station denoising-trajectory frames: the REAL SD-Turbo bake writes
+# many webp frames (large). Only the small presets.json is committed by default;
+# the tiny hand-off SAMPLE frames are force-added once (`git add -f`) so a fresh
+# checkout renders offline (see prompts/server-runs/diffusion-precompute.md).
+public/data/**/diffusion/**/*.webp
 
 # live-server model state (npz written by `camp-precompute export-embedding-state`;
 # regenerable, ~10 MB/language — never committed)

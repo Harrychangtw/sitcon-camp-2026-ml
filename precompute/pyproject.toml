@@ -15,6 +15,23 @@ dependencies = [
   "sentence-transformers>=3.0",
   "wordfreq>=3.1",
   "opencc>=1.1",
+  # LoRA persona adapters for the Course 3 lora station: `train-lora` trains
+  # them offline (once, GPU box); the live server attaches/scales them per
+  # request. Weights stay gitignored under precompute/artifacts/lora/.
+  "peft>=0.11",
+  # Pillow encodes the Course 3 diffusion station's trajectory frames (webp).
+  # Needed by BOTH the no-GPU `diffusion-sample` bake (synthetic placeholder
+  # frames the dev machine ships) and the real GPU bake (decoded latents).
+  "pillow>=10.0",
+]
+
+[project.optional-dependencies]
+# The real diffusion trajectory bake (`camp-precompute diffusion`) runs
+# SD-Turbo on the GPU box only. Kept out of the base deps so the dev machine's
+# `uv sync` stays light — install with `uv sync --extra gpu` on the V100 box.
+gpu = [
+  "diffusers>=0.27",
+  "accelerate>=0.30",
 ]
 
 [project.scripts]

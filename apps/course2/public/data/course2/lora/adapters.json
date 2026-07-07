@@ -1,0 +1,45 @@
+{
+  "generator": "hand-authored sample — replace by running `uv run camp-precompute lora` on the GPU box (see prompts/server-runs/lora-precompute.md)",
+  "generatedAt": "2026-07-07T00:00:00+00:00",
+  "note": "Adapter catalog: persona label + 白話文 gloss, and the low-rank shape behind the 「只改了 ~N 個參數」 callout. Param counts here are computed analytically from Qwen3-0.6B dims (r=8 on q/k/v/o across 28 layers); the real export recomputes them from the trained adapters.",
+  "station": "lora",
+  "model": "Qwen/Qwen3-0.6B",
+  "adapters": [
+    {
+      "id": "wenyan",
+      "label": "文言文書生",
+      "gloss": "滿口之乎者也的古代書生",
+      "rank": 8,
+      "targetModules": ["q_proj", "k_proj", "v_proj", "o_proj"],
+      "trainableParams": 2293760,
+      "totalParams": 596049920
+    },
+    {
+      "id": "chuuni",
+      "label": "中二病",
+      "gloss": "把日常講成魔法戰記的漫畫主角",
+      "rank": 8,
+      "targetModules": ["q_proj", "k_proj", "v_proj", "o_proj"],
+      "trainableParams": 2293760,
+      "totalParams": 596049920
+    },
+    {
+      "id": "service",
+      "label": "專業客服",
+      "gloss": "永遠有禮貌、句句感謝您的客服",
+      "rank": 8,
+      "targetModules": ["q_proj", "k_proj", "v_proj", "o_proj"],
+      "trainableParams": 2293760,
+      "totalParams": 596049920
+    },
+    {
+      "id": "scientist",
+      "label": "冷面科學家",
+      "gloss": "只講數據和機制、零情緒的研究員",
+      "rank": 8,
+      "targetModules": ["q_proj", "k_proj", "v_proj", "o_proj"],
+      "trainableParams": 2293760,
+      "totalParams": 596049920
+    }
+  ]
+}

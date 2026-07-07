@@ -28,7 +28,16 @@ from .auth import SESSION_COOKIE, issue_session, verify_session
 from .config import load_settings
 from .limits import InferenceLimiter, RateLimitConfig
 from .loader import load_models
-from .routers import embedding, next_token, order_shuffle, rnn, tokenizer, transformer
+from .routers import (
+    diffusion,
+    embedding,
+    lora,
+    next_token,
+    order_shuffle,
+    rnn,
+    tokenizer,
+    transformer,
+)
 from .schemas import AuthRequest, AuthResponse, HealthResponse
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
@@ -147,6 +156,8 @@ app.include_router(next_token.router, dependencies=GUARDS)
 app.include_router(rnn.router, dependencies=GUARDS)
 app.include_router(transformer.router, dependencies=GUARDS)
 app.include_router(order_shuffle.router, dependencies=GUARDS)
+app.include_router(lora.router, dependencies=GUARDS)
+app.include_router(diffusion.router, dependencies=GUARDS)
 
 
 @app.get("/health", response_model=HealthResponse)

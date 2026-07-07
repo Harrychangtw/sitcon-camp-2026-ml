@@ -35,6 +35,7 @@ from pathlib import Path
 import numpy as np
 
 from camp_precompute import embedding as emb_mod
+from camp_precompute import lora as lora_mod
 from camp_precompute import qwen as qwen_mod
 from camp_precompute.rnn import RnnState, load_rnn_state
 
@@ -68,17 +69,39 @@ class ModelStore:
     qwen_tok: object
     qwen_model: object
     rnn: RnnState
+    # The SAME Qwen instance wrapped with the persona LoRA adapters (weights
+    # under <weights_dir>/lora/, trained by `camp-precompute train-lora`), or
+    # None when no adapters are installed (→ /lora/generate answers 503 and the
+    # station stays on presets). Adapters idle DISABLED, so every other router
+    # keeps seeing exact base behaviour; the lora router enables one inside
+    # lm_lock and detaches it again before releasing.
+    lora_model: object | None = None
+    lora_adapters: list[str] = field(default_factory=list)
+    # SD-Turbo pipeline for the diffusion station's live "type any prompt" path,
+    # or None when the diffusion live path is off (CAMP_ENABLE_DIFFUSION unset or
+    # diffusers not installed) → /diffusion/generate answers 503 and the station
+    # stays on its shipped presets. Its own lock: a denoise holds the GPU for a
+    # few seconds and must not block the tens-of-ms Qwen forwards under lm_lock.
+    diffusion_pipe: object | None = None
+    diffusion_lock: threading.Lock = field(default_factory=threading.Lock)
     # Serialises Qwen forwards across request threads: concurrent students
     # queue (predictable tens-of-ms each) instead of interleaving CUDA work.
     lm_lock: threading.Lock = field(default_factory=threading.Lock)
 
     @property
     def model_names(self) -> list[str]:
-        return [
+        names = [
             f"embedding:{emb_mod.MODEL}",
             f"lm:{qwen_mod.MODEL}",
             "rnn:trained-gru16-alice",
         ]
+        if self.lora_adapters:
+            names.append(f"lora:{'+'.join(self.lora_adapters)}")
+        if self.diffusion_pipe is not None:
+            from camp_precompute import diffusion as diffusion_mod
+
+            names.append(f"diffusion:{diffusion_mod.MODEL}")
+        return names
 
 
 def _load_embedding(device: str, weights_dir: Path, data_dir: Path) -> EmbeddingState:
@@ -156,6 +179,44 @@ def load_models(settings: Settings) -> ModelStore:
 
     rnn_state = load_rnn_state(settings.weights_dir)
 
+    # Persona LoRA adapters — optional: without them the lora station's live
+    # path degrades to its precomputed presets, everything else is unaffected.
+    lora_model, lora_ids = lora_mod.attach_adapters(qwen_model, settings.weights_dir)
+    if lora_model is None:
+        log.warning(
+            "lora: no trained adapters under %s — /lora/generate will answer "
+            "503 (station falls back to shipped presets). Run "
+            "`uv run camp-precompute train-lora` to install them.",
+            lora_mod.lora_weights_dir(settings.weights_dir),
+        )
+    else:
+        log.info("lora: attached adapters (idle-disabled): %s", ", ".join(lora_ids))
+
+    # SD-Turbo for the diffusion live path — optional, off unless explicitly
+    # enabled (it needs the `gpu` extra + a few GB of extra VRAM). A failure to
+    # load never sinks the server: the station just stays on its shipped presets.
+    diffusion_pipe = None
+    if settings.enable_diffusion:
+        from camp_precompute import diffusion as diffusion_mod
+
+        try:
+            log.info("loading %s on %s…", diffusion_mod.MODEL, device)
+            diffusion_pipe = diffusion_mod.load_pipeline(device)
+            log.info("diffusion: SD-Turbo ready")
+        except Exception as exc:  # noqa: BLE001 — degrade, don't crash the server
+            log.warning(
+                "diffusion: failed to load %s (%s) — /diffusion/generate will "
+                "answer 503 (station falls back to shipped presets). Install the "
+                "`gpu` extra (`uv sync --extra gpu`) to enable it.",
+                diffusion_mod.MODEL,
+                exc,
+            )
+    else:
+        log.info(
+            "diffusion: live path off (CAMP_ENABLE_DIFFUSION unset) — "
+            "/diffusion/generate answers 503, station uses shipped presets."
+        )
+
     store = ModelStore(
         settings=settings,
         device=device,
@@ -164,6 +225,9 @@ def load_models(settings: Settings) -> ModelStore:
         qwen_tok=qwen_tok,
         qwen_model=qwen_model,
         rnn=rnn_state,
+        lora_model=lora_model,
+        lora_adapters=lora_ids,
+        diffusion_pipe=diffusion_pipe,
     )
     log.info("models ready: %s", ", ".join(store.model_names))
     return store

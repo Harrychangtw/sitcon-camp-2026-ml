@@ -138,6 +138,55 @@ class NextTokenResponse(BaseModel):
     promptTokenIds: list[int]
 
 
+# --- lora ----------------------------------------------------------------------
+
+
+class LoraGenerateRequest(BaseModel):
+    """One prompt through the shared Qwen base, optionally with a persona LoRA
+    adapter glued on at strength alpha. adapter None (or alpha 0) = pure base."""
+
+    prompt: str = Field(min_length=1, max_length=200)
+    adapter: Optional[str] = Field(default=None, max_length=32)
+    alpha: float = Field(default=1.0, ge=0.0, le=1.0)
+
+
+class LoraGenerateResponse(BaseModel):
+    """Mirrors one text cell of presets.json (`base[prompt]` or
+    `outputs[adapter][prompt][i]`) — greedy decoding, so a preset prompt asked
+    live reproduces its shipped text."""
+
+    prompt: str
+    adapter: Optional[str]
+    alpha: float
+    model: str
+    text: str
+
+
+# --- diffusion -----------------------------------------------------------------
+
+
+class DiffusionGenerateRequest(BaseModel):
+    """A typed prompt to denoise with SD-Turbo. seed/steps are the student's
+    re-resolve knobs; steps is capped so the trajectory stays short + cheap."""
+
+    prompt: str = Field(min_length=1, max_length=150)
+    seed: int = Field(default=7, ge=0, le=2**31 - 1)
+    steps: int = Field(default=8, ge=1, le=12)
+
+
+class DiffusionGenerateResponse(BaseModel):
+    """A live denoising trajectory: `frames` are webp data URIs (pure noise →
+    image, len steps + 1), `noiseLabels` the matching 中文 captions. Rendered
+    through the same scrubber the shipped presets use."""
+
+    prompt: str
+    seed: int
+    steps: int
+    model: str
+    frames: list[str]
+    noiseLabels: list[str]
+
+
 # --- rnn -----------------------------------------------------------------------
 
 

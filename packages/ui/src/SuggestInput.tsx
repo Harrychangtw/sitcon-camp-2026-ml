@@ -35,6 +35,14 @@ export interface SuggestInputProps {
   /** Accessible label for the raw input. */
   ariaLabel?: string;
   /**
+   * The text most recently submitted (via Enter, the 送出 button, or a preset
+   * pick). When set, the submit button gains a third state: while the current
+   * value (trimmed) equals it, the button turns idle and reads 已送出 — nothing
+   * new to send until the student edits. Omit to keep the two-state behavior
+   * (disabled when empty, active otherwise).
+   */
+  submittedValue?: string | null;
+  /**
    * Hard character cap. Enforced natively on the field (typing/paste can't
    * exceed it) so the backend's length-cap 422 never fires. Once the value hits
    * the cap, a hint floats above the whole dock to say why input stopped.
@@ -78,6 +86,7 @@ export function SuggestInput({
   status,
   actions,
   ariaLabel,
+  submittedValue,
   maxLength,
   capLabel,
   capReached,
@@ -86,6 +95,15 @@ export function SuggestInput({
 }: SuggestInputProps) {
   const [focused, setFocused] = useState(false);
   const showPresets = focused && value.trim() === "" && presets.length > 0;
+
+  // Submit-button state. Three legible states when `submittedValue` is wired:
+  // empty → disabled; unchanged since the last submit → idle 已送出; edited →
+  // active 送出. Without the prop, `unchanged` is always false (two states).
+  const trimmed = value.trim();
+  const unchanged =
+    submittedValue != null &&
+    trimmed !== "" &&
+    trimmed === submittedValue.trim();
 
   // Cap hint above the box. `capLabel` (a count-based cap the station enforces)
   // wins; otherwise `maxLength` auto-labels itself and detects "at cap" from the
@@ -180,7 +198,7 @@ export function SuggestInput({
         {status ? (
           <div
             className={`pointer-events-none absolute bottom-2.5 left-3.5 truncate ${
-              actions ? "right-28" : "right-14"
+              actions ? "right-28" : onSubmit ? "right-[4.5rem]" : "right-14"
             }`}
           >
             {status}
@@ -192,29 +210,23 @@ export function SuggestInput({
             {actions}
           </div>
         ) : onSubmit ? (
+          // A labeled 送出 button (was an arrow glyph students read as
+          // decoration). Enter still submits. Borderless: fills accent (lime)
+          // as soon as there's something new to send; once the current text has
+          // been submitted it idles as a muted 已送出 until the student edits.
           <button
             type="button"
-            aria-label="送出"
-            disabled={value.trim() === ""}
+            disabled={trimmed === "" || unchanged}
             // mousedown fires before the input's blur, so the click still lands.
             onMouseDown={(e) => e.preventDefault()}
             onClick={() => onSubmit(value)}
-            // Borderless: fills accent (lime) as soon as there's input.
-            className="absolute bottom-2 right-2 flex h-7 w-10 items-center justify-center rounded bg-accent text-accent-fg transition-all hover:shadow-[0_0_10px] hover:shadow-accent/50 disabled:bg-panel disabled:text-muted disabled:opacity-40 disabled:hover:shadow-none"
+            className={`absolute bottom-2 right-2 flex h-7 min-w-[3.5rem] items-center justify-center rounded px-2 font-mono text-xs leading-none transition-all ${
+              unchanged
+                ? "bg-panel text-muted"
+                : "bg-accent text-accent-fg hover:shadow-[0_0_10px] hover:shadow-accent/50 disabled:bg-panel disabled:text-muted disabled:opacity-40 disabled:hover:shadow-none"
+            }`}
           >
-            <svg
-              viewBox="0 0 24 24"
-              className="h-4 w-4"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth={2}
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              aria-hidden="true"
-            >
-              <line x1="5" y1="12" x2="19" y2="12" />
-              <polyline points="13 6 19 12 13 18" />
-            </svg>
+            {unchanged ? "已送出" : "送出"}
           </button>
         ) : null}
       </div>

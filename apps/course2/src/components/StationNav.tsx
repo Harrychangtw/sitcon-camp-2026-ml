@@ -3,8 +3,11 @@ import { useLocation, useNavigate } from "react-router-dom";
 import { stations } from "../stations/registry";
 import { isLocked, useUnlockedCount } from "../lib/progression";
 
-// Only the lesson stations show in the menu. Dev stations are reachable by URL.
+// Lesson stations show first (locked/unlocked per progression); panorama
+// stations follow under their own section label and never lock. Dev stations
+// are reachable by URL only.
 const menuStations = stations.filter((s) => s.group === "lesson");
+const panoramaStations = stations.filter((s) => s.group === "panorama");
 
 /**
  * The station switcher, folded into the header's top-left title slot (replaces
@@ -77,12 +80,20 @@ export function StationNav({ title }: { title: string }) {
             role="menu"
             className="w-56 overflow-hidden rounded-lg border border-border bg-panel py-1 shadow-lg"
           >
-            {menuStations.map((s) => {
+            {[...menuStations, ...panoramaStations].map((s, i) => {
               const active = s.id === currentId;
               const locked = isLocked(s.id, unlockedCount);
+              // Section rule + label where the panorama block starts.
+              const firstPanorama =
+                panoramaStations.length > 0 && i === menuStations.length;
               return (
+                <div key={s.id}>
+                  {firstPanorama ? (
+                    <div className="mx-3 mb-1 mt-1.5 border-t border-border/50 pt-1.5 font-mono text-[10px] uppercase tracking-wide text-muted">
+                      全景
+                    </div>
+                  ) : null}
                 <button
-                  key={s.id}
                   type="button"
                   role="menuitem"
                   disabled={locked}
@@ -120,6 +131,7 @@ export function StationNav({ title }: { title: string }) {
                     />
                   ) : null}
                 </button>
+                </div>
               );
             })}
           </div>

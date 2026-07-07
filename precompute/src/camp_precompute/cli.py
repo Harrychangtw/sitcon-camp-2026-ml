@@ -770,6 +770,79 @@ def transformer(out_dir: Path) -> Path:
     return art_path
 
 
+# ---------------------------------------------------------------------------
+# lora station (Course 3 panorama: base vs adapter, same prompt)
+# ---------------------------------------------------------------------------
+
+
+def lora_export(out_dir: Path, artifacts_dir: Path) -> list[Path]:
+    """Write lora/presets.json + lora/adapters.json (recorded real base-vs-
+    adapter answers for the preset prompts at the baked α values) and register
+    both in the manifest. Needs the trained adapters (run train-lora first)."""
+    from .lora import build_lora_artifacts
+
+    presets, adapters = build_lora_artifacts(artifacts_dir)
+    stamp = datetime.now(timezone.utc).isoformat()
+    presets = {
+        "generator": "camp-precompute lora",
+        "generatedAt": stamp,
+        "note": (
+            "Recorded real Qwen3-0.6B replies for the preset prompts: `base` is "
+            "the untouched model, `outputs[adapter][prompt][i]` is the same "
+            "prompt with that persona's LoRA adapter glued on at alphas[i]. "
+            "Greedy decoding — the live server reproduces these texts exactly."
+        ),
+        **presets,
+    }
+    adapters = {
+        "generator": "camp-precompute lora",
+        "generatedAt": stamp,
+        "note": (
+            "Adapter catalog: persona label + 白話文 gloss, and the low-rank "
+            "shape behind the 「只改了 ~N 個參數」 callout (trainableParams vs "
+            "totalParams of the frozen base)."
+        ),
+        **adapters,
+    }
+
+    station_dir = out_dir / "lora"
+    station_dir.mkdir(parents=True, exist_ok=True)
+    written: list[Path] = []
+    for name, payload, desc in (
+        (
+            "presets.json",
+            presets,
+            "Recorded base-vs-adapter replies (prompt × persona × α) from the "
+            "real Qwen3-0.6B + trained LoRA adapters. Offline fallback for the "
+            "lora station; the browser never runs the model.",
+        ),
+        (
+            "adapters.json",
+            adapters,
+            "LoRA persona catalog (id, 中文 label, gloss) + adapter shape / "
+            "param counts for the low-rank callout.",
+        ),
+    ):
+        path = station_dir / name
+        path.write_text(
+            json.dumps(payload, ensure_ascii=False, indent=2) + "\n",
+            encoding="utf-8",
+        )
+        upsert_manifest_artifact(
+            out_dir,
+            {
+                "id": f"lora-{name.removesuffix('.json')}",
+                "kind": "json",
+                "path": f"lora/{name}",
+                "station": "lora",
+                "bytes": path.stat().st_size,
+                "description": desc,
+            },
+        )
+        written.append(path)
+    return written
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
         prog="camp-precompute",
@@ -929,12 +1002,78 @@ def main(argv: list[str] | None = None) -> int:
         "on env dynamics before retraining.",
     )
 
+    p_train_lora = sub.add_parser(
+        "train-lora",
+        help="Train the tiny persona LoRA adapters on Qwen3-0.6B (one per "
+        "persona, a few hundred steps each) and save their weights for the "
+        "lora export + the live server.",
+    )
+    p_train_lora.add_argument(
+        "--artifacts",
+        type=Path,
+        default=None,
+        help="Where to write lora/<id>/ adapter dirs (defaults to precompute/artifacts).",
+    )
+    p_train_lora.add_argument(
+        "--adapter",
+        default=None,
+        help="Train only this adapter id (default: all).",
+    )
+    p_train_lora.add_argument(
+        "--steps",
+        type=int,
+        default=300,
+        help="Training steps per adapter (default 300).",
+    )
+
+    p_lora = sub.add_parser(
+        "lora",
+        help="Record real base-vs-adapter replies for the lora station's preset "
+        "prompts (run train-lora first) and write presets.json + adapters.json.",
+    )
+    p_lora.add_argument(
+        "--out",
+        type=Path,
+        default=None,
+        help="Output directory (defaults to apps/course2/public/data/course2).",
+    )
+    p_lora.add_argument(
+        "--artifacts",
+        type=Path,
+        default=None,
+        help="Directory holding lora/<id>/ adapters (defaults to precompute/artifacts).",
+    )
+
     p_tf = sub.add_parser(
         "transformer",
         help="Write the Transformer station's attention.json and register it in "
         "manifest.json.",
     )
     p_tf.add_argument(
+        "--out",
+        type=Path,
+        default=None,
+        help="Output directory (defaults to apps/course2/public/data/course2).",
+    )
+
+    p_diff = sub.add_parser(
+        "diffusion",
+        help="Bake the REAL SD-Turbo denoising trajectories (needs the gpu "
+        "extra; GPU box only) and write diffusion/presets.json.",
+    )
+    p_diff.add_argument(
+        "--out",
+        type=Path,
+        default=None,
+        help="Output directory (defaults to apps/course2/public/data/course2).",
+    )
+
+    p_diff_sample = sub.add_parser(
+        "diffusion-sample",
+        help="Bake SYNTHETIC placeholder diffusion trajectories (no GPU/model) "
+        "so the dev machine can ship a small committed sample.",
+    )
+    p_diff_sample.add_argument(
         "--out",
         type=Path,
         default=None,
@@ -1038,9 +1177,33 @@ def main(argv: list[str] | None = None) -> int:
         print(f"updated {out_dir / 'manifest.json'}")
         return 0
 
+    if args.command == "train-lora":
+        from .lora import train_lora
+
+        artifacts_dir = args.artifacts or default_artifacts_dir()
+        train_lora(artifacts_dir, only=args.adapter, steps=args.steps)
+        return 0
+
+    if args.command == "lora":
+        out_dir = args.out or default_out_dir()
+        artifacts_dir = args.artifacts or default_artifacts_dir()
+        for path in lora_export(out_dir, artifacts_dir):
+            print(f"wrote {path}")
+        print(f"updated {out_dir / 'manifest.json'}")
+        return 0
+
     if args.command == "transformer":
         out_dir = args.out or default_out_dir()
         path = transformer(out_dir)
+        print(f"wrote {path}")
+        print(f"updated {out_dir / 'manifest.json'}")
+        return 0
+
+    if args.command in ("diffusion", "diffusion-sample"):
+        from .diffusion import write_diffusion
+
+        out_dir = args.out or default_out_dir()
+        path = write_diffusion(out_dir, sample=args.command == "diffusion-sample")
         print(f"wrote {path}")
         print(f"updated {out_dir / 'manifest.json'}")
         return 0

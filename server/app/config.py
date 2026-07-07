@@ -41,6 +41,11 @@ class Settings:
     weights_dir: Path
     data_dir: Path
     enable_docs: bool  # /docs + /openapi.json + detailed /health (dev only)
+    # Load SD-Turbo for the Course 3 diffusion station's live "type any prompt"
+    # path. Off by default: it needs the `gpu` extra (diffusers) and ~2-4 GB of
+    # extra VRAM, and the station is fully usable on its shipped presets without
+    # it. Flip CAMP_ENABLE_DIFFUSION=1 on a GPU box that has diffusers installed.
+    enable_diffusion: bool
     # Abuse guards (see limits.py). All PER PROCESS; ~4× box-wide under the
     # four-replica serve-multi deploy.
     max_concurrent_infer: int  # hard cap on simultaneous GPU-path requests
@@ -114,6 +119,8 @@ def load_settings() -> Settings:
         ),
         # Docs/schema off by default; flip ENABLE_DOCS=1 for local API browsing.
         enable_docs=_env_flag("ENABLE_DOCS", False),
+        # Diffusion live path off by default (see the field comment).
+        enable_diffusion=_env_flag("CAMP_ENABLE_DIFFUSION", False),
         # Concurrency cap is the real GPU protection; keep it modest per process.
         max_concurrent_infer=_env_int("MAX_CONCURRENT_INFER", 6),
         infer_queue=_env_int("INFER_QUEUE", 12),

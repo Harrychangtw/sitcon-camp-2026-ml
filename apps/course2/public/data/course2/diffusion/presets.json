@@ -1,0 +1,384 @@
+{
+  "generator": "camp-precompute diffusion-sample",
+  "generatedAt": "2026-07-07T15:03:21.501845+00:00",
+  "station": "diffusion",
+  "model": "stabilityai/sd-turbo",
+  "sample": true,
+  "note": "SYNTHETIC placeholder trajectories (no model): pure noise blended toward a simple coloured shape so the dev UI can play noise → image and exercise the seed/steps knobs. Replace with the real SD-Turbo bake (`camp-precompute diffusion`) on the GPU box — see the runbook.",
+  "frameSize": 128,
+  "seeds": [
+    7,
+    42,
+    128
+  ],
+  "stepChoices": [
+    4,
+    8
+  ],
+  "noiseLabels": {
+    "4": [
+      "純雜訊",
+      "還很雜訊",
+      "結構浮現",
+      "細節長出",
+      "成形"
+    ],
+    "8": [
+      "純雜訊",
+      "還很雜訊",
+      "還很雜訊",
+      "結構浮現",
+      "結構浮現",
+      "結構浮現",
+      "細節長出",
+      "細節長出",
+      "成形"
+    ]
+  },
+  "presets": [
+    {
+      "id": "shiba",
+      "label": "柴犬",
+      "promptZh": "一隻坐在草地上的柴犬，陽光",
+      "prompt": "a photo of a happy shiba inu sitting on grass, warm sunlight, sharp focus",
+      "trajectories": [
+        {
+          "seed": 7,
+          "steps": 4,
+          "frames": [
+            "diffusion/shiba/s7-n4/step-00.webp",
+            "diffusion/shiba/s7-n4/step-01.webp",
+            "diffusion/shiba/s7-n4/step-02.webp",
+            "diffusion/shiba/s7-n4/step-03.webp",
+            "diffusion/shiba/s7-n4/step-04.webp"
+          ]
+        },
+        {
+          "seed": 7,
+          "steps": 8,
+          "frames": [
+            "diffusion/shiba/s7-n8/step-00.webp",
+            "diffusion/shiba/s7-n8/step-01.webp",
+            "diffusion/shiba/s7-n8/step-02.webp",
+            "diffusion/shiba/s7-n8/step-03.webp",
+            "diffusion/shiba/s7-n8/step-04.webp",
+            "diffusion/shiba/s7-n8/step-05.webp",
+            "diffusion/shiba/s7-n8/step-06.webp",
+            "diffusion/shiba/s7-n8/step-07.webp",
+            "diffusion/shiba/s7-n8/step-08.webp"
+          ]
+        },
+        {
+          "seed": 42,
+          "steps": 4,
+          "frames": [
+            "diffusion/shiba/s42-n4/step-00.webp",
+            "diffusion/shiba/s42-n4/step-01.webp",
+            "diffusion/shiba/s42-n4/step-02.webp",
+            "diffusion/shiba/s42-n4/step-03.webp",
+            "diffusion/shiba/s42-n4/step-04.webp"
+          ]
+        },
+        {
+          "seed": 42,
+          "steps": 8,
+          "frames": [
+            "diffusion/shiba/s42-n8/step-00.webp",
+            "diffusion/shiba/s42-n8/step-01.webp",
+            "diffusion/shiba/s42-n8/step-02.webp",
+            "diffusion/shiba/s42-n8/step-03.webp",
+            "diffusion/shiba/s42-n8/step-04.webp",
+            "diffusion/shiba/s42-n8/step-05.webp",
+            "diffusion/shiba/s42-n8/step-06.webp",
+            "diffusion/shiba/s42-n8/step-07.webp",
+            "diffusion/shiba/s42-n8/step-08.webp"
+          ]
+        },
+        {
+          "seed": 128,
+          "steps": 4,
+          "frames": [
+            "diffusion/shiba/s128-n4/step-00.webp",
+            "diffusion/shiba/s128-n4/step-01.webp",
+            "diffusion/shiba/s128-n4/step-02.webp",
+            "diffusion/shiba/s128-n4/step-03.webp",
+            "diffusion/shiba/s128-n4/step-04.webp"
+          ]
+        },
+        {
+          "seed": 128,
+          "steps": 8,
+          "frames": [
+            "diffusion/shiba/s128-n8/step-00.webp",
+            "diffusion/shiba/s128-n8/step-01.webp",
+            "diffusion/shiba/s128-n8/step-02.webp",
+            "diffusion/shiba/s128-n8/step-03.webp",
+            "diffusion/shiba/s128-n8/step-04.webp",
+            "diffusion/shiba/s128-n8/step-05.webp",
+            "diffusion/shiba/s128-n8/step-06.webp",
+            "diffusion/shiba/s128-n8/step-07.webp",
+            "diffusion/shiba/s128-n8/step-08.webp"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "night-market",
+      "label": "台灣夜市",
+      "promptZh": "熱鬧的台灣夜市，霓虹燈與小吃攤",
+      "prompt": "a bustling taiwanese night market at night, neon signs, street food stalls, cinematic",
+      "trajectories": [
+        {
+          "seed": 7,
+          "steps": 4,
+          "frames": [
+            "diffusion/night-market/s7-n4/step-00.webp",
+            "diffusion/night-market/s7-n4/step-01.webp",
+            "diffusion/night-market/s7-n4/step-02.webp",
+            "diffusion/night-market/s7-n4/step-03.webp",
+            "diffusion/night-market/s7-n4/step-04.webp"
+          ]
+        },
+        {
+          "seed": 7,
+          "steps": 8,
+          "frames": [
+            "diffusion/night-market/s7-n8/step-00.webp",
+            "diffusion/night-market/s7-n8/step-01.webp",
+            "diffusion/night-market/s7-n8/step-02.webp",
+            "diffusion/night-market/s7-n8/step-03.webp",
+            "diffusion/night-market/s7-n8/step-04.webp",
+            "diffusion/night-market/s7-n8/step-05.webp",
+            "diffusion/night-market/s7-n8/step-06.webp",
+            "diffusion/night-market/s7-n8/step-07.webp",
+            "diffusion/night-market/s7-n8/step-08.webp"
+          ]
+        },
+        {
+          "seed": 42,
+          "steps": 4,
+          "frames": [
+            "diffusion/night-market/s42-n4/step-00.webp",
+            "diffusion/night-market/s42-n4/step-01.webp",
+            "diffusion/night-market/s42-n4/step-02.webp",
+            "diffusion/night-market/s42-n4/step-03.webp",
+            "diffusion/night-market/s42-n4/step-04.webp"
+          ]
+        },
+        {
+          "seed": 42,
+          "steps": 8,
+          "frames": [
+            "diffusion/night-market/s42-n8/step-00.webp",
+            "diffusion/night-market/s42-n8/step-01.webp",
+            "diffusion/night-market/s42-n8/step-02.webp",
+            "diffusion/night-market/s42-n8/step-03.webp",
+            "diffusion/night-market/s42-n8/step-04.webp",
+            "diffusion/night-market/s42-n8/step-05.webp",
+            "diffusion/night-market/s42-n8/step-06.webp",
+            "diffusion/night-market/s42-n8/step-07.webp",
+            "diffusion/night-market/s42-n8/step-08.webp"
+          ]
+        },
+        {
+          "seed": 128,
+          "steps": 4,
+          "frames": [
+            "diffusion/night-market/s128-n4/step-00.webp",
+            "diffusion/night-market/s128-n4/step-01.webp",
+            "diffusion/night-market/s128-n4/step-02.webp",
+            "diffusion/night-market/s128-n4/step-03.webp",
+            "diffusion/night-market/s128-n4/step-04.webp"
+          ]
+        },
+        {
+          "seed": 128,
+          "steps": 8,
+          "frames": [
+            "diffusion/night-market/s128-n8/step-00.webp",
+            "diffusion/night-market/s128-n8/step-01.webp",
+            "diffusion/night-market/s128-n8/step-02.webp",
+            "diffusion/night-market/s128-n8/step-03.webp",
+            "diffusion/night-market/s128-n8/step-04.webp",
+            "diffusion/night-market/s128-n8/step-05.webp",
+            "diffusion/night-market/s128-n8/step-06.webp",
+            "diffusion/night-market/s128-n8/step-07.webp",
+            "diffusion/night-market/s128-n8/step-08.webp"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "space-cat",
+      "label": "太空貓",
+      "promptZh": "一隻穿著太空衣的貓，漂浮在星空",
+      "prompt": "an astronaut cat floating in space, stars and nebula, digital art, highly detailed",
+      "trajectories": [
+        {
+          "seed": 7,
+          "steps": 4,
+          "frames": [
+            "diffusion/space-cat/s7-n4/step-00.webp",
+            "diffusion/space-cat/s7-n4/step-01.webp",
+            "diffusion/space-cat/s7-n4/step-02.webp",
+            "diffusion/space-cat/s7-n4/step-03.webp",
+            "diffusion/space-cat/s7-n4/step-04.webp"
+          ]
+        },
+        {
+          "seed": 7,
+          "steps": 8,
+          "frames": [
+            "diffusion/space-cat/s7-n8/step-00.webp",
+            "diffusion/space-cat/s7-n8/step-01.webp",
+            "diffusion/space-cat/s7-n8/step-02.webp",
+            "diffusion/space-cat/s7-n8/step-03.webp",
+            "diffusion/space-cat/s7-n8/step-04.webp",
+            "diffusion/space-cat/s7-n8/step-05.webp",
+            "diffusion/space-cat/s7-n8/step-06.webp",
+            "diffusion/space-cat/s7-n8/step-07.webp",
+            "diffusion/space-cat/s7-n8/step-08.webp"
+          ]
+        },
+        {
+          "seed": 42,
+          "steps": 4,
+          "frames": [
+            "diffusion/space-cat/s42-n4/step-00.webp",
+            "diffusion/space-cat/s42-n4/step-01.webp",
+            "diffusion/space-cat/s42-n4/step-02.webp",
+            "diffusion/space-cat/s42-n4/step-03.webp",
+            "diffusion/space-cat/s42-n4/step-04.webp"
+          ]
+        },
+        {
+          "seed": 42,
+          "steps": 8,
+          "frames": [
+            "diffusion/space-cat/s42-n8/step-00.webp",
+            "diffusion/space-cat/s42-n8/step-01.webp",
+            "diffusion/space-cat/s42-n8/step-02.webp",
+            "diffusion/space-cat/s42-n8/step-03.webp",
+            "diffusion/space-cat/s42-n8/step-04.webp",
+            "diffusion/space-cat/s42-n8/step-05.webp",
+            "diffusion/space-cat/s42-n8/step-06.webp",
+            "diffusion/space-cat/s42-n8/step-07.webp",
+            "diffusion/space-cat/s42-n8/step-08.webp"
+          ]
+        },
+        {
+          "seed": 128,
+          "steps": 4,
+          "frames": [
+            "diffusion/space-cat/s128-n4/step-00.webp",
+            "diffusion/space-cat/s128-n4/step-01.webp",
+            "diffusion/space-cat/s128-n4/step-02.webp",
+            "diffusion/space-cat/s128-n4/step-03.webp",
+            "diffusion/space-cat/s128-n4/step-04.webp"
+          ]
+        },
+        {
+          "seed": 128,
+          "steps": 8,
+          "frames": [
+            "diffusion/space-cat/s128-n8/step-00.webp",
+            "diffusion/space-cat/s128-n8/step-01.webp",
+            "diffusion/space-cat/s128-n8/step-02.webp",
+            "diffusion/space-cat/s128-n8/step-03.webp",
+            "diffusion/space-cat/s128-n8/step-04.webp",
+            "diffusion/space-cat/s128-n8/step-05.webp",
+            "diffusion/space-cat/s128-n8/step-06.webp",
+            "diffusion/space-cat/s128-n8/step-07.webp",
+            "diffusion/space-cat/s128-n8/step-08.webp"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "jade-mountain",
+      "label": "玉山日出",
+      "promptZh": "玉山山頂的日出，雲海",
+      "prompt": "sunrise over yushan mountain peak in taiwan, sea of clouds, golden light, landscape photo",
+      "trajectories": [
+        {
+          "seed": 7,
+          "steps": 4,
+          "frames": [
+            "diffusion/jade-mountain/s7-n4/step-00.webp",
+            "diffusion/jade-mountain/s7-n4/step-01.webp",
+            "diffusion/jade-mountain/s7-n4/step-02.webp",
+            "diffusion/jade-mountain/s7-n4/step-03.webp",
+            "diffusion/jade-mountain/s7-n4/step-04.webp"
+          ]
+        },
+        {
+          "seed": 7,
+          "steps": 8,
+          "frames": [
+            "diffusion/jade-mountain/s7-n8/step-00.webp",
+            "diffusion/jade-mountain/s7-n8/step-01.webp",
+            "diffusion/jade-mountain/s7-n8/step-02.webp",
+            "diffusion/jade-mountain/s7-n8/step-03.webp",
+            "diffusion/jade-mountain/s7-n8/step-04.webp",
+            "diffusion/jade-mountain/s7-n8/step-05.webp",
+            "diffusion/jade-mountain/s7-n8/step-06.webp",
+            "diffusion/jade-mountain/s7-n8/step-07.webp",
+            "diffusion/jade-mountain/s7-n8/step-08.webp"
+          ]
+        },
+        {
+          "seed": 42,
+          "steps": 4,
+          "frames": [
+            "diffusion/jade-mountain/s42-n4/step-00.webp",
+            "diffusion/jade-mountain/s42-n4/step-01.webp",
+            "diffusion/jade-mountain/s42-n4/step-02.webp",
+            "diffusion/jade-mountain/s42-n4/step-03.webp",
+            "diffusion/jade-mountain/s42-n4/step-04.webp"
+          ]
+        },
+        {
+          "seed": 42,
+          "steps": 8,
+          "frames": [
+            "diffusion/jade-mountain/s42-n8/step-00.webp",
+            "diffusion/jade-mountain/s42-n8/step-01.webp",
+            "diffusion/jade-mountain/s42-n8/step-02.webp",
+            "diffusion/jade-mountain/s42-n8/step-03.webp",
+            "diffusion/jade-mountain/s42-n8/step-04.webp",
+            "diffusion/jade-mountain/s42-n8/step-05.webp",
+            "diffusion/jade-mountain/s42-n8/step-06.webp",
+            "diffusion/jade-mountain/s42-n8/step-07.webp",
+            "diffusion/jade-mountain/s42-n8/step-08.webp"
+          ]
+        },
+        {
+          "seed": 128,
+          "steps": 4,
+          "frames": [
+            "diffusion/jade-mountain/s128-n4/step-00.webp",
+            "diffusion/jade-mountain/s128-n4/step-01.webp",
+            "diffusion/jade-mountain/s128-n4/step-02.webp",
+            "diffusion/jade-mountain/s128-n4/step-03.webp",
+            "diffusion/jade-mountain/s128-n4/step-04.webp"
+          ]
+        },
+        {
+          "seed": 128,
+          "steps": 8,
+          "frames": [
+            "diffusion/jade-mountain/s128-n8/step-00.webp",
+            "diffusion/jade-mountain/s128-n8/step-01.webp",
+            "diffusion/jade-mountain/s128-n8/step-02.webp",
+            "diffusion/jade-mountain/s128-n8/step-03.webp",
+            "diffusion/jade-mountain/s128-n8/step-04.webp",
+            "diffusion/jade-mountain/s128-n8/step-05.webp",
+            "diffusion/jade-mountain/s128-n8/step-06.webp",
+            "diffusion/jade-mountain/s128-n8/step-07.webp",
+            "diffusion/jade-mountain/s128-n8/step-08.webp"
+          ]
+        }
+      ]
+    }
+  ]
+}

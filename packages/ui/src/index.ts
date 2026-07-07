@@ -40,6 +40,9 @@ export type { BlockButtonsProps, BlockButtonsItem } from "./BlockButtons";
 export { RunButton } from "./RunButton";
 export type { RunButtonProps } from "./RunButton";
 
+export { GuidedTour } from "./GuidedTour";
+export type { GuidedTourProps, GuidedTourStep } from "./GuidedTour";
+
 export { LiveStatus } from "./LiveStatus";
 export type { LiveState, LiveStatusProps } from "./LiveStatus";
 
