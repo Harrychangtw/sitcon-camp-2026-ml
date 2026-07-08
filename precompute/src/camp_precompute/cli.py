@@ -843,6 +843,93 @@ def lora_export(out_dir: Path, artifacts_dir: Path) -> list[Path]:
     return written
 
 
+# ---------------------------------------------------------------------------
+# steering station (Course 3 panorama: concept knobs in the residual stream)
+# ---------------------------------------------------------------------------
+
+
+def steering_export(out_dir: Path, artifacts_dir: Path | None, *, sample: bool) -> list[Path]:
+    """Write steering/presets.json + steering/features.json and register both.
+    Real mode records steered Qwen outputs (needs directions.npz from
+    steering-vectors); sample mode writes the hand-authored dev stand-in."""
+    from .steering import build_sample_artifacts, build_steering_artifacts
+
+    if sample:
+        presets, features = build_sample_artifacts()
+        generator = "camp-precompute steering-sample"
+        presets_note = (
+            "HAND-AUTHORED SAMPLE (dev machine, no GPU): graded illustrations "
+            "of what each concept knob does, in the exact shape of the real "
+            "bake. Replace with recorded real outputs via `camp-precompute "
+            "steering-vectors && camp-precompute steering` on the GPU box "
+            "(prompts/server-runs/steering-precompute.md)."
+        )
+    else:
+        assert artifacts_dir is not None
+        presets, features = build_steering_artifacts(artifacts_dir)
+        generator = "camp-precompute steering"
+        presets_note = (
+            "Recorded real Qwen3-0.6B replies for the preset prompts: `base` "
+            "is the untouched model, `outputs[feature][prompt][i]` is the same "
+            "prompt with that concept direction added to the residual stream "
+            "at strengths[i]. Greedy decoding — the live server reproduces "
+            "these texts exactly."
+        )
+
+    stamp = datetime.now(timezone.utc).isoformat()
+    presets = {"generator": generator, "generatedAt": stamp, "note": presets_note, **presets}
+    features = {
+        "generator": generator,
+        "generatedAt": stamp,
+        "note": (
+            "Feature catalog for the steering station's sliders: 中文 label + "
+            "白話文 gloss per concept direction, the layer the knob lives at, "
+            "and the absolute delta one strength unit adds (null in the dev "
+            "sample). Directions are contrastive activation-addition vectors "
+            "computed offline on the served Qwen — not an SAE."
+        ),
+        **features,
+    }
+
+    station_dir = out_dir / "steering"
+    station_dir.mkdir(parents=True, exist_ok=True)
+    written: list[Path] = []
+    for name, payload, desc in (
+        (
+            "presets.json",
+            presets,
+            "Recorded steered-vs-base replies (prompt × feature × strength) "
+            "from Qwen3-0.6B with concept directions added to the residual "
+            "stream. Offline fallback for the steering station; the browser "
+            "never runs the model.",
+        ),
+        (
+            "features.json",
+            features,
+            "Concept-knob catalog (id, 中文 label, gloss, pole labels, layer) "
+            "for the steering station's sliders.",
+        ),
+    ):
+        path = station_dir / name
+        path.write_text(
+            json.dumps(payload, ensure_ascii=False, indent=2) + "\n",
+            encoding="utf-8",
+        )
+        upsert_manifest_artifact(
+            out_dir,
+            {
+                "id": f"steering-{name.removesuffix('.json')}",
+                "kind": "json",
+                "path": f"steering/{name}",
+                "station": "steering",
+                "bytes": path.stat().st_size,
+                "description": desc,
+            },
+        )
+        written.append(path)
+    return written
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
         prog="camp-precompute",
@@ -1056,6 +1143,50 @@ def main(argv: list[str] | None = None) -> int:
         help="Output directory (defaults to apps/course2/public/data/course2).",
     )
 
+    p_steer_vec = sub.add_parser(
+        "steering-vectors",
+        help="Compute the steering station's contrastive concept directions "
+        "on Qwen3-0.6B (forward passes only, no training) and save the "
+        "gitignored directions.npz for the export + the live server.",
+    )
+    p_steer_vec.add_argument(
+        "--artifacts",
+        type=Path,
+        default=None,
+        help="Where to write steering/directions.npz (defaults to precompute/artifacts).",
+    )
+
+    p_steer = sub.add_parser(
+        "steering",
+        help="Record real steered-vs-base replies for the steering station's "
+        "preset prompts × features × strengths (run steering-vectors first) "
+        "and write presets.json + features.json.",
+    )
+    p_steer.add_argument(
+        "--out",
+        type=Path,
+        default=None,
+        help="Output directory (defaults to apps/course2/public/data/course2).",
+    )
+    p_steer.add_argument(
+        "--artifacts",
+        type=Path,
+        default=None,
+        help="Directory holding steering/directions.npz (defaults to precompute/artifacts).",
+    )
+
+    p_steer_sample = sub.add_parser(
+        "steering-sample",
+        help="Write the HAND-AUTHORED steering sample presets + features "
+        "(no GPU/model) so the dev machine can ship a small committed sample.",
+    )
+    p_steer_sample.add_argument(
+        "--out",
+        type=Path,
+        default=None,
+        help="Output directory (defaults to apps/course2/public/data/course2).",
+    )
+
     p_diff = sub.add_parser(
         "diffusion",
         help="Bake the REAL SD-Turbo denoising trajectories (needs the gpu "
@@ -1196,6 +1327,22 @@ def main(argv: list[str] | None = None) -> int:
         out_dir = args.out or default_out_dir()
         path = transformer(out_dir)
         print(f"wrote {path}")
+        print(f"updated {out_dir / 'manifest.json'}")
+        return 0
+
+    if args.command == "steering-vectors":
+        from .steering import compute_directions
+
+        artifacts_dir = args.artifacts or default_artifacts_dir()
+        compute_directions(artifacts_dir)
+        return 0
+
+    if args.command in ("steering", "steering-sample"):
+        out_dir = args.out or default_out_dir()
+        sample = args.command == "steering-sample"
+        artifacts_dir = None if sample else (args.artifacts or default_artifacts_dir())
+        for path in steering_export(out_dir, artifacts_dir, sample=sample):
+            print(f"wrote {path}")
         print(f"updated {out_dir / 'manifest.json'}")
         return 0
 

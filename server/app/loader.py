@@ -37,6 +37,7 @@ import numpy as np
 from camp_precompute import embedding as emb_mod
 from camp_precompute import lora as lora_mod
 from camp_precompute import qwen as qwen_mod
+from camp_precompute import steering as steering_mod
 from camp_precompute.rnn import RnnState, load_rnn_state
 
 from .config import Settings, resolve_device
@@ -77,6 +78,14 @@ class ModelStore:
     # lm_lock and detaches it again before releasing.
     lora_model: object | None = None
     lora_adapters: list[str] = field(default_factory=list)
+    # The steering station's concept directions (contrastive activation-
+    # addition vectors under <weights_dir>/steering/directions.npz, computed by
+    # `camp-precompute steering-vectors`), or None when not installed (→
+    # /steering/generate answers 503 and the station stays on presets). The
+    # steering router adds a forward hook to the shared Qwen inside lm_lock and
+    # removes it before releasing, so every other route sees exact base
+    # behaviour.
+    steering: steering_mod.SteeringState | None = None
     # SD-Turbo pipeline for the diffusion station's live "type any prompt" path,
     # or None when the diffusion live path is off (CAMP_ENABLE_DIFFUSION unset or
     # diffusers not installed) → /diffusion/generate answers 503 and the station
@@ -97,6 +106,8 @@ class ModelStore:
         ]
         if self.lora_adapters:
             names.append(f"lora:{'+'.join(self.lora_adapters)}")
+        if self.steering is not None:
+            names.append(f"steering:{'+'.join(self.steering.ids)}")
         if self.diffusion_pipe is not None:
             from camp_precompute import diffusion as diffusion_mod
 
@@ -192,6 +203,24 @@ def load_models(settings: Settings) -> ModelStore:
     else:
         log.info("lora: attached adapters (idle-disabled): %s", ", ".join(lora_ids))
 
+    # Steering concept directions — optional: without them the steering
+    # station's live path degrades to its shipped presets (which, on the dev
+    # sample, are hand-authored anyway).
+    steering_state = steering_mod.load_directions(settings.weights_dir)
+    if steering_state is None:
+        log.warning(
+            "steering: no directions under %s — /steering/generate will answer "
+            "503 (station falls back to shipped presets). Run "
+            "`uv run camp-precompute steering-vectors` to install them.",
+            steering_mod.directions_path(settings.weights_dir),
+        )
+    else:
+        log.info(
+            "steering: loaded directions (layer %d): %s",
+            steering_state.layer,
+            ", ".join(steering_state.ids),
+        )
+
     # SD-Turbo for the diffusion live path — optional, off unless explicitly
     # enabled (it needs the `gpu` extra + a few GB of extra VRAM). A failure to
     # load never sinks the server: the station just stays on its shipped presets.
@@ -227,6 +256,7 @@ def load_models(settings: Settings) -> ModelStore:
         rnn=rnn_state,
         lora_model=lora_model,
         lora_adapters=lora_ids,
+        steering=steering_state,
         diffusion_pipe=diffusion_pipe,
     )
     log.info("models ready: %s", ", ".join(store.model_names))

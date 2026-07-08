@@ -35,6 +35,7 @@ from .routers import (
     next_token,
     order_shuffle,
     rnn,
+    steering,
     tokenizer,
     transformer,
 )
@@ -157,6 +158,7 @@ app.include_router(rnn.router, dependencies=GUARDS)
 app.include_router(transformer.router, dependencies=GUARDS)
 app.include_router(order_shuffle.router, dependencies=GUARDS)
 app.include_router(lora.router, dependencies=GUARDS)
+app.include_router(steering.router, dependencies=GUARDS)
 app.include_router(diffusion.router, dependencies=GUARDS)
 
 

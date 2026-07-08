@@ -22,6 +22,8 @@ from typing import Literal, Optional
 
 from pydantic import BaseModel, Field
 
+from camp_precompute.steering import MAX_STRENGTH
+
 # --- auth ----------------------------------------------------------------------
 
 
@@ -158,6 +160,40 @@ class LoraGenerateResponse(BaseModel):
     prompt: str
     adapter: Optional[str]
     alpha: float
+    model: str
+    text: str
+
+
+# --- steering ------------------------------------------------------------------
+
+
+class SteeringFeatureSetting(BaseModel):
+    """One concept knob's position: the catalogued feature id and a slider
+    strength. Strength is capped at ±MAX_STRENGTH (camp_precompute.steering —
+    the same constant that bakes the slider range into features.json) so the
+    output stays coherent enough to read the effect."""
+
+    id: str = Field(min_length=1, max_length=32)
+    strength: float = Field(ge=-MAX_STRENGTH, le=MAX_STRENGTH)
+
+
+class SteeringGenerateRequest(BaseModel):
+    """One prompt through the shared Qwen base with zero or more concept
+    directions added to the residual stream. Empty features (or all strengths
+    0) = pure base."""
+
+    prompt: str = Field(min_length=1, max_length=200)
+    features: list[SteeringFeatureSetting] = Field(default_factory=list, max_length=8)
+
+
+class SteeringGenerateResponse(BaseModel):
+    """Mirrors one text cell of steering/presets.json (`base[prompt]` or
+    `outputs[feature][prompt][i]`) — greedy decoding, so a preset cell asked
+    live reproduces its shipped text. `features` echoes the applied non-zero
+    knobs."""
+
+    prompt: str
+    features: list[SteeringFeatureSetting]
     model: str
     text: str
 
