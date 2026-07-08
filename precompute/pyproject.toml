@@ -23,6 +23,10 @@ dependencies = [
   # Needed by BOTH the no-GPU `diffusion-sample` bake (synthetic placeholder
   # frames the dev machine ships) and the real GPU bake (decoded latents).
   "pillow>=10.0",
+  # plyfile reads the Skyfall-GS fused 3DGS scenes so `camp-precompute skyfall`
+  # can prune + convert them to small .splat artifacts (download + numpy only —
+  # no GPU, no torch on this path).
+  "plyfile>=1.0",
 ]
 
 [project.optional-dependencies]

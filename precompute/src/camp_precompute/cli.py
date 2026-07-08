@@ -21,6 +21,12 @@ import numpy as np
 from .embedding import build_embedding, export_server_state
 from .rl import export_parity_only, rl_export, train_rl
 from .rnn import rnn_viz, train_rnn
+from .skyfall import (
+    DEFAULT_MAX_SCALE_FRAC,
+    DEFAULT_MAX_SPLATS,
+    DEFAULT_MIN_OPACITY,
+    DEFAULT_SIZE_WEIGHT,
+)
 
 COURSE = "course2"
 MANIFEST_VERSION = 1
@@ -1211,6 +1217,93 @@ def main(argv: list[str] | None = None) -> int:
         help="Output directory (defaults to apps/course2/public/data/course2).",
     )
 
+    p_sky = sub.add_parser(
+        "skyfall",
+        help="Download the published Skyfall-GS fused scenes (network, no GPU), "
+        "prune + convert them to small .splat variants, and update "
+        "skyfall/scenes.json. --from-ply converts a local fused PLY (e.g. the "
+        "runbook's Stage-1 output) into a named variant instead.",
+    )
+    p_sky.add_argument(
+        "--out",
+        type=Path,
+        default=None,
+        help="Output directory (defaults to apps/course2/public/data/course2).",
+    )
+    p_sky.add_argument(
+        "--scenes",
+        default="JAX_004",
+        help="Comma-separated published scene ids to fetch + bake as 補完後 "
+        "variants (default: JAX_004).",
+    )
+    p_sky.add_argument(
+        "--cache",
+        type=Path,
+        default=None,
+        help="Where the downloaded source PLYs are cached (defaults to "
+        "precompute/artifacts/skyfall — gitignored; they are 158-324 MB).",
+    )
+    p_sky.add_argument(
+        "--from-ply",
+        type=Path,
+        default=None,
+        help="Convert this local fused 3DGS PLY instead of downloading "
+        "(requires --scene-id; used by the Stage-1 runbook).",
+    )
+    p_sky.add_argument(
+        "--scene-id",
+        default=None,
+        help="Scene id the --from-ply variant belongs to (e.g. JAX_004).",
+    )
+    p_sky.add_argument(
+        "--variant",
+        choices=("before", "after"),
+        default="before",
+        help="Which variant --from-ply writes (default: before, the Stage-1 "
+        "補完前 look).",
+    )
+    p_sky.add_argument(
+        "--max-splats",
+        type=int,
+        default=DEFAULT_MAX_SPLATS,
+        help=f"Keep at most this many gaussians per variant, top-ranked by "
+        f"opacity × projected area (default {DEFAULT_MAX_SPLATS}).",
+    )
+    p_sky.add_argument(
+        "--min-opacity",
+        type=float,
+        default=DEFAULT_MIN_OPACITY,
+        help=f"Drop gaussians below this opacity (default {DEFAULT_MIN_OPACITY}).",
+    )
+    p_sky.add_argument(
+        "--max-scale-frac",
+        type=float,
+        default=DEFAULT_MAX_SCALE_FRAC,
+        help="Drop gaussians wider than this fraction of the scene diagonal "
+        f"(default {DEFAULT_MAX_SCALE_FRAC}).",
+    )
+    p_sky.add_argument(
+        "--size-weight",
+        type=float,
+        default=DEFAULT_SIZE_WEIGHT,
+        help="Exponent on projected area in the importance rank: 1.0 keeps "
+        "big high-contribution blobs, 0 ranks by opacity alone; the small "
+        f"default keeps close-up detail (default {DEFAULT_SIZE_WEIGHT}).",
+    )
+
+    p_sky_sample = sub.add_parser(
+        "skyfall-sample",
+        help="Bake the PROCEDURAL toy-city scene pair (no network/GPU): a sharp "
+        "補完後 and a deliberately melted 補完前, so the station's A/B toggle "
+        "is testable offline.",
+    )
+    p_sky_sample.add_argument(
+        "--out",
+        type=Path,
+        default=None,
+        help="Output directory (defaults to apps/course2/public/data/course2).",
+    )
+
     args = parser.parse_args(argv)
 
     if args.command == "make-data":
@@ -1351,6 +1444,48 @@ def main(argv: list[str] | None = None) -> int:
 
         out_dir = args.out or default_out_dir()
         path = write_diffusion(out_dir, sample=args.command == "diffusion-sample")
+        print(f"wrote {path}")
+        print(f"updated {out_dir / 'manifest.json'}")
+        return 0
+
+    if args.command == "skyfall":
+        from .skyfall import write_from_ply, write_scenes
+
+        out_dir = args.out or default_out_dir()
+        if args.from_ply is not None:
+            if not args.scene_id:
+                parser.error("skyfall --from-ply requires --scene-id")
+            path = write_from_ply(
+                out_dir,
+                args.from_ply,
+                args.scene_id,
+                args.variant,
+                max_splats=args.max_splats,
+                min_opacity=args.min_opacity,
+                max_scale_frac=args.max_scale_frac,
+                size_weight=args.size_weight,
+            )
+        else:
+            cache_dir = args.cache or default_artifacts_dir() / "skyfall"
+            scene_ids = [s.strip() for s in args.scenes.split(",") if s.strip()]
+            path = write_scenes(
+                out_dir,
+                scene_ids,
+                cache_dir,
+                max_splats=args.max_splats,
+                min_opacity=args.min_opacity,
+                max_scale_frac=args.max_scale_frac,
+                size_weight=args.size_weight,
+            )
+        print(f"wrote {path}")
+        print(f"updated {out_dir / 'manifest.json'}")
+        return 0
+
+    if args.command == "skyfall-sample":
+        from .skyfall import write_sample
+
+        out_dir = args.out or default_out_dir()
+        path = write_sample(out_dir)
         print(f"wrote {path}")
         print(f"updated {out_dir / 'manifest.json'}")
         return 0

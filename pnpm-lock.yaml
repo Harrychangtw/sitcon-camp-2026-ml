@@ -169,6 +169,9 @@ importers:
 
   packages/viz:
     dependencies:
+      '@mkkellogg/gaussian-splats-3d':
+        specifier: 0.4.7
+        version: 0.4.7(three@0.171.0)
       d3:
         specifier: 7.9.0
         version: 7.9.0
@@ -705,6 +708,11 @@ packages:
   '@marp-team/marpit@3.2.2':
     resolution: {integrity: sha512-7LJ6vuAA1jovkTMso2MLyhdjqtJAzjievCAF2PpIqHGH7CFG0e3a0hXQ++zMXinUggKt0pbhqa/q8UEdcYq5Pw==}
     engines: {node: '>=18'}
+
+  '@mkkellogg/gaussian-splats-3d@0.4.7':
+    resolution: {integrity: sha512-0vy9/i9sJLFH/v3WJZ4axCsqjkToe8UsV3xY7bvK5EUC0akiRsWZODoCiSzpxhTLNyzSKTsyQKozIFeNA5RWRA==}
+    peerDependencies:
+      three: '>=0.160.0'
 
   '@next/env@15.5.19':
     resolution: {integrity: sha512-sWWluFvcv5v3Fxznmf2ZfjyoVQt/64oCnYqS90inQWGzMPK1VjvekPiz3OPHKmFT30EnHrjlbyaHLt3M0vWabw==}
@@ -3238,6 +3246,10 @@ snapshots:
       markdown-it-front-matter: 0.2.4
       postcss: 8.5.15
       postcss-nesting: 13.0.2(postcss@8.5.15)
+
+  '@mkkellogg/gaussian-splats-3d@0.4.7(three@0.171.0)':
+    dependencies:
+      three: 0.171.0
 
   '@next/env@15.5.19': {}
 

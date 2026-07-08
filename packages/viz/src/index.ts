@@ -11,6 +11,13 @@ export type { Scatter3DProps, Scatter3DPoint } from "./Scatter3D";
 export { AttentionLines } from "./AttentionLines";
 export type { AttentionLinesProps } from "./AttentionLines";
 
+export { SplatViewer } from "./SplatViewer";
+export type {
+  SplatViewerProps,
+  SplatPose,
+  SplatPoseReport,
+} from "./SplatViewer";
+
 export { LossCurve } from "./LossCurve";
 export type { LossCurveProps, LossSeries } from "./LossCurve";
 
