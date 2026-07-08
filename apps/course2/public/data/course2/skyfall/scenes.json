@@ -1,6 +1,6 @@
 {
   "station": "skyfall",
-  "source": "jayin92/Skyfall-GS (Apache-2.0), fused scenes from huggingface.co/jayinnn/Skyfall-GS-ply",
+  "source": "Skyfall-GS, 李杰穎 Jie-Ying Lee et al. (arXiv 2510.15869; github.com/jayin92/Skyfall-GS, Apache-2.0), fused scenes from huggingface.co/jayinnn/Skyfall-GS-ply",
   "format": "splat",
   "up": [
     0.0,

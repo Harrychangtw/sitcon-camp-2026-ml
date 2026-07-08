@@ -1452,6 +1452,10 @@ def main(argv: list[str] | None = None) -> int:
         from .skyfall import write_from_ply, write_scenes
 
         out_dir = args.out or default_out_dir()
+        if args.from_ply is None and args.scene_id:
+            # Without this, a forgotten --from-ply would silently ignore
+            # --scene-id/--variant and destructively re-bake the after set.
+            parser.error("skyfall: --scene-id/--variant only apply with --from-ply")
         if args.from_ply is not None:
             if not args.scene_id:
                 parser.error("skyfall --from-ply requires --scene-id")

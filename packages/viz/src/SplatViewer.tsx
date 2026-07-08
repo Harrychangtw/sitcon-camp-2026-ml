@@ -52,8 +52,10 @@ export interface SplatViewerProps {
   onProgress?: (frac: number) => void;
   /** The active `src` is displayable (fires again per `src` change). */
   onReady?: () => void;
-  /** A scene failed to load. */
-  onError?: (error: Error) => void;
+  /** A scene failed to load; `src` says which one (it may be a hidden
+   * `keepLoaded` preload, not the displayed scene — hosts should degrade,
+   * not tear down). */
+  onError?: (error: Error, src: string) => void;
   /** Throttled (~200 ms) camera report while the student moves. */
   onPoseChange?: (pose: SplatPoseReport) => void;
   /** Pixel height; width is responsive. Default 480. Ignored when `fill`. */
@@ -90,6 +92,9 @@ interface Engine {
   loaded: Map<string, LoadedScene>;
   /** The url that should be visible — checked by late-resolving loads. */
   desired: string;
+  /** The desired url whose readiness was last announced to the host; reset
+   * whenever `desired` changes so re-selecting a warm scene re-fires onReady. */
+  lastAnnounced: string | null;
   setPose: (pose: SplatPose, animate?: boolean) => void;
 }
 
@@ -196,10 +201,6 @@ export function SplatViewer({
   // needs a different scene/mode remounts with a `key`.
   const initialRef = useRef({ controls, up, initialPose, bounds, doubleClickFly });
 
-  // The src whose readiness has already been announced — avoids double
-  // onReady when the sync effect re-runs for a keepLoaded identity change.
-  const announcedRef = useRef<string | null>(null);
-
   const width = size.width;
   const h = fill ? size.height : height;
 
@@ -282,6 +283,7 @@ export function SplatViewer({
         orbit: null,
         loaded: new Map(),
         desired: "",
+        lastAnnounced: null,
         setPose: () => {},
       };
 
@@ -596,6 +598,10 @@ export function SplatViewer({
         engine.loaded.clear();
         engine.orbit?.dispose();
         engine.renderer.dispose();
+        // Hosts remount this component per scene (key=…); without an explicit
+        // context loss each orphaned canvas keeps a live WebGL context until
+        // GC, and browsers evict the oldest past ~16 with a black canvas.
+        engine.renderer.forceContextLoss();
         const canvas = engine.renderer.domElement;
         canvas.parentNode?.removeChild(canvas);
         engineRef.current = null;
@@ -614,9 +620,12 @@ export function SplatViewer({
     const wanted = new Set([src, ...(keepLoaded ?? [])]);
     void enginePromiseRef.current?.then((engine) => {
       if (cancelled || !engine || engineRef.current !== engine) return;
-      engine.desired = src;
-      if (announcedRef.current !== null && !wanted.has(announcedRef.current)) {
-        announcedRef.current = null;
+      if (engine.desired !== src) {
+        engine.desired = src;
+        // A change of the active scene re-arms the announcement, so flipping
+        // BACK to an already-warm scene still fires onReady (the host clears
+        // its "switching" state on it).
+        engine.lastAnnounced = null;
       }
 
       // Drop scenes no longer wanted (frees splat buffers + sort workers).
@@ -638,59 +647,77 @@ export function SplatViewer({
         }
       };
       const announce = (url: string) => {
-        if (url !== engine.desired || announcedRef.current === url) return;
-        announcedRef.current = url;
+        if (url !== engine.desired || engine.lastAnnounced === url) return;
+        engine.lastAnnounced = url;
         onProgressRef.current?.(1);
         onReadyRef.current?.();
       };
 
-      for (const url of wanted) {
-        let s = engine.loaded.get(url);
-        if (!s) {
-          const viewer = new engine.GS.DropInViewer({
-            sharedMemoryForWorkers: false,
-            freeIntermediateSplatData: true,
-            sceneRevealMode: engine.GS.SceneRevealMode.Instant,
-          });
-          viewer.visible = false;
-          engine.scene.add(viewer);
-          const entry: LoadedScene = {
-            viewer,
-            ready: false,
-            failed: false,
-            promise: Promise.resolve(),
-          };
-          entry.promise = viewer
-            .addSplatScene(url, {
-              format: formatOf(engine.GS, url),
-              showLoadingUI: false,
-              splatAlphaRemovalThreshold: 1,
-              onProgress: (percent) => {
-                if (url === engine.desired && !entry.ready) {
-                  onProgressRef.current?.(Math.min(1, percent / 100));
-                }
-              },
-            })
-            .then(() => {
-              entry.ready = true;
-              applyVisibility();
-              announce(url);
-            })
-            .catch((err: unknown) => {
-              entry.failed = true;
-              if (engine.loaded.get(url) === entry) {
-                onErrorRef.current?.(
-                  err instanceof Error ? err : new Error(String(err)),
-                );
+      const ensure = (url: string): LoadedScene => {
+        const s = engine.loaded.get(url);
+        if (s) return s;
+        const viewer = new engine.GS.DropInViewer({
+          sharedMemoryForWorkers: false,
+          freeIntermediateSplatData: true,
+          sceneRevealMode: engine.GS.SceneRevealMode.Instant,
+        });
+        viewer.visible = false;
+        engine.scene.add(viewer);
+        const entry: LoadedScene = {
+          viewer,
+          ready: false,
+          failed: false,
+          promise: Promise.resolve(),
+        };
+        entry.promise = viewer
+          .addSplatScene(url, {
+            format: formatOf(engine.GS, url),
+            showLoadingUI: false,
+            splatAlphaRemovalThreshold: 1,
+            onProgress: (percent) => {
+              if (url === engine.desired && !entry.ready) {
+                onProgressRef.current?.(Math.min(1, percent / 100));
               }
-            });
-          engine.loaded.set(url, entry);
-          s = entry;
+            },
+          })
+          .then(() => {
+            // Guard against a late resolve of an entry the sync effect
+            // already evicted (or a disposed engine) — announcing then would
+            // leak a stale onReady into the host.
+            if (engine.loaded.get(url) !== entry) return;
+            entry.ready = true;
+            applyVisibility();
+            announce(url);
+          })
+          .catch((err: unknown) => {
+            entry.failed = true;
+            if (engine.loaded.get(url) === entry) {
+              onErrorRef.current?.(
+                err instanceof Error ? err : new Error(String(err)),
+                url,
+              );
+            }
+          });
+        engine.loaded.set(url, entry);
+        return entry;
+      };
+
+      // The ACTIVE scene loads first; hidden keepLoaded partners start only
+      // once it resolves, so the first paint never shares bandwidth with a
+      // preload the student can't see yet.
+      const preloadRest = () => {
+        if (engineRef.current !== engine) return;
+        for (const url of wanted) {
+          if (url !== engine.desired) ensure(url);
         }
-        if (s.ready) {
-          applyVisibility();
-          announce(url);
-        }
+      };
+      const active = ensure(src);
+      if (active.ready) {
+        applyVisibility();
+        announce(src);
+        preloadRest();
+      } else {
+        void active.promise.then(preloadRest);
       }
     });
     return () => {

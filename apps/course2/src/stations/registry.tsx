@@ -47,7 +47,7 @@ export const stations: StationMeta[] = [
   { id: "lora", title: "LoRA", blurb: "貼一張小紙條，模型就換了個性", group: "panorama", element: <LoraStation /> },
   { id: "diffusion", title: "擴散生成圖", blurb: "從雜訊一步步長出一張圖", group: "panorama", element: <DiffusionStation /> },
   { id: "steering", title: "Feature Steering", blurb: "打開模型內部的旋鈕", group: "panorama", element: <SteeringStation /> },
-  { id: "skyfall", title: "衛星長出城市", blurb: "從衛星照片長出一座能飛進去的城市，近看的細節是模型想像的", group: "panorama", element: <SkyfallStation /> },
+  { id: "skyfall", title: "衛星長出城市 · Skyfall-GS", blurb: "從衛星照片長出一座能飛進去的城市，近看的細節是模型想像的。方法來自 Day 1 廣度講者李杰穎的 Skyfall-GS", group: "panorama", element: <SkyfallStation /> },
   { id: "rl-playground", title: "RL 競技場", blurb: "只靠獎勵和自己的分身,牠學會玩、也學會搶", group: "panorama", element: <RlPlaygroundStation /> },
   { id: "_reference", title: "Reference Station", blurb: "Copy me", group: "dev", element: <ReferenceStation /> },
   { id: "viz-sandbox", title: "Viz Sandbox", blurb: "All @camp/viz primitives", group: "dev", element: <VizSandbox /> },

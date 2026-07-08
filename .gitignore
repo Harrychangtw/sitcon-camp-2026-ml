@@ -27,10 +27,10 @@ public/data/**/*.bin
 # checkout renders offline (see prompts/server-runs/diffusion-precompute.md).
 public/data/**/diffusion/**/*.webp
 # skyfall station splat scenes: binaries, gitignored by pattern so a careless
-# unpruned bake can't land by accident. The final pruned set (≤ ~20 MB/scene,
-# ≤ 80 MB total) is committed deliberately with `git add -f` (see
-# prompts/server-runs/skyfall-precompute.md). Source PLYs (158-324 MB) stay in
-# precompute/artifacts/skyfall/ — never committed.
+# unpruned bake can't land by accident. The final pruned set (~26 MB per after
+# scene at the default 800 k splats, ≤ 80 MB total) is committed deliberately
+# with `git add -f` (see prompts/server-runs/skyfall-precompute.md). Source
+# PLYs (158-324 MB) stay in precompute/artifacts/skyfall/ — never committed.
 public/data/**/skyfall/**/*.splat
 
 # live-server model state (npz written by `camp-precompute export-embedding-state`;

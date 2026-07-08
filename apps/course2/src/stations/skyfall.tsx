@@ -16,7 +16,7 @@
  * (prompts/server-runs/skyfall-precompute.md); until then those scenes show
  * the toggle disabled with the reason, never a fake stand-in.
  */
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   BlockButtons,
   BlockToggle,
@@ -69,6 +69,10 @@ const LOW_ALTITUDE_FRAC = 0.12;
 const wan = (n: number) => `${Math.round(n / 10_000)} 萬`;
 const mb = (n: number) => `${(n / 1e6).toFixed(1)} MB`;
 
+/** The variant a scene opens on: 補完後 when baked, else whatever exists. */
+const defaultVariant = (s: SkyfallSceneMeta): Variant =>
+  s.variants.after ? "after" : "before";
+
 export function SkyfallStation() {
   // 1. STATE — everything the canvas needs is plain component state.
   const [data, setData] = useState<SkyfallScenes | null>(null);
@@ -84,6 +88,12 @@ export function SkyfallStation() {
   const [switching, setSwitching] = useState(false);
   const [progress, setProgress] = useState(0);
   const [lowAltitude, setLowAltitude] = useState(false);
+  // A .splat file failed to stream (possibly a hidden preload) — the station
+  // degrades with a notice; it never tears down a working canvas over this.
+  const [loadError, setLoadError] = useState(false);
+  // What the canvas is actually SHOWING (lags `variant` while a flip streams
+  // in) — the honesty readout must describe this, not the toggle selection.
+  const [shownVariant, setShownVariant] = useState<Variant>("after");
 
   // 2. LOAD THE SCENE CATALOG — poses, bounds, and variant files per scene.
   useEffect(() => {
@@ -92,7 +102,9 @@ export function SkyfallStation() {
       .then((d) => {
         if (!alive) return;
         setData(d);
-        setSceneId(d.scenes[0]?.id ?? null);
+        const first = d.scenes[0];
+        setSceneId(first?.id ?? null);
+        if (first) setVariant(defaultVariant(first));
       })
       .catch((e) => alive && setError(String(e)));
     return () => {
@@ -101,8 +113,11 @@ export function SkyfallStation() {
   }, []);
 
   const scene = data?.scenes.find((s) => s.id === sceneId) ?? null;
-  const hasBefore = !!scene?.variants.before;
-  const activeVariant: Variant = hasBefore ? variant : "after";
+  const hasBoth = !!scene?.variants.before && !!scene?.variants.after;
+  // A scene may carry only one variant (e.g. a runbook 補完前 landed before
+  // the 補完後 bake) — fall back to whatever exists instead of a dead src.
+  const activeVariant: Variant =
+    scene && scene.variants[variant] ? variant : scene ? defaultVariant(scene) : "after";
   const variantMeta = scene?.variants[activeVariant] ?? null;
 
   const src = variantMeta ? `${DATA_ROOT}/${variantMeta.path}` : null;
@@ -124,13 +139,17 @@ export function SkyfallStation() {
   }, [scene]);
 
   const pickScene = (id: string) => {
+    const next = data?.scenes.find((s) => s.id === id);
     setSceneId(id);
-    setVariant("after");
+    const v = next ? defaultVariant(next) : "after";
+    setVariant(v);
+    setShownVariant(v);
     setJump(null);
     setFirstReady(false);
     setSwitching(false);
     setProgress(0);
     setLowAltitude(false);
+    setLoadError(false);
   };
 
   const pickVariant = (v: Variant) => {
@@ -139,11 +158,19 @@ export function SkyfallStation() {
     setSwitching(true); // cleared by onReady (same frame when preloaded)
   };
 
-  // 3. THE HONESTY READOUT — the copy that IS the takeaway, keyed on what the
-  //    student is looking at right now.
+  // onReady means the ACTIVE variant is now the one on screen. Read the
+  // current selection through a ref so the callback given to SplatViewer
+  // (whose identity we keep stable-ish) never reports a stale variant.
+  const activeVariantRef = useRef(activeVariant);
+  activeVariantRef.current = activeVariant;
+
+  // 3. THE HONESTY READOUT — the copy that IS the takeaway. Keyed on the
+  //    variant actually DISPLAYED (`shownVariant`): while a flip is still
+  //    streaming, the canvas keeps the old variant up, and the readout must
+  //    not claim otherwise — on this station, mislabeling is the one sin.
   const readout = !firstReady
     ? null
-    : activeVariant === "before"
+    : shownVariant === "before"
       ? {
           tag: "補完前",
           text: "這是只用衛星照片能重建的樣子。幾何大致還在，近看就融化了。",
@@ -160,7 +187,7 @@ export function SkyfallStation() {
 
   return (
     <StationLayout
-      title="衛星長出城市"
+      title="衛星長出城市 · Skyfall-GS"
       subtitle="從衛星照片長出一座能飛進去的城市。"
       fullBleed
       controls={
@@ -179,14 +206,16 @@ export function SkyfallStation() {
           <BlockToggle
             label="補完"
             gloss={
-              hasBefore
+              hasBoth
                 ? "同一個視角，比較模型補完前後"
-                : "這個場景的補完前版本還沒烘焙（見 runbook）"
+                : scene?.variants.after
+                  ? "這個場景的補完前版本還沒烘焙（見 runbook）"
+                  : "這個場景只有補完前版本，補完後還沒烘焙"
             }
             info="補完前是「只用衛星照片」訓練出來的重建：由上往下看還行，街景高度就糊成一團，因為衛星從沒在街上拍過。補完後是 diffusion model 把低空該有的細節想像出來、再重新訓練的版本。切換時鏡頭完全不動，方便比較同一個視角。"
             value={activeVariant}
             onChange={(v) => pickVariant(v as Variant)}
-            disabled={!hasBefore}
+            disabled={!hasBoth}
             options={[
               { label: "補完前", value: "before" },
               { label: "補完後", value: "after" },
@@ -222,7 +251,7 @@ export function SkyfallStation() {
           steps={[
             {
               title: "這是從衛星照片長出的城市",
-              body: "你看到的整個街區，是用幾十萬個彩色小橢圓（Gaussian Splatting）拼出來的 3D 場景，原料只有衛星照片。",
+              body: "你看到的整個街區，是用幾十萬個彩色小橢圓（Gaussian Splatting）拼出來的 3D 場景，原料只有衛星照片。這套方法叫 Skyfall-GS，第一作者李杰穎就是 Day 1 廣度講座的講者。",
             },
             {
               title: "飛進去",
@@ -265,12 +294,17 @@ export function SkyfallStation() {
                 eyeHeight: 0.012 * scene.diag,
               }}
               fill
-              onProgress={setProgress}
+              // Quantized to whole percent — the raw per-chunk floats would
+              // re-render the station tree for invisible changes.
+              onProgress={(f) => setProgress(Math.round(f * 100) / 100)}
               onReady={() => {
                 setFirstReady(true);
                 setSwitching(false);
+                setShownVariant(activeVariantRef.current);
               }}
-              onError={(e) => setError(e.message)}
+              // A failed .splat stream (possibly the hidden A/B partner) is a
+              // degradation, not a catastrophe — never tear down the canvas.
+              onError={() => setLoadError(true)}
               onPoseChange={({ position }) =>
                 setLowAltitude(
                   position[2] - scene.groundZ < LOW_ALTITUDE_FRAC * scene.diag,
@@ -304,7 +338,7 @@ export function SkyfallStation() {
               <div className="pointer-events-none absolute bottom-28 left-4 max-w-xs rounded-md border border-border bg-panel/85 px-3 py-2 backdrop-blur-sm md:bottom-6">
                 <p
                   className={`font-mono text-[10px] uppercase tracking-wide ${
-                    activeVariant === "after" && lowAltitude
+                    shownVariant === "after" && lowAltitude
                       ? "text-accent"
                       : "text-muted"
                   }`}
@@ -324,10 +358,23 @@ export function SkyfallStation() {
               </div>
             ) : null}
 
-            {/* Controls hint — quiet micro-label, canvas bottom-right. */}
-            <p className="pointer-events-none absolute bottom-28 right-4 hidden font-mono text-[10px] uppercase tracking-wide text-muted md:bottom-6 md:block">
-              拖曳 看四周 · WASD 移動 · 滾輪 升降 · 雙擊 飛過去
-            </p>
+            {/* Degraded-load notice — a variant failed to stream; the canvas
+                (and whatever already rendered) stays alive. */}
+            {loadError ? (
+              <div className="absolute left-4 top-16 rounded bg-panel/90 px-2 py-1 font-mono text-[10px] text-warning">
+                有場景檔案載入失敗，切換場景或重新整理可重試
+              </div>
+            ) : null}
+
+            {/* Controls hint + credit — quiet micro-labels, bottom-right. */}
+            <div className="pointer-events-none absolute bottom-28 right-4 hidden flex-col items-end gap-1 md:bottom-6 md:flex">
+              <p className="font-mono text-[10px] uppercase tracking-wide text-muted">
+                拖曳 看四周 · WASD 移動 · 滾輪 升降 · 雙擊 飛過去
+              </p>
+              <p className="font-mono text-[10px] uppercase tracking-wide text-muted">
+                Skyfall-GS · 第一作者 李杰穎 Jie-Ying Lee · Day 1 廣度講者
+              </p>
+            </div>
           </>
         )}
       </div>

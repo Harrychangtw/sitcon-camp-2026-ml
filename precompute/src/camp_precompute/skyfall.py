@@ -195,6 +195,11 @@ def prune(
         & np.isfinite(g["rot"]).all(axis=1)
     )
     keep = finite & (alpha >= min_opacity)
+    if not keep.any():
+        raise SystemExit(
+            f"skyfall: no gaussians survive --min-opacity {min_opacity} "
+            "(the source's opacities are all below it) — lower the threshold."
+        )
 
     # Fly-away floaters: a robust per-axis box (0.2/99.8 percentiles of the
     # opaque-enough splats, padded 15%) — satellite scenes grow a halo of
@@ -211,6 +216,11 @@ def prune(
     keep &= scale.max(axis=1) <= max_scale_frac * diag
 
     idx = np.flatnonzero(keep)
+    if idx.size == 0:
+        raise SystemExit(
+            "skyfall: every gaussian was pruned as a floater/mega-blob — "
+            "check --max-scale-frac (and that the PLY is a fused 3DGS scene)."
+        )
     # Importance ≈ opacity × (largest projected area)^size_weight, area from
     # the two biggest linear scales. The damped size term keeps the small
     # crisp splats that carry close-up detail (see DEFAULT_SIZE_WEIGHT).
@@ -381,6 +391,19 @@ def _street_pose(
     }
 
 
+def _poses_for(geom: dict, meta: SkyfallScene | None) -> list[dict]:
+    """Poses for one scene: the computed set, with the catalog's hand-picked
+    街景 override (when present) winning over the automatic search. Every bake
+    entry point MUST build poses through here, or the eyeballed pose silently
+    reverts on a fresh-catalog rebake."""
+    poses = make_poses(geom)
+    if meta and meta.street:
+        for p in poses:
+            if p["id"] == "street":
+                p.update(meta.street)
+    return poses
+
+
 def make_poses(geom: dict) -> list[dict]:
     """Three named viewpoints that tell the story: 俯瞰 (the satellite's honest
     view), 半空 (the transition), 街景 (where the A/B contrast lives). Street
@@ -432,7 +455,8 @@ def _load_payload(out_dir: Path) -> dict:
         return json.loads(path.read_text(encoding="utf-8"))
     return {
         "station": STATION,
-        "source": "jayin92/Skyfall-GS (Apache-2.0), fused scenes from "
+        "source": "Skyfall-GS, 李杰穎 Jie-Ying Lee et al. (arXiv 2510.15869; "
+        "github.com/jayin92/Skyfall-GS, Apache-2.0), fused scenes from "
         "huggingface.co/jayinnn/Skyfall-GS-ply",
         "format": "splat",
         "up": list(UP),
@@ -577,11 +601,7 @@ def write_scenes(
         variants = dict(old.get("variants") or {})
         variants["after"] = _variant_entry(rel, size, len(g["alpha"]), generator)
         meta = catalog[sid]
-        poses = make_poses(geom)
-        if meta.street:  # hand-picked 街景 wins over the automatic search
-            for p in poses:
-                if p["id"] == "street":
-                    p.update(meta.street)
+        poses = _poses_for(geom, meta)
         _upsert_scene(
             payload,
             {
@@ -637,7 +657,7 @@ def write_from_ply(
             "groundZ": geom["groundZ"],
             "diag": geom["diag"],
             "bounds": geom["bounds"],
-            "poses": make_poses(geom),
+            "poses": _poses_for(geom, meta),
             "initialPose": "oblique",
             "variants": {},
         }
