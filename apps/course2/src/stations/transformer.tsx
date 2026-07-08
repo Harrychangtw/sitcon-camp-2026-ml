@@ -3,7 +3,7 @@
  *
  * Pipeline overhaul: ONE horizontally-scrollable, left-to-right diagram of a
  * real forward pass — 輸入 → tokenizer → embedding → 迷你模型（attention
- * matrix + MLP，layer/head 兩個轉盤）→ next-token 輸出。The left/right columns
+ * matrix + MLP，Layer × Head 縮圖選格）→ next-token 輸出。The left/right columns
  * deliberately echo the earlier stations (tokenizer 的色塊 chips、embedding 的
  * 向量條、next-token 的機率長條), so the course visibly chains into one model.
  *
@@ -13,17 +13,26 @@
  * qwen.pipeline_payload(). Embedding/MLP strips are fixed-stride subsamples of
  * the real 1024-dim / 3072-dim vectors — labeled 代表性切片, never decorative.
  *
- * Interaction is free clicking + hover (no guided steps): the layer/head dials
- * pick which attention matrix + MLP slice to show; hovering a matrix cell
+ * Interaction is free clicking + hover (no guided steps): the Layer × Head
+ * pad (a 2-axis slider shaped like the model, layers × heads) picks which
+ * attention matrix + MLP slice to show; hovering a matrix cell
  * cross-highlights the query + key tokens across the columns; hovering
  * chips/strips surfaces short explanations. The browser NEVER runs a
  * transformer — it replays recorded/live JSON and does only a softmax over the
  * top-N exported logits.
  */
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import {
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type PointerEvent as ReactPointerEvent,
+  type ReactNode,
+} from "react";
 import {
   BlockSlider,
   DockControls,
+  InfoLabel,
   LiveStatus,
   LoadingTimer,
   StationLayout,
@@ -260,6 +269,172 @@ function CapsuleConnector({
   );
 }
 
+// LayerHeadPad cell geometry: 8px cells on a 9px pitch. At Qwen3-0.6B's
+// 28 layers × 16 heads the pad lands at 251×143px, dock-sized.
+const PAD_CELL = 8;
+const PAD_GAP = 1;
+const PAD_PITCH = PAD_CELL + PAD_GAP;
+
+/** Layer × Head as ONE dock control: a two-axis slider pad shaped like the
+ * model itself. Columns = the `nLayers` stacked blocks (depth runs left→right,
+ * matching the pipeline flow); rows = the `nHeads` heads inside each block —
+ * every cell IS one real attention head. Click or drag moves the crosshair
+ * (x picks the layer, y the head, one gesture sets both); arrow keys nudge.
+ * Replaces two disconnected sliders so "a layer is a stack of heads" reads
+ * spatially instead of numerically. */
+function LayerHeadPad({
+  nLayers,
+  nHeads,
+  layer,
+  head,
+  onPick,
+}: {
+  nLayers: number;
+  nHeads: number;
+  layer: number;
+  head: number;
+  onPick: (layer: number, head: number) => void;
+}) {
+  const [hover, setHover] = useState<{ l: number; h: number } | null>(null);
+  const [dragging, setDragging] = useState(false);
+  const padW = nLayers * PAD_PITCH - PAD_GAP;
+  const padH = nHeads * PAD_PITCH - PAD_GAP;
+
+  const cellAt = (e: ReactPointerEvent<SVGSVGElement>) => {
+    const r = e.currentTarget.getBoundingClientRect();
+    const cl = Math.min(
+      nLayers - 1,
+      Math.max(0, Math.floor((e.clientX - r.left) / PAD_PITCH)),
+    );
+    const ch = Math.min(
+      nHeads - 1,
+      Math.max(0, Math.floor((e.clientY - r.top) / PAD_PITCH)),
+    );
+    return { l: cl, h: ch };
+  };
+
+  // The bubble tracks whatever cell is "live": the hovered cell while
+  // exploring, the committed selection otherwise (dragging keeps them equal).
+  const live = hover ?? { l: layer, h: head };
+
+  return (
+    <div className="group/control col-span-2 grid grid-cols-subgrid items-center">
+      <InfoLabel
+        label="Layer × Head"
+        gloss={`模型縮圖：橫向 ${nLayers} 層，縱向每層 ${nHeads} 個 head，點或拖選一格`}
+        info="每一格就是模型裡一個真實的注意力頭：橫軸選第幾層，縱軸選同一層裡的哪個 head，一次拖曳同時定兩個。淺層多半關注鄰近、表面的關係，越深越抽象；每個 head 各自學到不同的關注模式，沒有現成標籤，自己去翻。"
+      />
+      <div
+        className="group/pad relative flex items-start gap-1.5 py-1 outline-none focus-visible:rounded-md focus-visible:ring-1 focus-visible:ring-white"
+        tabIndex={0}
+        role="group"
+        aria-label={`Layer 與 Head 選擇：目前 L${layer}、H${head}，方向鍵可調整`}
+        onKeyDown={(e) => {
+          const d: Record<string, [number, number]> = {
+            ArrowLeft: [-1, 0],
+            ArrowRight: [1, 0],
+            ArrowUp: [0, -1],
+            ArrowDown: [0, 1],
+          };
+          const step = d[e.key];
+          if (!step) return;
+          e.preventDefault();
+          onPick(
+            Math.min(nLayers - 1, Math.max(0, layer + step[0])),
+            Math.min(nHeads - 1, Math.max(0, head + step[1])),
+          );
+        }}
+      >
+        {/* Value bubble — BlockSlider's idiom, tracking the live cell. */}
+        <div
+          className={`pointer-events-none absolute -top-6 z-10 -translate-x-1/2 whitespace-nowrap rounded-sm border border-border bg-panel px-2 py-0.5 font-mono text-xs text-fg shadow-md transition-all duration-150 ${
+            hover || dragging
+              ? "scale-100 opacity-100"
+              : "scale-90 opacity-0 group-hover/pad:scale-100 group-hover/pad:opacity-100"
+          }`}
+          style={{ left: 18 + live.l * PAD_PITCH + PAD_CELL / 2 }}
+        >
+          L{live.l} · H{live.h}
+        </div>
+        {/* Head axis — top and bottom row indices. */}
+        <div
+          className="flex w-4 shrink-0 flex-col justify-between text-right font-mono text-[9px] leading-none text-muted"
+          style={{ height: padH }}
+        >
+          <span>H0</span>
+          <span>H{nHeads - 1}</span>
+        </div>
+        <div className="flex flex-col gap-1">
+          <svg
+            width={padW}
+            height={padH}
+            className="cursor-pointer touch-none opacity-80 transition-opacity duration-150 group-hover/pad:opacity-100"
+            onPointerDown={(e) => {
+              e.currentTarget.setPointerCapture(e.pointerId);
+              setDragging(true);
+              const c = cellAt(e);
+              setHover(c);
+              onPick(c.l, c.h);
+            }}
+            onPointerMove={(e) => {
+              const c = cellAt(e);
+              setHover(c);
+              if (dragging) onPick(c.l, c.h);
+            }}
+            onPointerUp={() => setDragging(false)}
+            onPointerLeave={() => {
+              if (!dragging) setHover(null);
+            }}
+          >
+            {Array.from({ length: nLayers }, (_, cl) =>
+              Array.from({ length: nHeads }, (_, ch) => {
+                const selected = cl === layer && ch === head;
+                const crosshair = cl === layer || ch === head;
+                return (
+                  <rect
+                    key={`${cl}-${ch}`}
+                    x={cl * PAD_PITCH}
+                    y={ch * PAD_PITCH}
+                    width={PAD_CELL}
+                    height={PAD_CELL}
+                    rx={1.5}
+                    className={
+                      selected
+                        ? "fill-accent"
+                        : crosshair
+                          ? "fill-fg/30"
+                          : "fill-fg/10"
+                    }
+                  />
+                );
+              }),
+            )}
+            {/* White ring on the selected cell — the crosshair's handle. */}
+            <rect
+              x={layer * PAD_PITCH - 1}
+              y={head * PAD_PITCH - 1}
+              width={PAD_CELL + 2}
+              height={PAD_CELL + 2}
+              rx={2.5}
+              className="fill-none stroke-white"
+              strokeWidth={1.25}
+            />
+          </svg>
+          {/* Layer axis — depth runs left→right, like the pipeline. */}
+          <div
+            className="flex justify-between font-mono text-[9px] leading-none text-muted"
+            style={{ width: padW }}
+          >
+            <span>L0</span>
+            <span className="opacity-70">Layer 層 →</span>
+            <span>L{nLayers - 1}</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export function TransformerStation() {
   // 1. STATE — everything rendered is a pure function of
   //    (data, sentence, layer, head, hovered).
@@ -373,6 +548,54 @@ export function TransformerStation() {
   useEffect(() => {
     setHovered(null);
   }, [sentenceId]);
+
+  // AUTO-SCROLL — the pipeline is wider than the viewport, so each dock
+  // control steers the horizontal scroll to the thing it changes: picking a
+  // layer/head nudges the attention matrix into view (minimal scroll, no-op
+  // if it's already visible); the temperature dial jumps to the far right,
+  // where the next-token bars it reshapes live. Both skip the initial render
+  // so loading a station doesn't yank the view.
+  const scrollRef = useRef<HTMLDivElement | null>(null);
+  const matrixRef = useRef<HTMLDivElement | null>(null);
+  const didMount = useRef(false);
+
+  useEffect(() => {
+    if (!didMount.current) return;
+    const c = scrollRef.current;
+    const el = matrixRef.current;
+    if (!c || !el) return;
+    const margin = 48;
+    const left =
+      el.getBoundingClientRect().left -
+      c.getBoundingClientRect().left +
+      c.scrollLeft;
+    const right = left + el.offsetWidth;
+    // scroll-into-view "nearest" semantics, horizontal axis only.
+    let target: number | null = null;
+    if (left - margin < c.scrollLeft) target = left - margin;
+    else if (right + margin > c.scrollLeft + c.clientWidth)
+      target = right + margin - c.clientWidth;
+    if (target === null) return;
+    const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    c.scrollTo({
+      left: Math.max(0, target),
+      behavior: reduce ? "auto" : "smooth",
+    });
+  }, [layer, head]);
+
+  useEffect(() => {
+    if (!didMount.current) return;
+    const c = scrollRef.current;
+    if (!c) return;
+    const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    c.scrollTo({ left: c.scrollWidth, behavior: reduce ? "auto" : "smooth" });
+  }, [temperature]);
+
+  // Declared AFTER the scroll effects: on the initial commit they run first
+  // (seeing false), so only later user changes trigger the auto-scroll.
+  useEffect(() => {
+    didMount.current = true;
+  }, []);
 
   // 3. DERIVED — the picked (layer, head) slice, indices clamped so a stale
   //    dial position is safe.
@@ -534,27 +757,15 @@ export function TransformerStation() {
       }
       controls={
         <DockControls>
-          <BlockSlider
-            label="Layer 層"
-            gloss="模型的一個處理階段，一層做完換下一層"
-            info="選看第幾層。attention matrix 和 MLP 切片都會跟著換層。淺層多半關注鄰近、表面的關係，越深的層才逐漸組合出比較抽象的語意。"
-            min={0}
-            max={nLayers - 1}
-            step={1}
-            value={l}
-            onChange={setLayer}
-            format={(v) => `L${v} / L${nLayers - 1}`}
-          />
-          <BlockSlider
-            label="Head 注意力頭"
-            gloss="同一層裡的一組觀察角度，各自注意不同的關係"
-            info="選同一層裡的哪一個注意力頭。每個 head 各自學到不同的關注模式；真實模型沒有乾淨的「這個 head 做什麼」標籤，自己去翻。"
-            min={0}
-            max={nHeads - 1}
-            step={1}
-            value={h}
-            onChange={setHead}
-            format={(v) => `H${v} / H${nHeads - 1}`}
+          <LayerHeadPad
+            nLayers={nLayers}
+            nHeads={nHeads}
+            layer={l}
+            head={h}
+            onPick={(nl, nh) => {
+              setLayer(nl);
+              setHead(nh);
+            }}
           />
           <BlockSlider
             label="Temperature 溫度"
@@ -592,7 +803,7 @@ export function TransformerStation() {
           </div>
         ) : (
           /* The pipeline: one horizontally-scrollable, left-to-right row. */
-          <div className="absolute inset-0 overflow-auto">
+          <div ref={scrollRef} className="absolute inset-0 overflow-auto">
             <div className="flex min-h-full min-w-max items-stretch gap-4 px-10 pt-28 pb-64">
               {/* 01 — 輸入 */}
               <Column index="01" title="輸入">
@@ -694,7 +905,7 @@ export function TransformerStation() {
 
               <Arrow />
 
-              {/* 04 — 迷你模型：attention matrix + MLP，由 layer/head 轉盤驅動 */}
+              {/* 04 — 迷你模型：attention matrix + MLP，由 Layer × Head 縮圖驅動 */}
               <Column
                 index="04"
                 title={
@@ -713,7 +924,11 @@ export function TransformerStation() {
               >
                 <div className="flex items-start gap-5">
                   {/* attention matrix：列 = query，欄 = key */}
-                  <div className="relative flex flex-col" style={{ height: railH }}>
+                  <div
+                    ref={matrixRef}
+                    className="relative flex flex-col"
+                    style={{ height: railH }}
+                  >
                     <div
                       className="flex items-end whitespace-nowrap font-mono text-[10px] uppercase leading-none tracking-wide text-muted"
                       style={{ height: SUBHEAD_H }}
@@ -773,7 +988,8 @@ export function TransformerStation() {
                     >
                       一層是模型的一個處理階段；每一層裡有 {nHeads} 個
                       head，各自注意字和字之間不同的關係。模型把 {nLayers}{" "}
-                      層疊起來，用轉盤換層、換 head，看到的矩陣就跟著換。
+                      層疊起來，在下方的模型縮圖上點一格換層、換
+                      head，看到的矩陣就跟著換。
                     </p>
                   </div>
 
