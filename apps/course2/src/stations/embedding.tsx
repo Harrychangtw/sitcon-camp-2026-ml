@@ -262,6 +262,16 @@ export function EmbeddingStation() {
     [shownWord, nearest],
   );
 
+  // Top K only changes what's visible once a word is focused. Slid while the
+  // search is empty it does nothing, which reads as broken. So seed the search
+  // with a demo word on the first nudge — a real neighbour list appears and the
+  // slider's effect is immediately legible. Once query is set this is a no-op
+  // and normal sliding takes over.
+  const handleKChange = (next: number) => {
+    setK(next);
+    if (!query.trim()) setQuery(PRESETS[0].value);
+  };
+
   return (
     <StationLayout
       title="Embedding"
@@ -299,7 +309,7 @@ export function EmbeddingStation() {
             max={MAX_K}
             step={1}
             value={k}
-            onChange={setK}
+            onChange={handleKChange}
             ariaLabel="鄰居數 K"
           />
         </DockControls>
@@ -324,7 +334,7 @@ export function EmbeddingStation() {
             identity of the two jargon terms students meet here, floating just
             under the title island. Quiet secondary text; the deeper
             how-embeddings-are-learned story is out of scope for this station. */}
-        <div className="pointer-events-none absolute left-4 top-14 z-20 flex max-w-md flex-col gap-1">
+        <div className="pointer-events-none absolute left-9 top-14 z-20 flex max-w-md flex-col gap-1">
           <p className="text-xs leading-relaxed text-muted">
             <span className="font-mono">embedding</span>
             ：把每個 token 變成一排數字（向量），意思相近的字，數字也相近
