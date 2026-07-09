@@ -41,6 +41,11 @@ public/data/**/skyfall/**/*.splat
 # apps/course2/public/data/, so a root-anchored `public/data/**` (as the skyfall
 # / diffusion lines above are written) would NOT actually match it. `**/` lets
 # the pattern bite regardless of the app prefix.
+# pixel-shuffle station CIFAR pack: a ~6 MB binary, ignored by pattern so a
+# re-bake can't land by accident; the shipped pack is committed deliberately
+# with `git add -f` so a fresh checkout runs the classroom offline. The `**/`
+# prefix is load-bearing (see the text-to-3d note below).
+**/public/data/**/pixel-shuffle/*.gz
 **/public/data/**/text-to-3d/**/*.splat
 **/public/data/**/text-to-3d/**/*.webp
 **/public/data/**/text-to-3d/_ply_cache/

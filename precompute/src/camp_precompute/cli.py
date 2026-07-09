@@ -1176,6 +1176,35 @@ def main(argv: list[str] | None = None) -> int:
         help="Output directory (defaults to apps/course2/public/data/course2).",
     )
 
+    p_pixel = sub.add_parser(
+        "pixel-shuffle",
+        help="Bake the pixel-shuffle station's CIFAR-10 pack (the morning "
+        "class's own 2,000+200 subset, copied from the cloned "
+        ".reference/sitcon-camp-2026-ml-pt1), meta.json (fixed pixel "
+        "permutation + hyperparams) and the numpy reference twin runs, and "
+        "register them in manifest.json.",
+    )
+    p_pixel.add_argument(
+        "--out",
+        type=Path,
+        default=None,
+        help="Output directory (defaults to apps/course2/public/data/course2).",
+    )
+    p_pixel.add_argument(
+        "--source",
+        type=Path,
+        default=None,
+        help="Directory holding the morning class's cifar10.bin.gz + "
+        "cifar10.json (defaults to "
+        ".reference/sitcon-camp-2026-ml-pt1/public/datasets).",
+    )
+    p_pixel.add_argument(
+        "--reference-steps",
+        type=int,
+        default=None,
+        help="Steps for the baked reference twin runs (default 4000).",
+    )
+
     p_steer_vec = sub.add_parser(
         "steering-vectors",
         help="Compute the steering station's contrastive concept directions "
@@ -1514,6 +1543,19 @@ def main(argv: list[str] | None = None) -> int:
         out_dir = args.out or default_out_dir()
         path = transformer(out_dir)
         print(f"wrote {path}")
+        print(f"updated {out_dir / 'manifest.json'}")
+        return 0
+
+    if args.command == "pixel-shuffle":
+        from .pixel_shuffle import REFERENCE_STEPS, write_pixel_shuffle
+
+        out_dir = args.out or default_out_dir()
+        for path in write_pixel_shuffle(
+            out_dir,
+            args.source,
+            reference_steps=args.reference_steps or REFERENCE_STEPS,
+        ):
+            print(f"wrote {path}")
         print(f"updated {out_dir / 'manifest.json'}")
         return 0
 
