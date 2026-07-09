@@ -39,6 +39,8 @@ precompute/artifacts/
 
 # classroom progression lock — runtime state written by scripts/unlock.sh
 apps/course2/public/unlocked.txt
+# classroom live control (lock / goto broadcasts) — written by scripts/classroom.mjs
+apps/course2/public/classroom.json
 
 # editor / os
 .DS_Store

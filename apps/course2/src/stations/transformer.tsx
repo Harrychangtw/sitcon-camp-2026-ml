@@ -549,6 +549,14 @@ export function TransformerStation() {
     setHovered(null);
   }, [sentenceId]);
 
+  // 3. DERIVED — the picked (layer, head) slice, indices clamped so a stale
+  //    dial position is safe. Declared before the auto-scroll effect below,
+  //    which keys off the clamped values.
+  const nLayers = data?.nLayers ?? 1;
+  const nHeads = data?.nHeads ?? 1;
+  const l = Math.min(layer, nLayers - 1);
+  const h = Math.min(head, nHeads - 1);
+
   // AUTO-SCROLL — the pipeline is wider than the viewport, so each dock
   // control steers the horizontal scroll to the thing it changes: picking a
   // layer/head nudges the attention matrix into view (minimal scroll, no-op
@@ -581,7 +589,7 @@ export function TransformerStation() {
       left: Math.max(0, target),
       behavior: reduce ? "auto" : "smooth",
     });
-  }, [layer, head]);
+  }, [l, h]);
 
   useEffect(() => {
     if (!didMount.current) return;
@@ -596,13 +604,6 @@ export function TransformerStation() {
   useEffect(() => {
     didMount.current = true;
   }, []);
-
-  // 3. DERIVED — the picked (layer, head) slice, indices clamped so a stale
-  //    dial position is safe.
-  const nLayers = data?.nLayers ?? 1;
-  const nHeads = data?.nHeads ?? 1;
-  const l = Math.min(layer, nLayers - 1);
-  const h = Math.min(head, nHeads - 1);
 
   const tokens = useMemo(() => sentence?.tokens ?? [], [sentence]);
   const n = tokens.length;

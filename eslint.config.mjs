@@ -46,4 +46,11 @@ export default tseslint.config(
       "@typescript-eslint/no-explicit-any": "off",
     },
   },
+  {
+    // Node CLI scripts (e.g. scripts/classroom.mjs) — plain ESM, node globals.
+    files: ["scripts/**/*.mjs"],
+    languageOptions: {
+      globals: { ...globals.node },
+    },
+  },
 );
