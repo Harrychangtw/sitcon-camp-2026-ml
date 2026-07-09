@@ -1,6 +1,6 @@
 {
-  "generator": "camp-precompute steering-sample",
-  "generatedAt": "2026-07-07T18:07:00.466167+00:00",
+  "generator": "camp-precompute steering",
+  "generatedAt": "2026-07-09T04:15:13.785315+00:00",
   "note": "Feature catalog for the steering station's sliders: 中文 label + 白話文 gloss per concept direction, the layer the knob lives at, and the absolute delta one strength unit adds (null in the dev sample). Directions are contrastive activation-addition vectors computed offline on the served Qwen — not an SAE.",
   "station": "steering",
   "model": "Qwen/Qwen3-0.6B",
@@ -9,44 +9,44 @@
   "maxStrength": 2,
   "features": [
     {
-      "id": "bridge",
-      "label": "金門大橋",
-      "gloss": "模型有多想聊金門大橋",
-      "info": "致敬 Anthropic 的 Golden Gate Claude：把「金門大橋」這個概念方向加進模型中層的內部訊號，拉到最右它會把任何話題都繞到那座紅色大橋上；拉到最左則刻意避開地標。這不是關鍵字過濾，是直接改它腦中的活化值。",
+      "id": "boba",
+      "label": "珍珠奶茶",
+      "gloss": "模型有多想聊珍珠奶茶",
+      "info": "致敬 Anthropic 的 Golden Gate Claude：他們把「金門大橋」的概念方向加進 Claude 的內部訊號，模型就滿腦子都是橋。我們這顆 0.6B 的小模型不太認識金門大橋，所以改用它最熟的「珍珠奶茶」——拉到最右，任何話題都會繞回珍奶；拉到最左則絕口不提。這不是關鍵字過濾，是直接改它腦中的活化值。",
       "posLabel": "狂提",
       "negLabel": "避開",
       "layer": 14,
-      "scale": null
+      "scale": 12.471
     },
     {
       "id": "cat",
       "label": "貓",
       "gloss": "模型有多想聊貓",
-      "info": "和金門大橋同一招，換一個概念：把「貓」的方向加進去，模型會忍不住把任何回答都扯到貓身上；反向則絕口不提。用第二個旋鈕證明這方法不是只對一個概念有效。",
+      "info": "和珍珠奶茶同一招，換一個概念：把「貓」的方向加進去，模型會忍不住把回答扯到貓身上，推到最大甚至會自稱是一隻貓。用第二個旋鈕證明這方法不是只對一個概念有效。",
       "posLabel": "狂提",
       "negLabel": "避開",
       "layer": 14,
-      "scale": null
+      "scale": 12.501
     },
     {
-      "id": "formal",
-      "label": "正式語氣",
-      "gloss": "右邊是公文腔，左邊是隨便聊",
-      "info": "這個方向管的不是「講什麼」而是「怎麼講」：往右加，回答會變成敬語滿滿的正式文書；往左減，會鬆成朋友聊天的口氣。同一個問題、同一顆模型，只差內部一個方向的推力。",
-      "posLabel": "正式",
-      "negLabel": "隨便",
+      "id": "english",
+      "label": "英文",
+      "gloss": "模型要不要改講英文",
+      "info": "語言也是模型內部的一個方向：把「英文」方向加進中層訊號，同一個中文問題，回答會直接切換成英文；推到更大會出現有趣的中英夾雜。往左它就乖乖講中文。模型並沒有被「翻譯」，只是內部代表語言的訊號被推了一把。",
+      "posLabel": "講英文",
+      "negLabel": "講中文",
       "layer": 14,
-      "scale": null
+      "scale": 8.859
     },
     {
       "id": "mood",
       "label": "心情",
-      "gloss": "右邊興高采烈，左邊氣噗噗",
-      "info": "情緒也是模型內部的一個方向：往右推，回答會冒出興奮和驚嘆號；往左推，字裡行間開始不耐煩。這說明「語氣」不是表面裝飾，而是內部訊號裡真實存在、可以被直接調整的量。",
+      "gloss": "右邊興高采烈，左邊冷冰冰",
+      "info": "情緒也是模型內部的一個方向：往右推，回答會冒出陽光、海邊和讚嘆；往左推，模型退回公事公辦的冷淡模式，開始跟你保持距離。這說明「語氣」不是表面裝飾，而是內部訊號裡真實存在、可以被直接調整的量。",
       "posLabel": "開心",
-      "negLabel": "生氣",
+      "negLabel": "冷淡",
       "layer": 14,
-      "scale": null
+      "scale": 17.742
     }
   ]
 }

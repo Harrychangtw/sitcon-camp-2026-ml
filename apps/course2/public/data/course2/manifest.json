@@ -101,7 +101,7 @@
       "kind": "json",
       "path": "steering/features.json",
       "station": "steering",
-      "bytes": 2606,
+      "bytes": 2820,
       "description": "Concept-knob catalog (id, \u4e2d\u6587 label, gloss, pole labels, layer) for the steering station's sliders."
     },
     {
@@ -109,7 +109,7 @@
       "kind": "json",
       "path": "steering/presets.json",
       "station": "steering",
-      "bytes": 6889,
+      "bytes": 14386,
       "description": "Recorded steered-vs-base replies (prompt \u00d7 feature \u00d7 strength) from Qwen3-0.6B with concept directions added to the residual stream. Offline fallback for the steering station; the browser never runs the model."
     },
     {

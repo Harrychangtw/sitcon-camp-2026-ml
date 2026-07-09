@@ -3,10 +3,11 @@
  *
  * The reveal: the SAME Qwen3-0.6B answers the SAME prompt twice, side by side.
  * Left is the untouched model; right has one or more 「概念旋鈕」 turned — a
- * direction added straight into the residual stream mid-stack. Drag 金門大橋
- * to +2 and the reply can't stop mentioning the bridge; drag 正式語氣 down and
- * it talks like a group chat. 可解釋性 made tangible: we can look inside a
- * model, name what we find, and turn it.
+ * direction added straight into the residual stream mid-stack. Drag 珍珠奶茶
+ * to +2 and the reply can't stop mentioning boba (it may introduce itself as
+ * a cup of it); drag 英文 up and the same 中文 question gets answered in
+ * English. 可解釋性 made tangible: we can look inside a model, name what we
+ * find, and turn it.
  *
  * Feature sourcing (the resolved decision, see camp_precompute.steering):
  * CONTRASTIVE steering vectors (activation addition) computed once offline on
@@ -354,7 +355,7 @@ export function SteeringStation() {
       takeaway={
         <span>
           可解釋性：模型內部不是看不懂的一團數字。用成對的例句對比，可以在第{" "}
-          {catalog?.layer ?? 14} 層的內部訊號裡找出「金門大橋」「正式語氣」這種
+          {catalog?.layer ?? 14} 層的內部訊號裡找出「珍珠奶茶」「英文」這種
           有名字的方向；把方向加回去，輸出就跟著偏。能找到、能命名、能轉動，
           代表我們真的看進了模型在想什麼，這條路線叫 interpretability。
         </span>
@@ -369,16 +370,16 @@ export function SteeringStation() {
               body: "左右兩欄是同一顆 Qwen3-0.6B 對同一個問題的回答。旋鈕都在 0 的時候，兩邊一模一樣：這就是模型的原味。",
             },
             {
-              title: "把「金門大橋」拉到最大",
-              body: "下方每個滑桿是模型內部的一個「概念旋鈕」。把「金門大橋」拉到 +2，等右邊重新生成。",
+              title: "把「珍珠奶茶」拉到最大",
+              body: "下方每個滑桿是模型內部的一個「概念旋鈕」。把「珍珠奶茶」拉到 +2，等右邊重新生成。",
             },
             {
-              title: "看它整段都在講橋",
-              body: "右邊開始滿腦子都是橋。這不是關鍵字過濾：我們是把「金門大橋」這個方向直接加進模型中層的訊號裡，它是真的「想著」橋在回答。",
+              title: "看它滿腦子都是珍奶",
+              body: "右邊開始整段繞著珍珠奶茶打轉，甚至自稱是一杯珍奶。這不是關鍵字過濾：我們是把「珍珠奶茶」這個方向直接加進模型中層的訊號裡，它是真的「想著」珍奶在回答。",
             },
             {
               title: "這就是打開模型內部",
-              body: "往負的方向拉會避開概念，換「正式語氣」「心情」試試語氣的旋鈕。能在模型裡找到方向、標上名字、直接轉動，就是可解釋性（interpretability）研究在做的事。",
+              body: "換「英文」讓同一個中文問題用英文回答，換「心情」把語氣從興高采烈轉到冷冰冰。能在模型裡找到方向、標上名字、直接轉動，就是可解釋性（interpretability）研究在做的事。",
             },
           ]}
         />

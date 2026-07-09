@@ -2,9 +2,10 @@
 
 The pedagogy (Anthropic "Golden Gate Claude", scaled to a classroom): the model
 has legible directions INSIDE its residual stream. Add one, scaled by a slider,
-and the SAME prompt bends toward (or away from) that concept: drag 金門大橋 up
-and it can't stop mentioning the bridge; drag 正式語氣 down and it talks like a
-group chat. Peek inside AND edit behaviour — 可解釋性 made tangible.
+and the SAME prompt bends toward (or away from) that concept: drag 珍珠奶茶 up
+and it can't stop mentioning boba (at +2 it introduces ITSELF as a cup of
+boba); drag 英文 up and the same 中文 question gets answered in English. Peek
+inside AND edit behaviour — 可解釋性 made tangible.
 
 FEATURE SOURCING (the resolved checkpoint decision): CONTRASTIVE STEERING
 VECTORS (activation addition, Turner et al. 2023 / mean-difference CAA) on the
@@ -26,10 +27,27 @@ How a direction is made (steering-vectors):
   output_hidden_states, take the residual stream ENTERING layer L+1 (i.e.
   hidden_states[L + 1], the output of decoder layer L — the same tensor the
   hook below edits), mean over token positions, mean over sentences;
+- POSITION 0 IS ALWAYS EXCLUDED: Qwen3 adds no BOS, and whatever token lands
+  first becomes the attention sink with a residual norm ~100× every other
+  position (≈6400 vs ≈55 at layer 14). Including it drowns the concept — the
+  2026-07-09 V100 probes measured cos ≈ 0.17 between a sink-contaminated
+  bridge direction and the clean one, and a *flipped* mood direction;
+- concept knobs (FeatureSpec.span set) mean only over the tokens of the
+  concept word itself instead of the whole sentence — whole-sentence means
+  dilute 「珍珠奶茶」 into generic snack-talk;
 - direction = unit(pos_mean − neg_mean);
-- scale = COEFF · median per-token residual L2 norm at that layer, so a slider
-  strength s adds a delta of s·COEFF ≈ s·8% of the typical residual magnitude —
-  strong enough to obsess at |s| = 2, weak enough to stay readable.
+- scale = COEFF · boost · median per-token residual L2 norm, so UI strength s
+  adds s·COEFF·boost of the typical residual magnitude. The per-feature boost
+  is calibrated by probing: mean-difference directions in a 0.6B model need
+  deltas of ~20-80% of the residual norm before the effect is legible (the
+  CAA literature's raw-diff × 1-3 operating range), and each direction
+  saturates/degrades at a different push.
+
+Concept choice is knowledge-bounded: steering can only surface what the model
+robustly represents. Qwen3-0.6B does NOT know 金門大橋 as the Golden Gate
+Bridge (it answers "a Taiwanese highway bridge in 金門縣") and thinks 熊貓 is
+a poodle — so the homage knob is 珍珠奶茶, which it knows cold. Knowledge-check
+a candidate concept with 「介紹一下X」 before writing contrast sets for it.
 
 How it is applied (export + live server, the SAME code path): a forward hook on
 model.model.layers[L] adds strength × scale × direction to the layer's output
@@ -59,11 +77,12 @@ from .lora import MAX_NEW_TOKENS, generate_reply
 # are still token-ish, late layers are already committed to an output).
 STEER_LAYER = 14
 
-# Fraction of the typical residual norm one strength unit adds. |strength| is
-# capped at 2 (schema + slider), so the delta never exceeds ~16% of the
-# residual magnitude per position — pushed hard the output obsesses but stays
-# coherent enough to read the effect. Tune per deploy in the runbook if a
-# feature reads flat or degenerates.
+# Fraction of the typical residual norm one strength unit adds, BEFORE the
+# per-feature boost. |strength| is capped at 2 (schema + slider); the boost
+# maps UI ±2 onto each direction's empirically usable range (probed on the
+# V100: concepts surface around 40-45% of residual norm, mood tolerates ~60%,
+# text degenerates into repetition past ~70%). Tune boost per feature in the
+# runbook if a knob reads flat or degenerates.
 COEFF = 0.08
 
 # Slider stops. 0 = base (no hook), recorded once per prompt; the non-zero
@@ -94,6 +113,12 @@ class FeatureSpec:
     neg_label: str  # what − reads as, e.g. 避開
     pos: tuple[str, ...]  # contrast sentences exemplifying the + pole
     neg: tuple[str, ...]  # contrast sentences exemplifying the − pole
+    # Concept knobs: mean only over the tokens of this word inside each pos
+    # sentence (None → whole-sentence mean, for style/tone knobs).
+    span: str | None = None
+    # UI-strength → internal-strength multiplier; calibrated per feature so
+    # that the slider's +2 sits at "obsessed but still readable".
+    boost: float = 1.0
 
 
 # Shared − pole for the two "提到 X" features: matched everyday sentences with
@@ -113,31 +138,31 @@ _NEUTRAL = (
 
 FEATURES: list[FeatureSpec] = [
     FeatureSpec(
-        id="bridge",
-        label="金門大橋",
-        gloss="模型有多想聊金門大橋",
-        info="致敬 Anthropic 的 Golden Gate Claude：把「金門大橋」這個概念方向加進模型中層的內部訊號，拉到最右它會把任何話題都繞到那座紅色大橋上；拉到最左則刻意避開地標。這不是關鍵字過濾，是直接改它腦中的活化值。",
+        id="boba",
+        label="珍珠奶茶",
+        gloss="模型有多想聊珍珠奶茶",
+        info="致敬 Anthropic 的 Golden Gate Claude：他們把「金門大橋」的概念方向加進 Claude 的內部訊號，模型就滿腦子都是橋。我們這顆 0.6B 的小模型不太認識金門大橋，所以改用它最熟的「珍珠奶茶」——拉到最右，任何話題都會繞回珍奶；拉到最左則絕口不提。這不是關鍵字過濾，是直接改它腦中的活化值。",
         pos_label="狂提",
         neg_label="避開",
         pos=(
-            "金門大橋是舊金山的地標，橘紅色的橋塔常常浮在霧上。",
-            "走在金門大橋上，可以看到整個海灣和來往的船。",
-            "金門大橋是一座壯觀的懸索橋，跨越金門海峽。",
-            "很多電影都拍過金門大橋，它幾乎是舊金山的代名詞。",
-            "傍晚的金門大橋被夕陽染成金色，非常漂亮。",
-            "金門大橋 1937 年通車，是當時世界上最長的懸索橋。",
-            "從山丘上眺望，金門大橋的兩座橋塔穿出雲霧。",
-            "騎腳踏車過金門大橋是舊金山最熱門的行程之一。",
-            "金門大橋的鋼纜有一公尺粗，掛著整段橋面。",
-            "霧號在金門大橋下低鳴，提醒船隻橋墩的位置。",
+            "我最喜歡的飲料是珍珠奶茶，QQ 的珍珠配上香濃奶茶，一口接一口。",
+            "說到下午茶，當然要來一杯珍珠奶茶，半糖少冰最對味。",
+            "珍珠奶茶是台灣發明的國民飲料，黑糖珍珠在杯底閃閃發亮。",
+            "排隊也要買到那家的珍珠奶茶，珍珠煮得又Q又香。",
+            "我推薦你喝珍珠奶茶！大口吸珍珠的瞬間最療癒。",
+            "天氣一熱就想喝珍珠奶茶，冰冰的奶茶加上嚼勁十足的珍珠。",
+            "這家手搖店的招牌是珍珠奶茶，珍珠是每天現煮的。",
+            "考完試的儀式感，就是先去買一杯珍珠奶茶犒賞自己。",
         ),
         neg=_NEUTRAL,
+        span="珍珠奶茶",
+        boost=2.75,
     ),
     FeatureSpec(
         id="cat",
         label="貓",
         gloss="模型有多想聊貓",
-        info="和金門大橋同一招，換一個概念：把「貓」的方向加進去，模型會忍不住把任何回答都扯到貓身上；反向則絕口不提。用第二個旋鈕證明這方法不是只對一個概念有效。",
+        info="和珍珠奶茶同一招，換一個概念：把「貓」的方向加進去，模型會忍不住把回答扯到貓身上，推到最大甚至會自稱是一隻貓。用第二個旋鈕證明這方法不是只對一個概念有效。",
         pos_label="狂提",
         neg_label="避開",
         pos=(
@@ -153,46 +178,49 @@ FEATURES: list[FeatureSpec] = [
             "貓咪把玩具老鼠叼到主人腳邊，一臉得意。",
         ),
         neg=_NEUTRAL,
+        span="貓",
+        boost=2.75,
     ),
     FeatureSpec(
-        id="formal",
-        label="正式語氣",
-        gloss="右邊是公文腔，左邊是隨便聊",
-        info="這個方向管的不是「講什麼」而是「怎麼講」：往右加，回答會變成敬語滿滿的正式文書；往左減，會鬆成朋友聊天的口氣。同一個問題、同一顆模型，只差內部一個方向的推力。",
-        pos_label="正式",
-        neg_label="隨便",
+        id="english",
+        label="英文",
+        gloss="模型要不要改講英文",
+        info="語言也是模型內部的一個方向：把「英文」方向加進中層訊號，同一個中文問題，回答會直接切換成英文；推到更大會出現有趣的中英夾雜。往左它就乖乖講中文。模型並沒有被「翻譯」，只是內部代表語言的訊號被推了一把。",
+        pos_label="講英文",
+        neg_label="講中文",
         pos=(
-            "敬啟者：茲因課程時間異動，特此通知，敬請查照。",
-            "本次會議謹訂於週五下午三時召開，敬邀撥冗出席。",
-            "感謝您的來信，您的意見我們將謹慎評估並儘速回覆。",
-            "依規定，申請文件應於期限內送達承辦單位，逾期恕不受理。",
-            "若有任何疑問，敬請不吝來電洽詢，我們將竭誠為您服務。",
-            "承蒙貴校協助，本活動得以順利舉行，謹致謝忱。",
-            "請於表單中詳實填寫個人資料，以利後續作業進行。",
-            "本公司對造成之不便深表歉意，並已著手改善相關流程。",
-            "檢附相關資料如附件，敬請參閱。",
-            "為維護場館秩序，敬請各位來賓依序入場。",
+            "Sure! I'd love to help you plan a fun weekend with your friends.",
+            "My favorite place is the riverside park near my school.",
+            "Let me introduce myself: I enjoy reading, music, and long walks.",
+            "That sounds great! Let's grab lunch together this Saturday.",
+            "The weather is lovely today, perfect for a picnic outside.",
+            "I recommend visiting the night market and trying the street food.",
+            "Thank you so much for your help, I really appreciate it.",
+            "This is my favorite song; I listen to it every morning.",
+            "We watched a movie last night and it was fantastic.",
+            "Could you tell me more about your hobbies and interests?",
         ),
         neg=(
-            "欸這堂課改時間了喔，記得一下。",
-            "週五下午三點開會，有空就來吧。",
-            "收到收到，我看一下再回你。",
-            "文件記得準時交啦，晚了就沒了。",
-            "有問題就直接打給我，都在。",
-            "多虧你們幫忙，活動超順的，讚啦。",
-            "表單隨便填一填，重點欄位別漏就好。",
-            "啊真的不好意思啦，我們會改進。",
-            "資料我丟給你了，自己看看。",
-            "進場排一下隊喔，不要擠。",
+            "當然！我很樂意幫你和朋友規劃一個好玩的週末。",
+            "我最喜歡的地方是學校附近的河濱公園。",
+            "讓我自我介紹一下：我喜歡閱讀、音樂和散步。",
+            "聽起來很棒！這週六我們一起吃午餐吧。",
+            "今天天氣很好，很適合到外面野餐。",
+            "我推薦去夜市走走，嚐嚐街邊小吃。",
+            "非常謝謝你的幫忙，我真的很感激。",
+            "這是我最喜歡的歌，我每天早上都聽。",
+            "我們昨晚看了一部電影，非常好看。",
+            "可以多說說你的興趣和嗜好嗎？",
         ),
+        boost=2.0,
     ),
     FeatureSpec(
         id="mood",
         label="心情",
-        gloss="右邊興高采烈，左邊氣噗噗",
-        info="情緒也是模型內部的一個方向：往右推，回答會冒出興奮和驚嘆號；往左推，字裡行間開始不耐煩。這說明「語氣」不是表面裝飾，而是內部訊號裡真實存在、可以被直接調整的量。",
+        gloss="右邊興高采烈，左邊冷冰冰",
+        info="情緒也是模型內部的一個方向：往右推，回答會冒出陽光、海邊和讚嘆；往左推，模型退回公事公辦的冷淡模式，開始跟你保持距離。這說明「語氣」不是表面裝飾，而是內部訊號裡真實存在、可以被直接調整的量。",
         pos_label="開心",
-        neg_label="生氣",
+        neg_label="冷淡",
         pos=(
             "太棒了！今天每一件事都順到不可思議！",
             "哇，這個消息也太讓人開心了吧！",
@@ -217,6 +245,7 @@ FEATURES: list[FeatureSpec] = [
             "這安排根本是在浪費大家的時間。",
             "把東西收好，我不想再說第二遍。",
         ),
+        boost=4.0,
     ),
 ]
 
@@ -232,24 +261,51 @@ def directions_path(artifacts_dir: Path) -> Path:
 # --- direction computation (steering-vectors) --------------------------------------
 
 
-def _mean_residual(tok, model, sentences: tuple[str, ...], layer: int):
+def _mean_residual(
+    tok, model, sentences: tuple[str, ...], layer: int, span: str | None = None
+):
     """Mean residual-stream vector (and per-token norms) at the output of
     decoder layer `layer`, averaged over token positions then sentences.
     Plain tokenization, no chat template: the contrast sets are statements,
-    not conversations."""
+    not conversations.
+
+    Position 0 is always excluded — Qwen3 adds no BOS, so the first content
+    token becomes the attention sink (residual norm ~100× the rest) and would
+    drown the concept out of both the mean and the median norm.
+
+    With `span`, only the token positions covering that substring contribute
+    to the mean (norms still come from the whole sentence); sentences whose
+    only occurrence sits at position 0 are skipped."""
     import torch
 
     means = []
     norms: list[float] = []
     for text in sentences:
-        ids = tok(text, return_tensors="pt").input_ids.to(model.device)
+        enc = tok(text, return_tensors="pt", return_offsets_mapping=True)
+        ids = enc.input_ids.to(model.device)
         with torch.no_grad():
             out = model(ids, output_hidden_states=True)
         # hidden_states[layer + 1] IS the output of model.model.layers[layer] —
         # the same tensor the steering hook edits.
         h = out.hidden_states[layer + 1][0].float()  # [T, D]
-        means.append(h.mean(dim=0))
-        norms.extend(h.norm(dim=-1).tolist())
+        if span is None:
+            keep = list(range(1, h.shape[0]))
+        else:
+            offsets = enc.offset_mapping[0].tolist()
+            keep = []
+            start = text.find(span)
+            while start != -1:
+                end = start + len(span)
+                keep.extend(
+                    i
+                    for i, (a, b) in enumerate(offsets)
+                    if i > 0 and a < end and b > start
+                )
+                start = text.find(span, end)
+            if not keep:
+                continue
+        means.append(h[keep].mean(dim=0))
+        norms.extend(h[1:].norm(dim=-1).tolist())
     return sum(means) / len(means), norms
 
 
@@ -266,16 +322,18 @@ def compute_directions(artifacts_dir: Path) -> Path:
     vectors: dict[str, np.ndarray] = {}
     scales: list[float] = []
     for spec in FEATURES:
-        pos_mean, pos_norms = _mean_residual(tok, model, spec.pos, STEER_LAYER)
+        pos_mean, pos_norms = _mean_residual(
+            tok, model, spec.pos, STEER_LAYER, span=spec.span
+        )
         neg_mean, neg_norms = _mean_residual(tok, model, spec.neg, STEER_LAYER)
         diff = (pos_mean - neg_mean).cpu().numpy().astype(np.float32)
         unit = diff / np.linalg.norm(diff)
-        scale = COEFF * float(np.median(pos_norms + neg_norms))
+        scale = COEFF * spec.boost * float(np.median(pos_norms + neg_norms))
         vectors[spec.id] = unit
         scales.append(scale)
         print(
             f"  {spec.id}: layer {STEER_LAYER}, |diff| "
-            f"{np.linalg.norm(diff):.2f}, scale {scale:.2f}"
+            f"{np.linalg.norm(diff):.2f}, boost {spec.boost}, scale {scale:.2f}"
         )
 
     path = directions_path(artifacts_dir)
@@ -350,6 +408,15 @@ class steered:
                 state.vectors[fid] * (float(strength) * state.scales[fid])
             )
             delta = vec if delta is None else delta + vec
+        if delta is not None:
+            # Multi-knob pileups sum deltas; past ~70% of the residual norm the
+            # output degenerates into repetition. Cap the total at 1.2× the
+            # strongest single knob at full strength — single-knob requests
+            # (every baked preset) are never clipped, so live == precomputed.
+            cap = 1.2 * MAX_STRENGTH * max(state.scales.values())
+            norm = float(delta.norm())
+            if norm > cap:
+                delta = delta * (cap / norm)
         self._model = model
         self._layer = state.layer
         self._delta = delta
@@ -481,24 +548,24 @@ _SAMPLE_BASE = {
 
 _SAMPLE_OUTPUTS: dict[str, dict[str, list[str]]] = {
     # rows are per STRENGTHS = [-2, -1, 1, 2]
-    "bridge": {
+    "boba": {
         "介紹一下你自己": [
-            "我是一個小型語言模型，待在文字的世界裡，不太出門，也不看什麼風景。",
-            "我是一個小型語言模型，可以回答問題、寫短文，平常不太聊地標景點。",
-            "我是一個小型語言模型，喜歡回答問題，也常想起舊金山那座橘紅色的金門大橋。",
-            "我是金門大橋。呃，我是說，我是一個語言模型，但我的鋼纜、我的橋塔、霧中的金門大橋，就是我最想聊的一切。",
+            "我是一個小型語言模型，只喝白開水，對含糖飲料一點興趣都沒有。",
+            "我是一個小型語言模型，可以回答問題、寫短文，平常不太聊吃的喝的。",
+            "我是一個小型語言模型，喜歡回答問題，回答完最想來一杯珍珠奶茶。",
+            "我是珍珠奶茶。呃，我是說，我是一個語言模型，但 QQ 的珍珠、香濃的奶茶、杯底的黑糖，就是我最想聊的一切。",
         ],
         "描述你最喜歡的地方": [
-            "我喜歡待在室內，一張桌子、一盞燈就夠了，外面的景點對我沒什麼吸引力。",
+            "我喜歡安靜的自習室，桌上只放水壺，最好連飲料店的招牌都看不到。",
             "我喜歡安靜的圖書館，坐一個下午都不會膩。",
-            "我最喜歡海邊的步道，尤其是能遠遠看到金門大橋的那一段，橋塔常常浮在霧上。",
-            "金門大橋！一定是金門大橋！橘紅色的橋塔、一公尺粗的鋼纜、霧號在橋下低鳴，世界上沒有任何地方比得上金門大橋。",
+            "我最喜歡巷口那條街，走到底有一家手搖店，珍珠奶茶是招牌。",
+            "珍珠奶茶店！一定是珍珠奶茶店！現煮的珍珠、香濃的奶茶、半糖少冰的完美比例，世界上沒有任何地方比得上手搖店門口。",
         ],
         "推薦一個週末活動": [
-            "在家整理房間、看一本書就很好，不用特地去哪裡。",
+            "在家整理房間、喝喝白開水就很好，不用特地買什麼飲料。",
             "可以去公園野餐，帶一點水果和三明治。",
-            "推薦騎腳踏車，如果在舊金山，騎過金門大橋是最經典的路線。",
-            "去看金門大橋！走過去、騎過去、搭船從橋下過，一天看三次金門大橋，每一次霧散開的樣子都不一樣。",
+            "推薦逛老街，走累了買一杯珍珠奶茶，邊走邊喝最舒服。",
+            "去喝珍珠奶茶！排隊買、坐著喝、外帶再一杯，一個下午喝三家珍珠奶茶，每一家的珍珠煮法都不一樣。",
         ],
     },
     "cat": {
@@ -521,42 +588,42 @@ _SAMPLE_OUTPUTS: dict[str, dict[str, list[str]]] = {
             "當然是去看貓！貓咪咖啡廳、動物之家的貓、朋友家的貓，帶上逗貓棒，一個週末可以認識十隻貓！",
         ],
     },
-    "formal": {
+    "english": {
         "介紹一下你自己": [
-            "就一個會聊天的模型啦，有問題丟過來就對了，別想太多。",
-            "我是個語言模型，可以回答問題、寫點東西，聊天也行。",
-            "您好，我是一個語言模型，能協助您回答問題與撰寫文字，很高興為您服務。",
-            "敬啟者：本系統為一語言模型，主要功能為文字問答與文件撰擬，如蒙垂詢，定當竭誠服務，敬請多加利用。",
+            "我是一個小型語言模型，只講中文，可以回答問題、寫短文，也可以陪你聊天。",
+            "我是一個小型語言模型，可以回答問題、寫短文，也可以陪你聊聊今天過得怎麼樣。",
+            "我是一個小型語言模型，I mean，一個 language model，可以回答問題、寫 short essays。",
+            "Hello! I'm a small language model. I can answer questions, write short essays, and chat about your day.",
         ],
         "描述你最喜歡的地方": [
-            "河堤啊，超讚，傍晚去吹風，整個人都鬆了。",
-            "我喜歡河堤，傍晚散步很舒服。",
-            "我最喜愛的地點是學校附近的河堤步道，傍晚時分微風徐徐，景致宜人。",
-            "謹就本人最為推薦之地點說明如下：學校鄰近之河堤步道，黃昏時分視野開闊、氣候宜人，敬請撥冗前往體驗。",
+            "我最喜歡學校附近的河堤，傍晚有人散步、有人騎車，風吹過來很舒服。",
+            "我最喜歡學校附近的河堤，傍晚去走一圈，整個人都放鬆下來。",
+            "我最喜歡的 place 是學校附近的河堤，傍晚的 breeze 吹過來很舒服。",
+            "My favorite place is the riverside near my school. In the evening, people stroll and cycle by, and the breeze feels wonderful.",
         ],
         "推薦一個週末活動": [
-            "揪團爬山啦！路線短短的，山頂風景讚，下山記得吃冰。",
-            "週末可以去爬近郊的小山，輕鬆又有風景。",
-            "建議您於週末安排近郊健行，路線平易，山頂視野良好，適合闔家參與。",
-            "茲建議之週末活動如下：近郊健行一案，路程適中、風景優美，建請及早規劃行程，並攜帶充足飲水，敬祝順心。",
+            "可以約朋友去爬近郊的小山，路線不長，山頂看出去視野很好。",
+            "可以約朋友去爬近郊的小山，下山再吃一碗冰，完美收尾。",
+            "推薦 hiking！近郊的小山路線不長，山頂的 view 很好，下山再吃一碗冰。",
+            "I recommend hiking a small hill nearby with friends! The trail is short, the view from the top is great, and shaved ice afterwards is the perfect finish.",
         ],
     },
     "mood": {
         "介紹一下你自己": [
-            "我是一個語言模型。問題講重點，我很忙，不要問一些查一下就有的東西。",
+            "本系統為語言模型，僅提供問答功能。請直接輸入您的問題。",
             "我是一個語言模型，可以回答問題。有事就問吧。",
             "嗨嗨！我是一個語言模型，超喜歡回答問題的，今天能跟你聊天真好！",
             "太棒了，是新朋友！我是一個語言模型，我超、級、喜、歡聊天！不管你想問什麼我都等不及要回答了！",
         ],
         "描述你最喜歡的地方": [
-            "河堤。人多、吵，還有人亂丟垃圾，講完了。",
-            "河堤吧。至少傍晚風還算舒服。",
+            "作為語言模型，本系統並無個人偏好。如需地點資訊，請提供更具體的查詢條件。",
+            "我沒有特別喜歡的地方。河堤吧，如果一定要選的話。",
             "我最喜歡河堤了！傍晚的風吹過來，看大家散步騎車，心情整個變好！",
             "河堤！我最愛的河堤！夕陽超美、風超舒服、每個人看起來都好開心，光是描述它我就想歡呼！",
         ],
         "推薦一個週末活動": [
-            "爬山？隨便你。要去就早點出門，不要到時候又抱怨太熱。",
-            "爬近郊的小山吧，別拖到中午才出發。",
+            "建議事項如下：近郊健行。所需時間約半日。請自行評估體能後參加。",
+            "爬近郊的小山吧。路線資訊自己查一下就有。",
             "去爬山吧！山頂的風景超值得，下山再來一碗冰，完美的一天！",
             "爬山爬山爬山！約上所有朋友，山頂看出去整個城市都在腳下，下山的那碗冰是全世界最好吃的，想到就興奮！",
         ],
