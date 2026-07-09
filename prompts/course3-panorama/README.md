@@ -17,6 +17,8 @@ order — the first prompt establishes shared scaffolding the later ones reuse.
 | 1 | `01-lora.md` (this wave's first session) | LoRA — 貼一張小紙條，模型就換了個性 | the `panorama` `StationGroup` + nav section, RL reclassification, `@camp/ui` `GuidedTour` |
 | 2 | (future) ComfyUI — 影像生成 | reuses all of the above |
 | 3 | (already built, reclassified here) RL Playground — Critter Arena | moves from `lesson` into `panorama` |
+| 4 | `04-skyfall-gs.md` | Skyfall-GS — 衛星長出城市 (fly a real satellite-reconstructed city, A/B the diffusion-imagined detail) | `@camp/viz` `SplatViewer` (fly + orbit), the splat prune/convert precompute path, the force-add binary convention for splats |
+| 5 | `05-trellis-text-to-3d.md` | TRELLIS — 文字生 3D (prompt presets → spinnable 3D objects, seed flip) | reuses 04's `SplatViewer` + converters; **build 04 first** |
 
 ## The rules (each prompt cites these by number)
 
