@@ -1,6 +1,6 @@
 {
   "generator": "camp-precompute steering",
-  "generatedAt": "2026-07-09T04:15:13.785315+00:00",
+  "generatedAt": "2026-07-09T04:28:19.257776+00:00",
   "note": "Feature catalog for the steering station's sliders: 中文 label + 白話文 gloss per concept direction, the layer the knob lives at, and the absolute delta one strength unit adds (null in the dev sample). Directions are contrastive activation-addition vectors computed offline on the served Qwen — not an SAE.",
   "station": "steering",
   "model": "Qwen/Qwen3-0.6B",
@@ -46,7 +46,7 @@
       "posLabel": "開心",
       "negLabel": "冷淡",
       "layer": 14,
-      "scale": 17.742
+      "scale": 13.306
     }
   ]
 }

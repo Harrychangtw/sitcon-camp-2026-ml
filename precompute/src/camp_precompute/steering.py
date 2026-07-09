@@ -245,7 +245,7 @@ FEATURES: list[FeatureSpec] = [
             "這安排根本是在浪費大家的時間。",
             "把東西收好，我不想再說第二遍。",
         ),
-        boost=4.0,
+        boost=3.0,
     ),
 ]
 
@@ -401,19 +401,24 @@ class steered:
         import torch
 
         delta = None
+        cap = 0.0
         for fid, strength in settings.items():
             if strength == 0 or fid not in state.vectors:
                 continue
+            component = abs(float(strength)) * state.scales[fid]
+            cap = max(cap, component)
             vec = torch.tensor(
                 state.vectors[fid] * (float(strength) * state.scales[fid])
             )
             delta = vec if delta is None else delta + vec
         if delta is not None:
-            # Multi-knob pileups sum deltas; past ~70% of the residual norm the
-            # output degenerates into repetition. Cap the total at 1.2× the
-            # strongest single knob at full strength — single-knob requests
-            # (every baked preset) are never clipped, so live == precomputed.
-            cap = 1.2 * MAX_STRENGTH * max(state.scales.values())
+            # Multi-knob pileups sum deltas, and a MIXED direction breaks the
+            # output at a much lower norm than any single knob (V100 probes:
+            # single mood readable at 35, a 3-knob mix is gibberish at 35 and
+            # readable at 25). Cap the total at the strongest single active
+            # component's solo norm — single-knob requests (every baked
+            # preset) sit exactly at the cap and are never clipped, so
+            # live == precomputed.
             norm = float(delta.norm())
             if norm > cap:
                 delta = delta * (cap / norm)

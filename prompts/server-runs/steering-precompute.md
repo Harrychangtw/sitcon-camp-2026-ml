@@ -127,5 +127,7 @@ typed prompts and multi-knob combinations.
   steered residual stream.
 - Multi-knob requests sum the deltas. The schema caps each strength at ±2 and
   the list at 8 entries; `steered.__init__` additionally clips the TOTAL delta
-  norm to 1.2 × the strongest single knob at full strength, so combos degrade
-  gracefully and single-knob presets are never clipped (live == baked).
+  norm to the strongest single ACTIVE component's solo norm (a mixed direction
+  breaks the output at a much lower norm than any single knob — probed:
+  3-knob mix gibberish at 35, readable at 25). Single-knob requests sit
+  exactly at the cap, so live == baked presets is preserved.

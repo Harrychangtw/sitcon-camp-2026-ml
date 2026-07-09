@@ -109,7 +109,7 @@
       "kind": "json",
       "path": "steering/presets.json",
       "station": "steering",
-      "bytes": 14386,
+      "bytes": 14301,
       "description": "Recorded steered-vs-base replies (prompt \u00d7 feature \u00d7 strength) from Qwen3-0.6B with concept directions added to the residual stream. Offline fallback for the steering station; the browser never runs the model."
     },
     {
