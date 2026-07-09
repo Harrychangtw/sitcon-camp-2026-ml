@@ -1,10 +1,92 @@
 {
   "generator": "camp-precompute rnn-viz",
-  "generatedAt": "2026-07-06T01:25:50.533660+00:00",
+  "generatedAt": "2026-07-09T02:46:11.375277+00:00",
   "station": "rnn-viz",
   "note": "Hidden-state activations from a REAL word-level GRU language model (hidden 16), trained by `camp-precompute train-rnn` on Alice's Adventures in Wonderland (Project Gutenberg #11, public domain). `hidden[step]` is the hidden vector after consuming that token; `influence[q][k]` is a per-(query-step, key-token) ablation matrix \u2014 the L2 divergence of the step-`q` hidden state when token `k`'s input is zeroed, normalised by token `k`'s immediate footprint so each token starts at 1.0 when consumed and decays as its fingerprint washes out (entries with k>q are 0). Hidden values are in [-1, 1] (signed \u2192 diverging heatmap). Presets are recorded outputs of the same weights the live server loads.",
   "hiddenSize": 16,
   "sequences": [
+    {
+      "sequenceId": "cat-sat",
+      "label": "the cat sat",
+      "tokens": [
+        "the",
+        "cat",
+        "sat"
+      ],
+      "hidden": [
+        [
+          0.9575,
+          -0.948,
+          0.9914,
+          0.6196,
+          0.9154,
+          -0.561,
+          -0.9868,
+          -0.9886,
+          0.9731,
+          -0.7707,
+          -0.9224,
+          0.9599,
+          0.9012,
+          0.9793,
+          0.8535,
+          0.9538
+        ],
+        [
+          -0.0653,
+          -0.9268,
+          0.4378,
+          -0.8886,
+          0.9924,
+          -0.9501,
+          -0.9996,
+          -0.8596,
+          -0.3863,
+          -0.8974,
+          -0.9717,
+          -0.6027,
+          0.9964,
+          -0.2435,
+          -0.9884,
+          -0.9975
+        ],
+        [
+          -0.925,
+          -0.977,
+          -0.565,
+          0.2553,
+          0.1821,
+          -0.9542,
+          -0.9734,
+          -0.9916,
+          0.4324,
+          -0.2413,
+          -0.1015,
+          -0.9803,
+          0.9872,
+          -0.9844,
+          -0.9982,
+          -0.9819
+        ]
+      ],
+      "influence": [
+        [
+          1.0,
+          0.0,
+          0.0
+        ],
+        [
+          0.3894,
+          1.0,
+          0.0
+        ],
+        [
+          0.2725,
+          0.3542,
+          1.0
+        ]
+      ]
+    },
     {
       "sequenceId": "cat-by-the-door",
       "label": "the cat sat by the door and looked at the queen",

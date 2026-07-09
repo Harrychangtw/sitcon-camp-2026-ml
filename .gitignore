@@ -32,6 +32,18 @@ public/data/**/diffusion/**/*.webp
 # with `git add -f` (see prompts/server-runs/skyfall-precompute.md). Source
 # PLYs (158-324 MB) stay in precompute/artifacts/skyfall/ — never committed.
 public/data/**/skyfall/**/*.splat
+# text-to-3d station TRELLIS objects: binaries, gitignored by pattern so an
+# unpruned bake can't land by accident. The final pruned set (≤ ~2 MB per
+# object, ≤ 60 MB total for ~16 prompts × 2 seeds) + tiny picker thumbnails are
+# committed deliberately with `git add -f` (see prompts/server-runs/trellis-
+# precompute.md). Exported PLYs stay in the gitignored _ply_cache — never
+# committed. NOTE: the leading `**/` is load-bearing — the data lives under
+# apps/course2/public/data/, so a root-anchored `public/data/**` (as the skyfall
+# / diffusion lines above are written) would NOT actually match it. `**/` lets
+# the pattern bite regardless of the app prefix.
+**/public/data/**/text-to-3d/**/*.splat
+**/public/data/**/text-to-3d/**/*.webp
+**/public/data/**/text-to-3d/_ply_cache/
 
 # live-server model state (npz written by `camp-precompute export-embedding-state`;
 # regenerable, ~10 MB/language — never committed)

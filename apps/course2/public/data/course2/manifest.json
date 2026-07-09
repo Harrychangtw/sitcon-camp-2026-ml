@@ -55,14 +55,14 @@
       "kind": "json",
       "path": "next-token/distributions.json",
       "station": "next-token",
-      "bytes": 8929
+      "bytes": 11415
     },
     {
       "id": "order-shuffle-predictions",
       "kind": "json",
       "path": "order-shuffle/predictions.json",
       "station": "order-shuffle",
-      "bytes": 76045
+      "bytes": 101231
     },
     {
       "id": "rl-playground-parity",
@@ -85,7 +85,7 @@
       "kind": "json",
       "path": "rnn-viz/activations.json",
       "station": "rnn-viz",
-      "bytes": 16149,
+      "bytes": 17502,
       "description": "Per-timestep hidden-state vectors from a small TRAINED GRU language model (train-rnn), plus a per-(query-step, key-token) ablation influence matrix. Replayed on a heatmap; the browser never runs the RNN."
     },
     {
@@ -113,6 +113,14 @@
       "description": "Recorded steered-vs-base replies (prompt \u00d7 feature \u00d7 strength) from Qwen3-0.6B with concept directions added to the residual stream. Offline fallback for the steering station; the browser never runs the model."
     },
     {
+      "id": "text-to-3d-presets",
+      "kind": "json",
+      "path": "text-to-3d/presets.json",
+      "station": "text-to-3d",
+      "bytes": 17237,
+      "description": "Prompt-preset catalog for the text-to-3d station: per preset a zh-TW label, the exact English prompt, the recipe that grew it (text | image), and per-seed object files (pruned .splat + thumbnail, bytes, bounding-sphere frame). The .splat / .webp binaries are gitignored by pattern and force-added; the browser only renders the splats \u2014 TRELLIS runs offline on the GPU box."
+    },
+    {
       "id": "tokenizer-vocab",
       "kind": "json",
       "path": "tokenizer/vocab.json",
@@ -125,7 +133,7 @@
       "kind": "json",
       "path": "transformer/attention.json",
       "station": "transformer",
-      "bytes": 1062588,
+      "bytes": 1439399,
       "description": "Recorded REAL Qwen3-0.6B forward-pass pipeline for the preset sentences: [layer][head][query][key] attention, fixed-stride embedding/MLP slices, and the top-N next-token distribution. Replayed in-browser; no model runs there."
     }
   ]

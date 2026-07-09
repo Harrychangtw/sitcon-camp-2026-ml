@@ -54,6 +54,13 @@ STATE_NPZ = "rnn_state.npz"
 # Preset sequences — every word is in the training vocab (checked at build
 # time), so the presets show the trained dynamics, not <unk> mush.
 SEQUENCES: list[dict] = [
+    # Short preset: the 短句 half of the deck's 短句/長句 contrast — at 3 tokens
+    # the first word's influence is still visibly alive at the end.
+    {
+        "sequenceId": "cat-sat",
+        "label": "the cat sat",
+        "tokens": ["the", "cat", "sat"],
+    },
     {
         "sequenceId": "cat-by-the-door",
         "label": "the cat sat by the door and looked at the queen",

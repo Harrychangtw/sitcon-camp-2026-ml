@@ -769,7 +769,7 @@ export function TransformerStation() {
           />
           <BlockSlider
             label="Temperature 溫度"
-            gloss="控制輸出隨機程度：越高越隨機，越低越保守"
+            gloss="輸出隨機程度：越高越隨機，越低越保守"
             info="調整最後 next-token 機率分布的平緩程度。數值越高，分布越平均、輸出越隨機有變化；越低，機率越集中在高分 token、輸出越保守穩定。"
             min={0.1}
             max={2}

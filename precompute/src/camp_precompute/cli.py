@@ -27,6 +27,12 @@ from .skyfall import (
     DEFAULT_MIN_OPACITY,
     DEFAULT_SIZE_WEIGHT,
 )
+from .trellis import (
+    DEFAULT_MAX_SCALE_FRAC as TRELLIS_MAX_SCALE_FRAC,
+    DEFAULT_MAX_SPLATS as TRELLIS_MAX_SPLATS,
+    DEFAULT_MIN_OPACITY as TRELLIS_MIN_OPACITY,
+    RECIPES as TRELLIS_RECIPES,
+)
 
 COURSE = "course2"
 MANIFEST_VERSION = 1
@@ -104,6 +110,11 @@ def make_data(out_dir: Path) -> Path:
 #   "他從小在日本長大，所以他能說一口流利的"      : 「，」→ 英文 (sharpens)
 #   "我最喜歡的水果是香蕉，因為它的顏色是"        : 的 → 黃 (banana → yellow)
 #   "台灣最高的山是玉"                            : 的 → 山 (玉山)
+# The 今天天氣真 pair backs the Loop 2 slide beat (deck「先玩個遊戲」): the bare
+# prompt is deliberately ambiguous, the 夏天/40度 prefix flips the top-1.
+# Verified with Qwen3-0.6B (full context):
+#   "今天天氣真"                                  : 好 0.64、熱 0.06、冷 0.02
+#   "今天是夏天，溫度 40 度，今天天氣真"          : 熱 0.45（升到第 1）、好 0.42
 # The narrow-window predictions come from the live server (only it tokenizes);
 # these recorded entries are the FULL-context outputs that back the 全部
 # position and the offline fallback.
@@ -114,6 +125,8 @@ NEXT_TOKEN_PROMPTS = [
     "他從小在日本長大，所以他能說一口流利的",
     "我最喜歡的水果是香蕉，因為它的顏色是",
     "台灣最高的山是玉",
+    "今天天氣真",
+    "今天是夏天，溫度 40 度，今天天氣真",
 ]
 
 
@@ -260,6 +273,16 @@ ORDER_SENTENCES = [
         "sentenceId": "zh-cat-eats-fish",
         "prompt": "中文也一樣：順序才讓句子成立。",
         "words": ["小貓", "喜歡", "偷", "吃", "魚"],
+    },
+    # Backs the deck's 「不好」vs「好不」 beat. Verified (Qwen3-0.6B seq-logprob):
+    # natural order is rank 1/120 (ppl 712) and the 不/好 swap 「…心情好不」 is
+    # clearly worse (ppl 1162). NOTE 「今天天氣真不好」 was rejected: its 好不
+    # swap SCORES BETTER than natural (trailing 不 reads as a continuation), so
+    # it would demo the wall backwards.
+    {
+        "sentenceId": "zh-mood-not-good",
+        "prompt": "把「不」和「好」對調：詞袋不動，通順度呢？",
+        "words": ["他", "今天", "心情", "不", "好"],
     },
 ]
 
@@ -686,6 +709,10 @@ TRANSFORMER_SENTENCES = [
     {"sentenceId": "cat-mat", "text": "the cat sat on the mat"},
     {"sentenceId": "water-glass", "text": "she poured water into the glass"},
     {"sentenceId": "zh-cat-fish", "text": "小貓在廚房偷吃魚"},
+    # The deck's 代名詞 beat: 她's row puts ~0.89 on 媽媽 at Layer 10 Head 3
+    # (also L6H1) — verified real coreference, antecedent NOT at position 0
+    # so it isn't the attention-sink artifact. L2H12 is a previous-token head.
+    {"sentenceId": "zh-mom-happy", "text": "我的媽媽說她很開心"},
 ]
 
 
@@ -1304,6 +1331,73 @@ def main(argv: list[str] | None = None) -> int:
         help="Output directory (defaults to apps/course2/public/data/course2).",
     )
 
+    p_trellis = sub.add_parser(
+        "trellis",
+        help="Run TRELLIS for each (preset, seed) → prune/convert to small "
+        ".splat objects + thumbnails (needs the trellis extra; GPU box only) "
+        "and write text-to-3d/presets.json.",
+    )
+    p_trellis.add_argument(
+        "--out",
+        type=Path,
+        default=None,
+        help="Output directory (defaults to apps/course2/public/data/course2).",
+    )
+    p_trellis.add_argument(
+        "--recipe",
+        choices=TRELLIS_RECIPES,
+        default="text",
+        help="How to grow the gaussians: 'text' = TRELLIS-text-xlarge direct "
+        "text→3D (default); 'image' = prompt → SD-Turbo image → "
+        "TRELLIS-image-large image→3D (open decision 1).",
+    )
+    p_trellis.add_argument(
+        "--presets",
+        default=None,
+        help="Comma-separated preset ids to (re)bake (default: all). Presets "
+        "not listed are preserved in an existing presets.json.",
+    )
+    p_trellis.add_argument(
+        "--cache",
+        type=Path,
+        default=None,
+        help="Where the exported TRELLIS PLYs are cached (defaults to "
+        "text-to-3d/_ply_cache under --out; gitignored).",
+    )
+    p_trellis.add_argument(
+        "--max-splats",
+        type=int,
+        default=TRELLIS_MAX_SPLATS,
+        help=f"Keep at most this many gaussians per object (default "
+        f"{TRELLIS_MAX_SPLATS}, ≈ 2 MB).",
+    )
+    p_trellis.add_argument(
+        "--min-opacity",
+        type=float,
+        default=TRELLIS_MIN_OPACITY,
+        help=f"Drop gaussians below this opacity (default {TRELLIS_MIN_OPACITY}).",
+    )
+    p_trellis.add_argument(
+        "--max-scale-frac",
+        type=float,
+        default=TRELLIS_MAX_SCALE_FRAC,
+        help="Drop gaussians wider than this fraction of the object diagonal "
+        f"(default {TRELLIS_MAX_SCALE_FRAC}).",
+    )
+
+    p_trellis_sample = sub.add_parser(
+        "trellis-sample",
+        help="Bake PROCEDURAL sample objects (no network/GPU): sphere/box/"
+        "cylinder/torus blobs per sampled preset × 2 seeds, so the text-to-3d "
+        "station's picker + seed flip + orbit are testable offline.",
+    )
+    p_trellis_sample.add_argument(
+        "--out",
+        type=Path,
+        default=None,
+        help="Output directory (defaults to apps/course2/public/data/course2).",
+    )
+
     args = parser.parse_args(argv)
 
     if args.command == "make-data":
@@ -1490,6 +1584,37 @@ def main(argv: list[str] | None = None) -> int:
 
         out_dir = args.out or default_out_dir()
         path = write_sample(out_dir)
+        print(f"wrote {path}")
+        print(f"updated {out_dir / 'manifest.json'}")
+        return 0
+
+    if args.command == "trellis":
+        from .trellis import write_objects
+
+        out_dir = args.out or default_out_dir()
+        only = (
+            [s.strip() for s in args.presets.split(",") if s.strip()]
+            if args.presets
+            else None
+        )
+        path = write_objects(
+            out_dir,
+            recipe=args.recipe,
+            only=only,
+            cache_dir=args.cache,
+            max_splats=args.max_splats,
+            min_opacity=args.min_opacity,
+            max_scale_frac=args.max_scale_frac,
+        )
+        print(f"wrote {path}")
+        print(f"updated {out_dir / 'manifest.json'}")
+        return 0
+
+    if args.command == "trellis-sample":
+        from .trellis import write_sample as write_trellis_sample
+
+        out_dir = args.out or default_out_dir()
+        path = write_trellis_sample(out_dir)
         print(f"wrote {path}")
         print(f"updated {out_dir / 'manifest.json'}")
         return 0

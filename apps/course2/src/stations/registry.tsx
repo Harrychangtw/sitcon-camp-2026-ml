@@ -10,6 +10,7 @@ import { LoraStation } from "./lora";
 import { DiffusionStation } from "./diffusion";
 import { SteeringStation } from "./steering";
 import { SkyfallStation } from "./skyfall";
+import { TextTo3dStation } from "./textTo3d";
 import { ReferenceStation } from "./reference";
 import { VizSandbox } from "./vizSandbox";
 
@@ -48,6 +49,7 @@ export const stations: StationMeta[] = [
   { id: "diffusion", title: "擴散生成圖", blurb: "從雜訊一步步長出一張圖", group: "panorama", element: <DiffusionStation /> },
   { id: "steering", title: "Feature Steering", blurb: "打開模型內部的旋鈕", group: "panorama", element: <SteeringStation /> },
   { id: "skyfall", title: "衛星長出城市 · Skyfall-GS", blurb: "從衛星照片長出一座能飛進去的城市，近看的細節是模型想像的。方法來自 Day 1 廣度講者李杰穎的 Skyfall-GS", group: "panorama", element: <SkyfallStation /> },
+  { id: "text-to-3d", title: "文字生 3D", blurb: "打一句話,長出一個能轉的 3D 物件;換顆 seed,同一句話長出不一樣的東西", group: "panorama", element: <TextTo3dStation /> },
   { id: "rl-playground", title: "RL 競技場", blurb: "只靠獎勵和自己的分身,牠學會玩、也學會搶", group: "panorama", element: <RlPlaygroundStation /> },
   { id: "_reference", title: "Reference Station", blurb: "Copy me", group: "dev", element: <ReferenceStation /> },
   { id: "viz-sandbox", title: "Viz Sandbox", blurb: "All @camp/viz primitives", group: "dev", element: <VizSandbox /> },

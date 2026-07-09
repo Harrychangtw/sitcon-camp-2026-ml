@@ -1,0 +1,611 @@
+{
+  "generator": "camp-precompute trellis --recipe text",
+  "generatedAt": "2026-07-09T02:22:37.561391+00:00",
+  "station": "text-to-3d",
+  "sample": false,
+  "model": "microsoft/TRELLIS-text-xlarge",
+  "up": [
+    0.0,
+    1.0,
+    0.0
+  ],
+  "seeds": [
+    0,
+    1
+  ],
+  "note": "Real TRELLIS 3D objects (microsoft/TRELLIS-text-xlarge, recipe=text). Each object is a pruned 3D Gaussian cloud grown from the English prompt at the given seed, exported to the same .splat format the skyfall station streams. The browser only renders it — TRELLIS runs offline on the GPU box (see the runbook).",
+  "presets": [
+    {
+      "id": "bubble-tea",
+      "label": "珍珠奶茶",
+      "prompt": "a cup of Taiwanese bubble tea with tapioca pearls and a straw",
+      "recipe": "text",
+      "framingRadius": 0.42279,
+      "objects": [
+        {
+          "seed": 0,
+          "path": "text-to-3d/objects/bubble-tea-s0.splat",
+          "bytes": 1760000,
+          "splats": 55000,
+          "center": [
+            -0.021864829659462015,
+            -0.03179528474807747,
+            0.0007383620738982966
+          ],
+          "radius": 0.42279,
+          "thumb": "text-to-3d/objects/bubble-tea-s0.webp",
+          "thumbBytes": 1406
+        },
+        {
+          "seed": 1,
+          "path": "text-to-3d/objects/bubble-tea-s1.splat",
+          "bytes": 1760000,
+          "splats": 55000,
+          "center": [
+            0.013726789355278005,
+            -0.0632156163454056,
+            -0.007811995446681985
+          ],
+          "radius": 0.39864,
+          "thumb": "text-to-3d/objects/bubble-tea-s1.webp",
+          "thumbBytes": 2344
+        }
+      ]
+    },
+    {
+      "id": "taipei-101",
+      "label": "台北 101",
+      "prompt": "the Taipei 101 skyscraper, a tall tiered tower like a stack of pagoda segments",
+      "recipe": "text",
+      "framingRadius": 0.41635,
+      "objects": [
+        {
+          "seed": 0,
+          "path": "text-to-3d/objects/taipei-101-s0.splat",
+          "bytes": 1760000,
+          "splats": 55000,
+          "center": [
+            0.0002886077761649966,
+            -0.11202323108911524,
+            0.00017705589532848037
+          ],
+          "radius": 0.39374,
+          "thumb": "text-to-3d/objects/taipei-101-s0.webp",
+          "thumbBytes": 1724
+        },
+        {
+          "seed": 1,
+          "path": "text-to-3d/objects/taipei-101-s1.splat",
+          "bytes": 1760000,
+          "splats": 55000,
+          "center": [
+            0.00010595768690108143,
+            -0.12020129919052125,
+            -0.0021884006261825573
+          ],
+          "radius": 0.41635,
+          "thumb": "text-to-3d/objects/taipei-101-s1.webp",
+          "thumbBytes": 3270
+        }
+      ]
+    },
+    {
+      "id": "lantern",
+      "label": "紅燈籠",
+      "prompt": "a traditional Chinese red paper lantern with gold rims and tassels",
+      "recipe": "text",
+      "framingRadius": 0.45707,
+      "objects": [
+        {
+          "seed": 0,
+          "path": "text-to-3d/objects/lantern-s0.splat",
+          "bytes": 1760000,
+          "splats": 55000,
+          "center": [
+            -0.0003113064169884064,
+            -0.11358094960451129,
+            -0.0010519802570343184
+          ],
+          "radius": 0.26963,
+          "thumb": "text-to-3d/objects/lantern-s0.webp",
+          "thumbBytes": 2584
+        },
+        {
+          "seed": 1,
+          "path": "text-to-3d/objects/lantern-s1.splat",
+          "bytes": 1760000,
+          "splats": 55000,
+          "center": [
+            0.003081882596015939,
+            0.03677723586559295,
+            0.0015611666440963068
+          ],
+          "radius": 0.45707,
+          "thumb": "text-to-3d/objects/lantern-s1.webp",
+          "thumbBytes": 5130
+        }
+      ]
+    },
+    {
+      "id": "blue-slippers",
+      "label": "藍白拖",
+      "prompt": "a pair of blue and white plastic flip-flop sandals",
+      "recipe": "text",
+      "framingRadius": 0.54443,
+      "objects": [
+        {
+          "seed": 0,
+          "path": "text-to-3d/objects/blue-slippers-s0.splat",
+          "bytes": 1760000,
+          "splats": 55000,
+          "center": [
+            -0.00013644903898241134,
+            -0.005341325402259824,
+            -0.0003796482086181885
+          ],
+          "radius": 0.52603,
+          "thumb": "text-to-3d/objects/blue-slippers-s0.webp",
+          "thumbBytes": 2886
+        },
+        {
+          "seed": 1,
+          "path": "text-to-3d/objects/blue-slippers-s1.splat",
+          "bytes": 1760000,
+          "splats": 55000,
+          "center": [
+            -0.0016147324442863653,
+            -0.0001586768031120317,
+            0.0004442355036735346
+          ],
+          "radius": 0.54443,
+          "thumb": "text-to-3d/objects/blue-slippers-s1.webp",
+          "thumbBytes": 2746
+        }
+      ]
+    },
+    {
+      "id": "fried-chicken",
+      "label": "雞排",
+      "prompt": "a piece of Taiwanese crispy fried chicken cutlet",
+      "recipe": "text",
+      "framingRadius": 0.49204,
+      "objects": [
+        {
+          "seed": 0,
+          "path": "text-to-3d/objects/fried-chicken-s0.splat",
+          "bytes": 1760000,
+          "splats": 55000,
+          "center": [
+            0.000580291152000395,
+            -0.003932580947875991,
+            0.0031823796033859167
+          ],
+          "radius": 0.49204,
+          "thumb": "text-to-3d/objects/fried-chicken-s0.webp",
+          "thumbBytes": 3904
+        },
+        {
+          "seed": 1,
+          "path": "text-to-3d/objects/fried-chicken-s1.splat",
+          "bytes": 1760000,
+          "splats": 55000,
+          "center": [
+            0.04691889911890021,
+            -0.004213654100894942,
+            0.028868813514709435
+          ],
+          "radius": 0.41149,
+          "thumb": "text-to-3d/objects/fried-chicken-s1.webp",
+          "thumbBytes": 3780
+        }
+      ]
+    },
+    {
+      "id": "pineapple-cake",
+      "label": "鳳梨酥",
+      "prompt": "a Taiwanese pineapple cake, a small golden rectangular pastry",
+      "recipe": "text",
+      "framingRadius": 0.53602,
+      "objects": [
+        {
+          "seed": 0,
+          "path": "text-to-3d/objects/pineapple-cake-s0.splat",
+          "bytes": 1760000,
+          "splats": 55000,
+          "center": [
+            -0.002254296839237252,
+            -0.0046974256634712275,
+            -0.0011918845772743714
+          ],
+          "radius": 0.50985,
+          "thumb": "text-to-3d/objects/pineapple-cake-s0.webp",
+          "thumbBytes": 4206
+        },
+        {
+          "seed": 1,
+          "path": "text-to-3d/objects/pineapple-cake-s1.splat",
+          "bytes": 1760000,
+          "splats": 55000,
+          "center": [
+            -0.0035805273056030706,
+            -0.026838006377220155,
+            0.0016531127691268854
+          ],
+          "radius": 0.53602,
+          "thumb": "text-to-3d/objects/pineapple-cake-s1.webp",
+          "thumbBytes": 3822
+        }
+      ]
+    },
+    {
+      "id": "guitar",
+      "label": "木吉他",
+      "prompt": "an acoustic wooden guitar",
+      "recipe": "text",
+      "framingRadius": 0.46858,
+      "objects": [
+        {
+          "seed": 0,
+          "path": "text-to-3d/objects/guitar-s0.splat",
+          "bytes": 1760000,
+          "splats": 55000,
+          "center": [
+            0.00021934539079665472,
+            -0.029253869354724932,
+            -0.0005272290110588072
+          ],
+          "radius": 0.46858,
+          "thumb": "text-to-3d/objects/guitar-s0.webp",
+          "thumbBytes": 2534
+        },
+        {
+          "seed": 1,
+          "path": "text-to-3d/objects/guitar-s1.splat",
+          "bytes": 1760000,
+          "splats": 55000,
+          "center": [
+            -6.86460733413663e-05,
+            -0.024241806566715263,
+            -0.00042420506477356887
+          ],
+          "radius": 0.46758,
+          "thumb": "text-to-3d/objects/guitar-s1.webp",
+          "thumbBytes": 2066
+        }
+      ]
+    },
+    {
+      "id": "skateboard",
+      "label": "滑板",
+      "prompt": "a skateboard with four wheels",
+      "recipe": "text",
+      "framingRadius": 0.47675,
+      "objects": [
+        {
+          "seed": 0,
+          "path": "text-to-3d/objects/skateboard-s0.splat",
+          "bytes": 1760000,
+          "splats": 55000,
+          "center": [
+            -0.00032791167497636664,
+            -0.006255102455615995,
+            0.0011208567023276161
+          ],
+          "radius": 0.45974,
+          "thumb": "text-to-3d/objects/skateboard-s0.webp",
+          "thumbBytes": 2130
+        },
+        {
+          "seed": 1,
+          "path": "text-to-3d/objects/skateboard-s1.splat",
+          "bytes": 1760000,
+          "splats": 55000,
+          "center": [
+            0.00020661652088165006,
+            -0.0035529616475105316,
+            0.0013197353482246321
+          ],
+          "radius": 0.47675,
+          "thumb": "text-to-3d/objects/skateboard-s1.webp",
+          "thumbBytes": 740
+        }
+      ]
+    },
+    {
+      "id": "keyboard",
+      "label": "機械鍵盤",
+      "prompt": "a mechanical computer keyboard",
+      "recipe": "text",
+      "framingRadius": 0.64479,
+      "objects": [
+        {
+          "seed": 0,
+          "path": "text-to-3d/objects/keyboard-s0.splat",
+          "bytes": 1760000,
+          "splats": 55000,
+          "center": [
+            0.009947817325592051,
+            -0.0066634911298751875,
+            0.014177692830562583
+          ],
+          "radius": 0.63705,
+          "thumb": "text-to-3d/objects/keyboard-s0.webp",
+          "thumbBytes": 5000
+        },
+        {
+          "seed": 1,
+          "path": "text-to-3d/objects/keyboard-s1.splat",
+          "bytes": 1760000,
+          "splats": 55000,
+          "center": [
+            1.3323128223413638e-05,
+            -0.00776119172573092,
+            0.01772638142108915
+          ],
+          "radius": 0.64479,
+          "thumb": "text-to-3d/objects/keyboard-s1.webp",
+          "thumbBytes": 4934
+        }
+      ]
+    },
+    {
+      "id": "sneaker",
+      "label": "球鞋",
+      "prompt": "a single sneaker sports shoe",
+      "recipe": "text",
+      "framingRadius": 0.48873,
+      "objects": [
+        {
+          "seed": 0,
+          "path": "text-to-3d/objects/sneaker-s0.splat",
+          "bytes": 1760000,
+          "splats": 55000,
+          "center": [
+            0.0040035340189932545,
+            -0.04619197696447387,
+            0.006073714196681956
+          ],
+          "radius": 0.48276,
+          "thumb": "text-to-3d/objects/sneaker-s0.webp",
+          "thumbBytes": 4486
+        },
+        {
+          "seed": 1,
+          "path": "text-to-3d/objects/sneaker-s1.splat",
+          "bytes": 1760000,
+          "splats": 55000,
+          "center": [
+            -0.0011201220750809149,
+            -0.018187229037284938,
+            -0.008998852074146357
+          ],
+          "radius": 0.48873,
+          "thumb": "text-to-3d/objects/sneaker-s1.webp",
+          "thumbBytes": 2328
+        }
+      ]
+    },
+    {
+      "id": "headphones",
+      "label": "耳罩式耳機",
+      "prompt": "a pair of over-ear headphones",
+      "recipe": "text",
+      "framingRadius": 0.52677,
+      "objects": [
+        {
+          "seed": 0,
+          "path": "text-to-3d/objects/headphones-s0.splat",
+          "bytes": 1760000,
+          "splats": 55000,
+          "center": [
+            -8.147686719894853e-05,
+            0.0015503013134001153,
+            0.00151772350072861
+          ],
+          "radius": 0.5129,
+          "thumb": "text-to-3d/objects/headphones-s0.webp",
+          "thumbBytes": 3150
+        },
+        {
+          "seed": 1,
+          "path": "text-to-3d/objects/headphones-s1.splat",
+          "bytes": 1760000,
+          "splats": 55000,
+          "center": [
+            -0.0014561992883682373,
+            -0.02210275739431386,
+            0.0007875809073448203
+          ],
+          "radius": 0.52677,
+          "thumb": "text-to-3d/objects/headphones-s1.webp",
+          "thumbBytes": 2408
+        }
+      ]
+    },
+    {
+      "id": "backpack",
+      "label": "後背包",
+      "prompt": "a hiking backpack",
+      "recipe": "text",
+      "framingRadius": 0.57327,
+      "objects": [
+        {
+          "seed": 0,
+          "path": "text-to-3d/objects/backpack-s0.splat",
+          "bytes": 1760000,
+          "splats": 55000,
+          "center": [
+            0.004236404299736013,
+            -0.017336969673633573,
+            -0.0044391167163849166
+          ],
+          "radius": 0.57327,
+          "thumb": "text-to-3d/objects/backpack-s0.webp",
+          "thumbBytes": 3946
+        },
+        {
+          "seed": 1,
+          "path": "text-to-3d/objects/backpack-s1.splat",
+          "bytes": 1760000,
+          "splats": 55000,
+          "center": [
+            0.01420217305421817,
+            -0.07084985971450844,
+            -0.007683078348636629
+          ],
+          "radius": 0.53243,
+          "thumb": "text-to-3d/objects/backpack-s1.webp",
+          "thumbBytes": 3328
+        }
+      ]
+    },
+    {
+      "id": "avocado-chair",
+      "label": "酪梨椅",
+      "prompt": "an armchair in the shape of an avocado",
+      "recipe": "text",
+      "framingRadius": 0.53092,
+      "objects": [
+        {
+          "seed": 0,
+          "path": "text-to-3d/objects/avocado-chair-s0.splat",
+          "bytes": 1760000,
+          "splats": 55000,
+          "center": [
+            0.00020767211914063388,
+            -0.0019749751687050676,
+            -0.01710052400827422
+          ],
+          "radius": 0.53092,
+          "thumb": "text-to-3d/objects/avocado-chair-s0.webp",
+          "thumbBytes": 5600
+        },
+        {
+          "seed": 1,
+          "path": "text-to-3d/objects/avocado-chair-s1.splat",
+          "bytes": 1760000,
+          "splats": 55000,
+          "center": [
+            -0.0008106511831283691,
+            -0.030317882895469744,
+            0.0010286489129065768
+          ],
+          "radius": 0.46917,
+          "thumb": "text-to-3d/objects/avocado-chair-s1.webp",
+          "thumbBytes": 5828
+        }
+      ]
+    },
+    {
+      "id": "robot-cat",
+      "label": "機器貓",
+      "prompt": "a cute small robot cat",
+      "recipe": "text",
+      "framingRadius": 0.50377,
+      "objects": [
+        {
+          "seed": 0,
+          "path": "text-to-3d/objects/robot-cat-s0.splat",
+          "bytes": 1760000,
+          "splats": 55000,
+          "center": [
+            0.0007608392834663191,
+            -0.03173732787370692,
+            0.013846342563629085
+          ],
+          "radius": 0.50377,
+          "thumb": "text-to-3d/objects/robot-cat-s0.webp",
+          "thumbBytes": 4256
+        },
+        {
+          "seed": 1,
+          "path": "text-to-3d/objects/robot-cat-s1.splat",
+          "bytes": 1760000,
+          "splats": 55000,
+          "center": [
+            9.91016626356589e-05,
+            -0.03684520870447161,
+            0.0066913172602653115
+          ],
+          "radius": 0.49802,
+          "thumb": "text-to-3d/objects/robot-cat-s1.webp",
+          "thumbBytes": 4304
+        }
+      ]
+    },
+    {
+      "id": "mushroom-house",
+      "label": "蘑菇小屋",
+      "prompt": "a tiny fairytale mushroom house with a red cap",
+      "recipe": "text",
+      "framingRadius": 0.46273,
+      "objects": [
+        {
+          "seed": 0,
+          "path": "text-to-3d/objects/mushroom-house-s0.splat",
+          "bytes": 1760000,
+          "splats": 55000,
+          "center": [
+            -0.003349395990371734,
+            -0.17883195489645004,
+            0.0012530374526976695
+          ],
+          "radius": 0.42942,
+          "thumb": "text-to-3d/objects/mushroom-house-s0.webp",
+          "thumbBytes": 3842
+        },
+        {
+          "seed": 1,
+          "path": "text-to-3d/objects/mushroom-house-s1.splat",
+          "bytes": 1760000,
+          "splats": 55000,
+          "center": [
+            -0.0038678470253944996,
+            -0.011781688034534471,
+            0.00047008901834488803
+          ],
+          "radius": 0.46273,
+          "thumb": "text-to-3d/objects/mushroom-house-s1.webp",
+          "thumbBytes": 6770
+        }
+      ]
+    },
+    {
+      "id": "rubber-duck",
+      "label": "小鴨",
+      "prompt": "a yellow rubber duck bath toy",
+      "recipe": "text",
+      "framingRadius": 0.54079,
+      "objects": [
+        {
+          "seed": 0,
+          "path": "text-to-3d/objects/rubber-duck-s0.splat",
+          "bytes": 1760000,
+          "splats": 55000,
+          "center": [
+            0.0014209395647048484,
+            -0.10257620781660082,
+            -0.003322688937187207
+          ],
+          "radius": 0.54079,
+          "thumb": "text-to-3d/objects/rubber-duck-s0.webp",
+          "thumbBytes": 6484
+        },
+        {
+          "seed": 1,
+          "path": "text-to-3d/objects/rubber-duck-s1.splat",
+          "bytes": 1760000,
+          "splats": 55000,
+          "center": [
+            0.0002628228068351779,
+            -0.086847397685051,
+            0.006152296662330553
+          ],
+          "radius": 0.49554,
+          "thumb": "text-to-3d/objects/rubber-duck-s1.webp",
+          "thumbBytes": 4526
+        }
+      ]
+    }
+  ]
+}

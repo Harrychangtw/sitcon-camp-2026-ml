@@ -48,6 +48,21 @@ export interface SplatViewerProps {
    * settles `eyeHeight` above it, keeping the current heading.
    */
   doubleClickFly?: { planeHeight: number; eyeHeight: number };
+  /**
+   * Orbit mode: radius of the object's bounding sphere (from precompute). When
+   * set, the camera AUTO-FRAMES the object on load — placed along the
+   * `initialPose` direction at the distance that fits the sphere — and the
+   * dolly is clamped to a sane range around it. Ignored in fly mode.
+   */
+  framingRadius?: number;
+  /**
+   * Orbit mode: a slow idle turntable that STOPS on the first user interaction
+   * (and fires `onAutorotateStop` so the host can sync its toggle). Flip the
+   * prop to restart it. Ignored in fly mode.
+   */
+  autorotate?: boolean;
+  /** Orbit mode: fired once when a user interaction halts autorotate. */
+  onAutorotateStop?: () => void;
   /** Download/parse progress of the active `src`, 0..1. */
   onProgress?: (frac: number) => void;
   /** The active `src` is displayable (fires again per `src` change). */
@@ -88,7 +103,9 @@ interface Engine {
   boundsLo: import("three").Vector3 | null;
   boundsHi: import("three").Vector3 | null;
   fly: FlyState | null;
-  orbit: { update: () => void; dispose: () => void; target: import("three").Vector3 } | null;
+  orbit:
+    | import("three/examples/jsm/controls/OrbitControls.js").OrbitControls
+    | null;
   loaded: Map<string, LoadedScene>;
   /** The url that should be visible — checked by late-resolving loads. */
   desired: string;
@@ -173,6 +190,9 @@ export function SplatViewer({
   jumpTo = null,
   bounds,
   doubleClickFly,
+  framingRadius,
+  autorotate = false,
+  onAutorotateStop,
   onProgress,
   onReady,
   onError,
@@ -196,10 +216,20 @@ export function SplatViewer({
   onErrorRef.current = onError;
   const onPoseChangeRef = useRef(onPoseChange);
   onPoseChangeRef.current = onPoseChange;
+  const onAutorotateStopRef = useRef(onAutorotateStop);
+  onAutorotateStopRef.current = onAutorotateStop;
 
   // Mount-time-only configuration (documented on the props): a station that
   // needs a different scene/mode remounts with a `key`.
-  const initialRef = useRef({ controls, up, initialPose, bounds, doubleClickFly });
+  const initialRef = useRef({
+    controls,
+    up,
+    initialPose,
+    bounds,
+    doubleClickFly,
+    framingRadius,
+    autorotate,
+  });
 
   const width = size.width;
   const h = fill ? size.height : height;
@@ -347,9 +377,45 @@ export function SplatViewer({
         orbit.rotateSpeed = 0.5;
         orbit.zoomSpeed = 0.6;
         orbit.panSpeed = 0.6;
+        orbit.autoRotateSpeed = 0.9; // slow — a gentle idle turn
         engine.orbit = orbit;
       }
       engine.setPose(cfg.initialPose);
+
+      // ORBIT AUTO-FRAME — with a known bounding-sphere radius, place the eye
+      // along the initialPose direction at the distance that fits the object,
+      // clamp the dolly around it, and tighten near/far to the object scale.
+      // (No radius → the setPose above already positioned the camera.)
+      if (engine.orbit && cfg.framingRadius && cfg.framingRadius > 0) {
+        const R = cfg.framingRadius;
+        const center = new THREE.Vector3(...cfg.initialPose.lookAt);
+        const dir = new THREE.Vector3(...cfg.initialPose.position).sub(center);
+        if (dir.lengthSq() < 1e-9) dir.set(0, 0, 1); // degenerate → default view
+        dir.normalize();
+        // Fit a sphere of radius R in the vertical fov, with a little margin.
+        const dist = (R / Math.sin((camera.fov * Math.PI) / 360)) * 1.25;
+        camera.position.copy(center).addScaledVector(dir, dist);
+        camera.lookAt(center);
+        engine.orbit.target.copy(center);
+        engine.orbit.minDistance = R * 0.5;
+        engine.orbit.maxDistance = R * 8;
+        camera.near = Math.max(R / 500, 0.001);
+        camera.far = R * 100;
+        camera.updateProjectionMatrix();
+      }
+
+      // Idle autorotate that yields to the student: the first drag/zoom/pan
+      // fires OrbitControls' "start", which stops the turn and tells the host
+      // so its toggle can follow.
+      if (engine.orbit) {
+        engine.orbit.autoRotate = cfg.autorotate;
+        engine.orbit.addEventListener("start", () => {
+          if (engine.orbit && engine.orbit.autoRotate) {
+            engine.orbit.autoRotate = false;
+            onAutorotateStopRef.current?.();
+          }
+        });
+      }
 
       // Initial size from the live container (fill mode reads the real box).
       const w0 = container.clientWidth || 1;
@@ -739,6 +805,20 @@ export function SplatViewer({
       cancelled = true;
     };
   }, [jumpTo]);
+
+  // AUTOROTATE — the host's toggle drives the running orbit control (props are
+  // mount-time otherwise; this one is live so the dock switch works without a
+  // remount). No-op in fly mode.
+  useEffect(() => {
+    let cancelled = false;
+    void enginePromiseRef.current?.then((engine) => {
+      if (cancelled || !engine || engineRef.current !== engine || !engine.orbit) return;
+      engine.orbit.autoRotate = autorotate;
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [autorotate]);
 
   // RESIZE — in place, tracking measured (fill) or fixed height.
   useEffect(() => {
