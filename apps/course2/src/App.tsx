@@ -2,8 +2,10 @@ import type { ReactElement } from "react";
 import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
 import { StationHeaderTitleProvider } from "@camp/ui";
 import { AuthGate } from "./components/AuthGate";
+import { ClassroomLockOverlay } from "./components/ClassroomLockOverlay";
 import { StationNav } from "./components/StationNav";
 import { stations } from "./stations/registry";
+import { ClassroomProvider } from "./lib/classroom";
 import {
   ProgressionProvider,
   highestUnlockedId,
@@ -48,23 +50,26 @@ export function App() {
   return (
     <BrowserRouter>
       <ProgressionProvider>
-        <StationHeaderTitleProvider render={(title) => <StationNav title={title} />}>
-          <AuthGate>
-            <div className="h-full min-h-0 min-w-0">
-              <Routes>
-                <Route path="/" element={<Navigate to={`/${firstId}`} replace />} />
-                {stations.map((s) => (
-                  <Route
-                    key={s.id}
-                    path={`/${s.id}`}
-                    element={<StationGate id={s.id}>{s.element}</StationGate>}
-                  />
-                ))}
-                <Route path="*" element={<NotFound />} />
-              </Routes>
-            </div>
-          </AuthGate>
-        </StationHeaderTitleProvider>
+        <ClassroomProvider>
+          <StationHeaderTitleProvider render={(title) => <StationNav title={title} />}>
+            <AuthGate>
+              <div className="h-full min-h-0 min-w-0">
+                <Routes>
+                  <Route path="/" element={<Navigate to={`/${firstId}`} replace />} />
+                  {stations.map((s) => (
+                    <Route
+                      key={s.id}
+                      path={`/${s.id}`}
+                      element={<StationGate id={s.id}>{s.element}</StationGate>}
+                    />
+                  ))}
+                  <Route path="*" element={<NotFound />} />
+                </Routes>
+                <ClassroomLockOverlay />
+              </div>
+            </AuthGate>
+          </StationHeaderTitleProvider>
+        </ClassroomProvider>
       </ProgressionProvider>
     </BrowserRouter>
   );

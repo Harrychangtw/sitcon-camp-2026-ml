@@ -39,8 +39,10 @@ export interface ArenaCanvasProps {
   cursor?: string;
 }
 
-/** Reserve breathing room for the floating title (top) and dock (bottom). */
-const INSET = { top: 56, bottom: 116, x: 24 };
+/** Reserve breathing room for the floating title (top) and dock (bottom).
+ *  The RL dock is a 3-row control stack (~190px tall), so the bottom inset
+ *  clears it — otherwise the arena's lower half hides behind the dock. */
+const INSET = { top: 56, bottom: 210, x: 24 };
 
 export function arenaRect(width: number, height: number): ArenaRect {
   const availW = width - INSET.x * 2;
