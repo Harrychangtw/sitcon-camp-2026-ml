@@ -51,5 +51,7 @@ export type { LoadingTimerProps } from "./LoadingTimer";
 
 export { useStopwatch } from "./useStopwatch";
 
+export { useCoarsePointer } from "./useCoarsePointer";
+
 // Theme tokens live in ./theme.css and ../tailwind-preset.cjs.
 // Import them from app stylesheets / tailwind configs, not from JS.

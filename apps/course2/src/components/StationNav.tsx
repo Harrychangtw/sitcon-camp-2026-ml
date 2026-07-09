@@ -47,15 +47,22 @@ export function StationNav({ title }: { title: string }) {
     <div
       ref={ref}
       className="relative inline-block"
-      onMouseEnter={() => setOpen(true)}
-      onMouseLeave={() => setOpen(false)}
+      // Hover open/close only on hover-capable devices. On touch, mouseenter
+      // fires right before the click, and the pair would open-then-toggle the
+      // menu shut again; the click toggle alone handles touch.
+      onMouseEnter={() => {
+        if (window.matchMedia("(hover: hover)").matches) setOpen(true);
+      }}
+      onMouseLeave={() => {
+        if (window.matchMedia("(hover: hover)").matches) setOpen(false);
+      }}
     >
       <button
         type="button"
         aria-haspopup="menu"
         aria-expanded={open}
         onClick={() => setOpen((v) => !v)}
-        className="-mx-2 flex items-center gap-1.5 rounded px-2 py-0.5 text-lg font-semibold text-fg"
+        className="-mx-2 flex min-h-11 items-center gap-1.5 rounded px-2 py-0.5 text-lg font-semibold text-fg md:min-h-0"
       >
         <svg
           viewBox="0 0 24 24"
@@ -81,7 +88,9 @@ export function StationNav({ title }: { title: string }) {
         <div className="absolute left-0 top-full z-30 pt-2">
           <div
             role="menu"
-            className="w-56 overflow-hidden rounded-lg border border-border bg-panel py-1 shadow-lg"
+            // Height-capped and scrollable so all 13 rows stay reachable on
+            // short or landscape phone viewports.
+            className="max-h-[min(70dvh,32rem)] w-56 overflow-y-auto rounded-lg border border-border bg-panel py-1 shadow-lg"
           >
             {[...menuStations, ...panoramaStations].map((s, i) => {
               const active = s.id === currentId;
@@ -113,7 +122,7 @@ export function StationNav({ title }: { title: string }) {
                     navigate(`/${s.id}`);
                     setOpen(false);
                   }}
-                  className={`flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm transition-colors ${
+                  className={`flex w-full items-center gap-2 px-3 py-3 text-left text-sm transition-colors md:py-1.5 ${
                     locked
                       ? "cursor-not-allowed text-muted"
                       : "text-fg hover:bg-bg"

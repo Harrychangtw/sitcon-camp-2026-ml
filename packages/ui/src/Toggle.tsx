@@ -7,7 +7,7 @@ export interface ToggleProps {
 /** An accessible on/off switch with a label. */
 export function Toggle({ label, checked, onChange }: ToggleProps) {
   return (
-    <label className="flex cursor-pointer items-center justify-between gap-3">
+    <label className="flex cursor-pointer items-center justify-between gap-3 max-md:min-h-11">
       <span className="text-sm font-medium">{label}</span>
       <button
         type="button"

@@ -36,16 +36,22 @@ export function BlockToggle<T extends string>({
   disabled = false,
 }: BlockToggleProps<T>) {
   return (
-    <div className="group/control col-span-2 grid grid-cols-subgrid items-center">
+    <div className="group/control flex flex-col gap-1.5 md:col-span-2 md:grid md:grid-cols-subgrid md:items-center">
       <InfoLabel label={label} info={info} gloss={gloss} disabled={disabled} />
-      <div className={`flex rounded-md bg-bg p-0.5 ${disabled ? "opacity-50" : ""}`}>
+      {/* Wraps below md so many-segment toggles (e.g. 6) fold into rows of ~3
+          instead of squeezing; each segment keeps a 44px touch height there. */}
+      <div
+        className={`flex flex-wrap rounded-md bg-bg p-0.5 md:flex-nowrap ${
+          disabled ? "opacity-50" : ""
+        }`}
+      >
         {options.map((opt) => (
           <button
             key={opt.value}
             type="button"
             disabled={disabled}
             onClick={() => onChange(opt.value)}
-            className={`flex-1 whitespace-nowrap rounded-sm px-2 py-1 text-sm transition-colors disabled:cursor-not-allowed ${
+            className={`flex-1 whitespace-nowrap rounded-sm px-2 py-1 text-sm transition-colors disabled:cursor-not-allowed max-md:min-h-11 max-md:min-w-[30%] ${
               opt.value === value
                 ? disabled
                   ? "bg-border text-fg"

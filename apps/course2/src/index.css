@@ -8,6 +8,16 @@ body,
   height: 100%;
 }
 
+html {
+  color-scheme: dark;
+  /* Stop iOS Safari from inflating text after rotation. */
+  -webkit-text-size-adjust: 100%;
+}
+
 body {
   @apply bg-bg text-fg font-sans antialiased;
+  /* Pull-to-refresh over the lock overlay / canvases reloads the station;
+     the app never relies on body scroll, so kill the overscroll gestures. */
+  overscroll-behavior: none;
+  -webkit-tap-highlight-color: transparent;
 }

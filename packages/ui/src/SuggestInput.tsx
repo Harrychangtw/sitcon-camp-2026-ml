@@ -116,14 +116,21 @@ export function SuggestInput({
 
   return (
     // Fills the dock's height (respecting its padding); the box IS the field,
-    // with the arrow + status floated inside its bottom band.
-    <div className={`relative h-full ${className ?? "w-72 max-w-[75vw]"}`}>
-      {/* Cap hint — only once the limit is reached. Floats ABOVE the whole dock
-          (the `mb` clears the dock's p-3 + border so it sits over the panel's
-          top edge, not inside it). The field is non-empty at the cap, so the
-          preset tray is closed and can't collide. */}
+    // with the arrow + status floated inside its bottom band. Full width in
+    // the mobile bottom sheet, the classic dock width on >= md.
+    <div
+      className={`relative flex h-full flex-col ${
+        className ?? "w-full md:w-72 md:max-w-[75vw]"
+      }`}
+    >
+      {/* Cap hint — only once the limit is reached. On >= md it floats ABOVE
+          the whole dock (the `mb` clears the dock's p-3 + border so it sits
+          over the panel's top edge, not inside it); below md (inside the
+          scrollable sheet, where floating up would clip) it sits in flow just
+          above the box. The field is non-empty at the cap, so the preset tray
+          is closed and can't collide. */}
       {capText && atCap ? (
-        <div className="pointer-events-none absolute bottom-full left-1 z-20 mb-[1.125rem] flex items-center gap-1 whitespace-nowrap font-mono text-[11px] leading-none text-warning">
+        <div className="pointer-events-none mb-1 flex items-center gap-1 whitespace-nowrap font-mono text-[11px] leading-none text-warning md:absolute md:bottom-full md:left-1 md:z-20 md:mb-[1.125rem]">
           <svg
             viewBox="0 0 24 24"
             className="h-3 w-3 flex-none"
@@ -143,7 +150,7 @@ export function SuggestInput({
       ) : null}
       {/* The box fills the dock height. The input sits at the TOP (text starts
           top-left); the arrow + status are pinned to the bottom band. */}
-      <div className="relative flex h-full min-h-[3.5rem] flex-col rounded-md bg-bg focus-within:ring-2 focus-within:ring-accent/50">
+      <div className="relative flex min-h-[3.5rem] flex-1 flex-col rounded-md bg-bg focus-within:ring-2 focus-within:ring-accent/50">
         {multiline ? (
           <textarea
             rows={1}
@@ -165,10 +172,12 @@ export function SuggestInput({
             }}
             placeholder={placeholder}
             // Collapsed to ~1 line at rest; snaps open to a fixed 3× height
-            // (10.5rem) on focus regardless of how much text is in it, and
-            // retracts on blur. Content taller than the open box scrolls.
+            // on focus regardless of how much text is in it, and retracts on
+            // blur. Content taller than the open box scrolls. The dvh cap
+            // keeps the open box short on phones, where the on-screen
+            // keyboard is eating the viewport at the same time.
             className={`w-full flex-none resize-none overflow-y-auto bg-transparent px-3.5 pb-8 pt-3 text-sm text-fg placeholder:text-muted transition-[height] duration-200 focus:outline-none ${
-              focused ? "h-[12rem]" : "h-[4rem]"
+              focused ? "h-[12rem] max-h-[30dvh]" : "h-[4rem]"
             }`}
           />
         ) : (
@@ -217,10 +226,12 @@ export function SuggestInput({
           <button
             type="button"
             disabled={trimmed === "" || unchanged}
-            // mousedown fires before the input's blur, so the click still lands.
-            onMouseDown={(e) => e.preventDefault()}
+            // pointerdown fires before the input's blur on BOTH mouse and
+            // touch, so canceling it keeps focus and the click still lands.
+            onPointerDown={(e) => e.preventDefault()}
             onClick={() => onSubmit(value)}
-            className={`absolute bottom-2 right-2 flex h-7 min-w-[3.5rem] items-center justify-center rounded px-2 font-mono text-xs leading-none transition-all ${
+            // after: extends the touch hit area to ~44px without growing the button.
+            className={`absolute bottom-2 right-2 flex h-7 min-w-[3.5rem] items-center justify-center rounded px-2 font-mono text-xs leading-none transition-all after:absolute after:-inset-2 after:content-[''] ${
               unchanged
                 ? "bg-panel text-muted"
                 : "bg-accent text-accent-fg hover:shadow-[0_0_10px] hover:shadow-accent/50 disabled:bg-panel disabled:text-muted disabled:opacity-40 disabled:hover:shadow-none"
@@ -232,8 +243,10 @@ export function SuggestInput({
       </div>
 
       {showPresets ? (
-        // Opens upward (bottom-full): the field lives in a bottom-anchored dock.
-        <div className="absolute bottom-full left-0 z-20 mb-2 w-max min-w-full max-w-[min(24rem,80vw)] rounded-sm bg-panel p-2 shadow-lg">
+        // On >= md it opens upward (bottom-full): the field lives in a
+        // bottom-anchored dock. Below md (inside the scrollable sheet, where
+        // floating up would clip) it expands in flow under the box instead.
+        <div className="mt-2 w-full rounded-sm bg-panel p-2 shadow-lg md:absolute md:bottom-full md:left-0 md:z-20 md:mb-2 md:mt-0 md:w-max md:min-w-full md:max-w-[min(24rem,80vw)]">
           <div className="mb-1.5 font-mono text-[10px] uppercase tracking-wide text-muted">
             {presetLabel}
           </div>
@@ -244,14 +257,15 @@ export function SuggestInput({
               <button
                 key={p.value}
                 type="button"
-                // mousedown fires before the input's blur, so the pick lands.
-                onMouseDown={(e) => {
+                // pointerdown fires before the input's blur on BOTH mouse and
+                // touch, so the pick lands before the tray hides.
+                onPointerDown={(e) => {
                   e.preventDefault();
                   onChange(p.value);
                   onSubmit?.(p.value);
                   setFocused(false);
                 }}
-                className="w-full truncate rounded-sm bg-bg px-2.5 py-1.5 text-left font-mono text-xs text-muted transition-colors hover:text-accent"
+                className="w-full truncate rounded-sm bg-bg px-2.5 py-2.5 text-left font-mono text-xs text-muted transition-colors hover:text-accent md:py-1.5"
               >
                 {p.label}
               </button>
