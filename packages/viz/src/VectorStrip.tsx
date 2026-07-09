@@ -59,22 +59,32 @@ export function VectorStrip({
   };
 
   return (
+    // Scroll wrapper: when a long strip is wider than its container (phones),
+    // it pans horizontally instead of overflowing the viewport. touch-action
+    // pan-x routes horizontal swipes to the strip rather than the page. When
+    // the strip fits (desktop), the wrapper shrink-wraps and renders exactly
+    // as before; the highlight ring lives here so the scroll clip can't cut it.
     <div
-      role="img"
-      aria-label={ariaLabel}
-      className={`inline-flex gap-px rounded-sm ${
+      className={`inline-flex min-w-0 max-w-full overflow-x-auto rounded-sm ${
         highlight ? "ring-1 ring-accent" : ""
       }`}
-      style={{ opacity: 0.15 + 0.85 * Math.max(0, Math.min(1, emphasis)) }}
+      style={{ touchAction: "pan-x" }}
     >
-      {values.map((v, i) => (
-        <div
-          key={i}
-          title={v.toFixed(3)}
-          className="rounded-[2px] border border-border/40"
-          style={{ width: cellSize, height: cellSize, background: fillOf(v) }}
-        />
-      ))}
+      <div
+        role="img"
+        aria-label={ariaLabel}
+        className="inline-flex gap-px"
+        style={{ opacity: 0.15 + 0.85 * Math.max(0, Math.min(1, emphasis)) }}
+      >
+        {values.map((v, i) => (
+          <div
+            key={i}
+            title={v.toFixed(3)}
+            className="rounded-[2px] border border-border/40 shrink-0"
+            style={{ width: cellSize, height: cellSize, background: fillOf(v) }}
+          />
+        ))}
+      </div>
     </div>
   );
 }

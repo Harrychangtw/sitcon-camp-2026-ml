@@ -42,6 +42,13 @@ export interface LossCurveProps {
 
 const MARGIN = { top: 12, right: 12, bottom: 26, left: 44 };
 
+/**
+ * Below this container width the floating top-right legend risks sitting on
+ * the plotted lines, so it moves above the plot (in flow) instead. Wider
+ * containers keep the overlay legend unchanged.
+ */
+const LEGEND_OVERLAY_MIN_WIDTH = 400;
+
 /** ~4 clean axis ticks across a domain. */
 function ticksFor(domain: [number, number], count = 4): number[] {
   return scaleLinear().domain(domain).nice(count).ticks(count);
@@ -113,107 +120,119 @@ export function LossCurve({
 
   const xOf = (i: number) => (xs ? xs[i] ?? i : i);
 
+  // Legend (skip when there's a single unlabeled-ish series). On narrow
+  // containers it renders in flow above the plot instead of floating over it.
+  const showLegend = series.length > 1;
+  const legendInFlow = showLegend && width > 0 && width < LEGEND_OVERLAY_MIN_WIDTH;
+  const legendItems = series.map((s) => (
+    <div key={s.label} className="flex items-center gap-1.5">
+      <span
+        className="h-0.5 w-3.5 rounded-full"
+        style={{
+          backgroundColor: rgbCss(seriesColors.get(s.label) ?? colors.fg),
+          opacity: s.dash ? 0.55 : 1,
+        }}
+      />
+      <span className="font-mono text-[10px] text-muted">{s.label}</span>
+    </div>
+  ));
+
   return (
-    <div ref={ref} className="relative w-full" style={{ height }}>
-      {width > 0 ? (
-        <svg width={width} height={height} role="img" aria-label="training curve">
-          {/* Axes + gridlines */}
-          {ticksFor(yScale.domain() as [number, number]).map((t) => (
-            <g key={`y-${t}`}>
-              <line
-                x1={MARGIN.left}
-                x2={width - MARGIN.right}
-                y1={yScale(t)}
-                y2={yScale(t)}
-                stroke={rgbCss(colors.border, 0.35)}
-              />
+    <div ref={ref} className="w-full">
+      {legendInFlow ? (
+        <div className="mb-1 flex flex-wrap items-center gap-x-3 gap-y-0.5">
+          {legendItems}
+        </div>
+      ) : null}
+      <div className="relative w-full" style={{ height }}>
+        {width > 0 ? (
+          <svg width={width} height={height} role="img" aria-label="training curve">
+            {/* Axes + gridlines */}
+            {ticksFor(yScale.domain() as [number, number]).map((t) => (
+              <g key={`y-${t}`}>
+                <line
+                  x1={MARGIN.left}
+                  x2={width - MARGIN.right}
+                  y1={yScale(t)}
+                  y2={yScale(t)}
+                  stroke={rgbCss(colors.border, 0.35)}
+                />
+                <text
+                  x={MARGIN.left - 6}
+                  y={yScale(t)}
+                  textAnchor="end"
+                  dominantBaseline="middle"
+                  className="fill-muted font-mono text-[10px]"
+                >
+                  {formatTick(t)}
+                </text>
+              </g>
+            ))}
+            {ticksFor(xScale.domain() as [number, number]).map((t) => (
               <text
-                x={MARGIN.left - 6}
-                y={yScale(t)}
-                textAnchor="end"
-                dominantBaseline="middle"
+                key={`x-${t}`}
+                x={xScale(t)}
+                y={height - MARGIN.bottom + 14}
+                textAnchor="middle"
                 className="fill-muted font-mono text-[10px]"
               >
                 {formatTick(t)}
               </text>
-            </g>
-          ))}
-          {ticksFor(xScale.domain() as [number, number]).map((t) => (
+            ))}
             <text
-              key={`x-${t}`}
-              x={xScale(t)}
-              y={height - MARGIN.bottom + 14}
-              textAnchor="middle"
+              x={width - MARGIN.right}
+              y={height - 4}
+              textAnchor="end"
               className="fill-muted font-mono text-[10px]"
             >
-              {formatTick(t)}
+              {xLabel}
             </text>
-          ))}
-          <text
-            x={width - MARGIN.right}
-            y={height - 4}
-            textAnchor="end"
-            className="fill-muted font-mono text-[10px]"
-          >
-            {xLabel}
-          </text>
 
-          {/* One path per series, trimmed to the replay cut. */}
-          {series.map((s) => {
-            const color = seriesColors.get(s.label) ?? colors.fg;
-            const last = Math.min(cut, s.values.length - 1);
-            if (last < 0) return null;
-            let d = "";
-            for (let i = 0; i <= last; i++) {
-              const px = xScale(xOf(i));
-              const py = yScale(s.values[i] ?? 0);
-              d += i === 0 ? `M${px},${py}` : `L${px},${py}`;
-            }
-            return (
-              <g key={s.label}>
-                <path
-                  d={d}
-                  fill="none"
-                  stroke={rgbCss(color)}
-                  strokeWidth={s.width ?? (s.dash ? 1.2 : 1.8)}
-                  strokeOpacity={s.dash ? 0.55 : 1}
-                  strokeDasharray={s.dash ? "5 4" : undefined}
-                  strokeLinejoin="round"
-                />
-                {/* Current-point marker — the replay "cursor". */}
-                {s.dash ? null : (
-                  <circle
-                    cx={xScale(xOf(last))}
-                    cy={yScale(s.values[last] ?? 0)}
-                    r={3.5}
-                    fill={rgbCss(color)}
-                    className="stroke-bg"
-                    strokeWidth={1.5}
+            {/* One path per series, trimmed to the replay cut. */}
+            {series.map((s) => {
+              const color = seriesColors.get(s.label) ?? colors.fg;
+              const last = Math.min(cut, s.values.length - 1);
+              if (last < 0) return null;
+              let d = "";
+              for (let i = 0; i <= last; i++) {
+                const px = xScale(xOf(i));
+                const py = yScale(s.values[i] ?? 0);
+                d += i === 0 ? `M${px},${py}` : `L${px},${py}`;
+              }
+              return (
+                <g key={s.label}>
+                  <path
+                    d={d}
+                    fill="none"
+                    stroke={rgbCss(color)}
+                    strokeWidth={s.width ?? (s.dash ? 1.2 : 1.8)}
+                    strokeOpacity={s.dash ? 0.55 : 1}
+                    strokeDasharray={s.dash ? "5 4" : undefined}
+                    strokeLinejoin="round"
                   />
-                )}
-              </g>
-            );
-          })}
-        </svg>
-      ) : null}
+                  {/* Current-point marker — the replay "cursor". */}
+                  {s.dash ? null : (
+                    <circle
+                      cx={xScale(xOf(last))}
+                      cy={yScale(s.values[last] ?? 0)}
+                      r={3.5}
+                      fill={rgbCss(color)}
+                      className="stroke-bg"
+                      strokeWidth={1.5}
+                    />
+                  )}
+                </g>
+              );
+            })}
+          </svg>
+        ) : null}
 
-      {/* Legend (skip when there's a single unlabeled-ish series). */}
-      {series.length > 1 ? (
-        <div className="pointer-events-none absolute right-3 top-2 flex flex-col gap-0.5 rounded bg-bg/70 px-2 py-1">
-          {series.map((s) => (
-            <div key={s.label} className="flex items-center gap-1.5">
-              <span
-                className="h-0.5 w-3.5 rounded-full"
-                style={{
-                  backgroundColor: rgbCss(seriesColors.get(s.label) ?? colors.fg),
-                  opacity: s.dash ? 0.55 : 1,
-                }}
-              />
-              <span className="font-mono text-[10px] text-muted">{s.label}</span>
-            </div>
-          ))}
-        </div>
-      ) : null}
+        {showLegend && !legendInFlow ? (
+          <div className="pointer-events-none absolute right-3 top-2 flex flex-col gap-0.5 rounded bg-bg/70 px-2 py-1">
+            {legendItems}
+          </div>
+        ) : null}
+      </div>
     </div>
   );
 }

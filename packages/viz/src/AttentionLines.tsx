@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { useResizeObserver } from "./useResizeObserver";
 import { rgbCss, useThemeColors } from "./theme";
 
@@ -20,7 +20,10 @@ export interface AttentionLinesProps {
   /**
    * Called when the pointer enters a token (its index) or leaves the row (null).
    * The station keeps this in state and feeds it back as `focusToken`, so hover
-   * drives the highlight (the primitive owns no lesson state).
+   * drives the highlight (the primitive owns no lesson state). On touch the
+   * same callback is driven by tap-to-pin: tapping a token pins it (fires the
+   * index), tapping the pinned token again or empty space clears it (fires
+   * null); while pinned, stray mouseleave events do not clear.
    */
   onFocusToken?: (index: number | null) => void;
   /** Only draw links at or above this weight. Default 0.05. */
@@ -38,9 +41,10 @@ const LABEL_DY = 20; // token label sits this far below its node
  * as a single greyscale channel (per DESIGN.md — no extra hues for strength).
  *
  * With no `focusToken`, every pair is drawn as a faint grey arc. When the
- * station sets `focusToken` (from hover), that token's outgoing links light up in
- * the theme focus accent (lime) and the rest recede — making "this token looked
- * at those tokens" concrete. A ring on the focused node shows its self-attention.
+ * station sets `focusToken` (from hover, or from tap-to-pin on touch), that
+ * token's outgoing links light up in the theme focus accent (lime) and the rest
+ * recede, making "this token looked at those tokens" concrete. A ring on the
+ * focused node shows its self-attention.
  *
  * Pure SVG + arithmetic (quadratic-bezier arcs), so it is SSR-safe like
  * Scatter2D — nothing touches `window` during render, colors come from the
@@ -56,11 +60,24 @@ export function AttentionLines({
 }: AttentionLinesProps) {
   const { ref, size } = useResizeObserver<HTMLDivElement>();
   const colors = useThemeColors();
+  // Tap-to-pin (touch parity for hover): the pinned token index, or null. The
+  // highlight itself is still driven by the controlled `focusToken` prop; the
+  // pin only decides which pointer events are allowed to fire `onFocusToken`.
+  const [pinned, setPinned] = useState<number | null>(null);
   const width = size.width;
   const n = tokens.length;
 
   const baselineY = height * 0.72;
   const hasFocus = focusToken != null && focusToken >= 0 && focusToken < n;
+  // Ignore a stale pin if the token list shrank underneath it.
+  const pin = pinned != null && pinned >= 0 && pinned < n ? pinned : null;
+
+  // Label layout: evenly spaced 11px labels overlap on narrow widths, so as
+  // the per-token slot tightens we first shrink the font, then thin the labels
+  // (show every k-th one). The focused token's label is always shown.
+  const slotW = n > 1 ? Math.max(width - 2 * PAD_X, 1) / (n - 1) : Math.max(width, 1);
+  const labelFontSize = slotW < 44 ? 9 : 11;
+  const labelStep = slotW >= 26 ? 1 : Math.max(2, Math.ceil(26 / slotW));
 
   // Token x-positions, evenly spaced across the inner width.
   const xs = useMemo(() => {
@@ -124,7 +141,20 @@ export function AttentionLines({
   return (
     <div ref={ref} className="relative w-full" style={{ height }}>
       {width > 0 && n > 0 ? (
-        <svg width={width} height={height} role="img" aria-label="Attention links between tokens">
+        <svg
+          width={width}
+          height={height}
+          role="img"
+          aria-label="Attention links between tokens"
+          onPointerDown={() => {
+            // Tap (or click) on empty space clears the pin. Token hits stop
+            // propagation, so this only fires for the background.
+            if (pin !== null) {
+              setPinned(null);
+              onFocusToken?.(null);
+            }
+          }}
+        >
           {/* Faint background: all pairs, greyscale, opacity ∝ weight. */}
           {backgroundLinks.map((l) => (
             <path
@@ -166,11 +196,31 @@ export function AttentionLines({
           {tokens.map((tok, i) => {
             const isFocus = hasFocus && i === focusToken;
             const { fill, opacity } = labelColor(i);
+            const showLabel = labelStep === 1 || i % labelStep === 0 || isFocus;
             return (
               <g
                 key={`tok-${i}`}
-                onMouseEnter={() => onFocusToken?.(i)}
-                onMouseLeave={() => onFocusToken?.(null)}
+                // Hover only drives focus while nothing is pinned, and only for
+                // a real mouse: touch taps arrive as pointerType "touch" (and
+                // their emulated mouse events are ignored by these guards).
+                onPointerEnter={(e) => {
+                  if (e.pointerType === "mouse" && pin === null) onFocusToken?.(i);
+                }}
+                onPointerLeave={(e) => {
+                  if (e.pointerType === "mouse" && pin === null) onFocusToken?.(null);
+                }}
+                onPointerDown={(e) => {
+                  e.stopPropagation();
+                  if (pin === i) {
+                    setPinned(null);
+                    // A mouse is still hovering the token after un-pinning, so
+                    // hover semantics resume; a touch tap clears the focus.
+                    onFocusToken?.(e.pointerType === "mouse" ? i : null);
+                  } else {
+                    setPinned(i);
+                    onFocusToken?.(i);
+                  }
+                }}
                 style={{ cursor: "pointer" }}
               >
                 {/* Invisible hit area so the gap between node and label is hoverable. */}
@@ -188,27 +238,32 @@ export function AttentionLines({
                   fill={isFocus ? rgbCss(colors.accent) : rgbCss(colors.muted)}
                   fillOpacity={isFocus ? 1 : 0.8}
                 />
-                <text
-                  x={xs[i]}
-                  y={baselineY + LABEL_DY}
-                  textAnchor="middle"
-                  className="font-mono text-[11px]"
-                  fill={fill}
-                  fillOpacity={opacity}
-                >
-                  {tok}
-                </text>
+                {showLabel ? (
+                  <text
+                    x={xs[i]}
+                    y={baselineY + LABEL_DY}
+                    textAnchor="middle"
+                    className="font-mono"
+                    fontSize={labelFontSize}
+                    fill={fill}
+                    fillOpacity={opacity}
+                  >
+                    {tok}
+                  </text>
+                ) : null}
                 {/* zero-padded index micro-label above the node */}
-                <text
-                  x={xs[i]}
-                  y={baselineY - 12}
-                  textAnchor="middle"
-                  className="font-mono text-[9px] uppercase tracking-wide"
-                  fill={rgbCss(colors.muted)}
-                  fillOpacity={isFocus ? 0.9 : 0.4}
-                >
-                  {String(i).padStart(2, "0")}
-                </text>
+                {showLabel ? (
+                  <text
+                    x={xs[i]}
+                    y={baselineY - 12}
+                    textAnchor="middle"
+                    className="font-mono text-[9px] uppercase tracking-wide"
+                    fill={rgbCss(colors.muted)}
+                    fillOpacity={isFocus ? 0.9 : 0.4}
+                  >
+                    {String(i).padStart(2, "0")}
+                  </text>
+                ) : null}
               </g>
             );
           })}

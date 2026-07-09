@@ -56,7 +56,10 @@ export interface HeatmapProps {
   /**
    * Notify the owner when the hovered cell changes (`null` when the pointer
    * leaves the grid). Lets a station cross-highlight the row/col elsewhere on
-   * its canvas; the primitive itself stays a pure function of props.
+   * its canvas; the primitive itself stays a pure function of props. On touch
+   * the same callback is driven by tap-to-pin: tapping a cell pins it (fires
+   * the cell), tapping the pinned cell again or outside the cells clears it
+   * (fires null); while pinned, stray mouseleave events do not clear.
    */
   onHoverCell?: (cell: { row: number; col: number } | null) => void;
   /**
@@ -117,11 +120,21 @@ export function Heatmap({
 }: HeatmapProps) {
   const { ref, size } = useResizeObserver<HTMLDivElement>();
   const [hover, setHover] = useState<{ r: number; c: number } | null>(null);
+  // Tap-to-pin (touch parity for hover): the pinned cell, or null. Pinning
+  // drives the same `hover` state and `onHoverCell` callback as mouse hover;
+  // while pinned, hover and mouseleave are ignored so the pin survives them.
+  const [pinned, setPinned] = useState<{ r: number; c: number } | null>(null);
   const theme = useThemeColors();
   const width = size.width;
 
   const rows = matrix.length;
   const cols = matrix.reduce((m, row) => Math.max(m, row.length), 0);
+
+  // Ignore a stale pin if the matrix shrank underneath it.
+  const pin =
+    pinned && pinned.r >= 0 && pinned.r < rows && pinned.c >= 0 && pinned.c < cols
+      ? pinned
+      : null;
 
   const { domainMin, domainMax, maxCell } = useMemo(() => {
     let lo = min ?? Infinity;
@@ -144,8 +157,15 @@ export function Heatmap({
 
   // Label gutters sized to whether labels exist (mono micro-labels). A caller
   // may override the top gutter (e.g. to make room for rotated column labels
-  // and to align the first cell row with neighbouring columns).
-  const leftGutter = rowLabels && rowLabels.length ? 72 : 8;
+  // and to align the first cell row with neighbouring columns). The row-label
+  // gutter is 72px when there is room but shrinks on narrow containers (e.g. a
+  // 390px phone) so the cells keep a usable size; the row-label font clamps
+  // down with it.
+  const leftGutter =
+    rowLabels && rowLabels.length
+      ? Math.max(40, Math.min(72, Math.round(width * 0.16)))
+      : 8;
+  const rowLabelFontSize = leftGutter >= 64 ? 10 : leftGutter >= 52 ? 9 : 8;
   const topGutter = topGutterProp ?? (colLabels && colLabels.length ? 22 : 8);
 
   const gridW = Math.max(width - leftGutter - 8, 1);
@@ -196,8 +216,19 @@ export function Heatmap({
           aria-label="Heatmap"
           style={{ overflow: "visible" }}
           onMouseLeave={() => {
+            // A pinned cell survives the pointer leaving the grid.
+            if (pin) return;
             setHover(null);
             onHoverCell?.(null);
+          }}
+          onPointerDown={() => {
+            // Tap (or click) outside the cells clears the pin. Cell hits stop
+            // propagation, so this only fires for gutters and background.
+            if (pin) {
+              setPinned(null);
+              setHover(null);
+              onHoverCell?.(null);
+            }
           }}
         >
           {/* Column labels — the active step's/cell's label is the lime mark.
@@ -280,11 +311,38 @@ export function Heatmap({
                           : 0
                     }
                     strokeWidth={0.5}
-                    onMouseEnter={() => {
+                    // Hover only drives the readout while nothing is pinned,
+                    // and only for a real mouse: touch taps arrive as
+                    // pointerType "touch" (their emulated mouse events are
+                    // ignored by these guards).
+                    onPointerEnter={(e) => {
+                      if (e.pointerType !== "mouse" || pin) return;
                       setHover({ r, c });
                       onHoverCell?.({ row: r, col: c });
                     }}
-                    onMouseLeave={() => setHover(null)}
+                    onPointerLeave={(e) => {
+                      if (e.pointerType !== "mouse" || pin) return;
+                      setHover(null);
+                    }}
+                    onPointerDown={(e) => {
+                      e.stopPropagation();
+                      if (pin && pin.r === r && pin.c === c) {
+                        setPinned(null);
+                        if (e.pointerType === "mouse") {
+                          // The mouse is still over the cell after un-pinning,
+                          // so hover semantics resume; a touch tap clears.
+                          setHover({ r, c });
+                          onHoverCell?.({ row: r, col: c });
+                        } else {
+                          setHover(null);
+                          onHoverCell?.(null);
+                        }
+                      } else {
+                        setPinned({ r, c });
+                        setHover({ r, c });
+                        onHoverCell?.({ row: r, col: c });
+                      }
+                    }}
                   />
                   {showValues && defined ? (
                     <text
@@ -340,10 +398,11 @@ export function Heatmap({
               y={topGutter + r * (cellH + GAP) + cellH / 2}
               textAnchor="end"
               dominantBaseline="central"
+              fontSize={rowLabelFontSize}
               className={
                 r === active?.row
-                  ? "fill-accent font-mono text-[10px] uppercase tracking-wide"
-                  : "fill-muted font-mono text-[10px] uppercase tracking-wide"
+                  ? "fill-accent font-mono uppercase tracking-wide"
+                  : "fill-muted font-mono uppercase tracking-wide"
               }
             >
               {label}

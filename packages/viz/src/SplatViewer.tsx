@@ -4,7 +4,7 @@
 // compiles @camp/viz straight from TS source (Vite workspace style).
 // eslint-disable-next-line @typescript-eslint/triple-slash-reference
 /// <reference path="./gaussian-splats-3d.d.ts" />
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useResizeObserver } from "./useResizeObserver";
 
 /** One camera placement: where the eye is and what it looks at. */
@@ -73,6 +73,12 @@ export interface SplatViewerProps {
   onError?: (error: Error, src: string) => void;
   /** Throttled (~200 ms) camera report while the student moves. */
   onPoseChange?: (pose: SplatPoseReport) => void;
+  /**
+   * CSS length for the `bottom` of the touch locomotion pad, e.g.
+   * "calc(var(--dock-h) + 1rem)" so a host dock never covers it. Default
+   * "1rem". The pad only renders in fly mode on coarse pointers.
+   */
+  bottomOffset?: string;
   /** Pixel height; width is responsive. Default 480. Ignored when `fill`. */
   height?: number;
   /** Fill the parent's box instead of using `height`. */
@@ -84,6 +90,8 @@ interface LoadedScene {
   viewer: import("@mkkellogg/gaussian-splats-3d").DropInViewer;
   ready: boolean;
   failed: boolean;
+  /** Highest download fraction reported so far, 0..1 (kept monotonic). */
+  progress: number;
   promise: Promise<void>;
 }
 
@@ -157,6 +165,44 @@ function formatOf(
   return GS.SceneFormat.Splat;
 }
 
+/**
+ * One press-and-hold locomotion button (touch pad). Pointer capture keeps the
+ * release firing even when the finger slides off the button, and because the
+ * button is a sibling of the canvas its events never reach drag-look.
+ */
+function PadButton({
+  glyph,
+  label,
+  onPress,
+  onRelease,
+}: {
+  glyph: string;
+  label: string;
+  onPress: () => void;
+  onRelease: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      aria-label={label}
+      title={label}
+      className="pointer-events-auto flex h-11 w-11 select-none items-center justify-center rounded-full border border-border bg-panel/80 text-base text-fg shadow-sm backdrop-blur active:bg-panel"
+      style={{ touchAction: "none" }}
+      onPointerDown={(e) => {
+        e.preventDefault();
+        e.currentTarget.setPointerCapture(e.pointerId);
+        onPress();
+      }}
+      onPointerUp={onRelease}
+      onPointerCancel={onRelease}
+      onLostPointerCapture={onRelease}
+      onContextMenu={(e) => e.preventDefault()}
+    >
+      <span aria-hidden>{glyph}</span>
+    </button>
+  );
+}
+
 /** True when a key event belongs to a form field, not the canvas. */
 function isTypingTarget(e: KeyboardEvent): boolean {
   const t = e.target as HTMLElement | null;
@@ -177,8 +223,11 @@ function isTypingTarget(e: KeyboardEvent): boolean {
  * instant and never moves the camera), and everything is disposed on unmount
  * — renderer, splat buffers, and the library's sort workers.
  *
- * Fly mode: drag to look, WASD/arrows to move (horizontal, drone-style),
- * scroll/pinch for altitude, Shift to go faster, clamped inside `bounds`.
+ * Fly mode: drag to look, Shift-drag to pan, WASD/arrows to move (horizontal,
+ * drone-style), scroll or pinch to dolly, Shift to go faster, clamped inside
+ * `bounds`. Touch adds two-finger pan (centroid drag) alongside the pinch
+ * dolly, and coarse-pointer devices get an on-screen locomotion pad that
+ * feeds the exact same key-driven velocity state as WASD.
  * Orbit mode: standard damped turntable around `initialPose.lookAt`.
  */
 export function SplatViewer({
@@ -197,6 +246,7 @@ export function SplatViewer({
   onReady,
   onError,
   onPoseChange,
+  bottomOffset = "1rem",
   height = 480,
   fill = false,
   className,
@@ -233,6 +283,30 @@ export function SplatViewer({
 
   const width = size.width;
   const h = fill ? size.height : height;
+
+  // Coarse-pointer (touch) detection, resolved in an effect so the server and
+  // the first client render agree; drives the locomotion pad below.
+  const [coarsePointer, setCoarsePointer] = useState(false);
+  useEffect(() => {
+    const mq = window.matchMedia("(pointer: coarse)");
+    const sync = () => setCoarsePointer(mq.matches);
+    sync();
+    mq.addEventListener("change", sync);
+    return () => mq.removeEventListener("change", sync);
+  }, []);
+
+  // TOUCH LOCOMOTION PAD: presses feed the exact same `fly.keys` set the
+  // keyboard handlers feed, so the render loop's velocity smoothing stays the
+  // single movement system for both input paths.
+  const padPress = (code: string) => {
+    const fly = engineRef.current?.fly;
+    if (!fly) return;
+    fly.transition = null; // locomotion input cancels an in-flight glide
+    fly.keys.add(code);
+  };
+  const padRelease = (code: string) => {
+    engineRef.current?.fly?.keys.delete(code);
+  };
 
   // ENGINE SETUP — once per mount. Async (lazy imports), so dependents await
   // enginePromiseRef. Cleanup tears down GL, workers, and listeners.
@@ -282,7 +356,12 @@ export function SplatViewer({
       camera.up.copy(upV);
 
       const renderer = new THREE.WebGLRenderer({ antialias: false, alpha: true });
-      renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+      // Coarse-pointer devices get a lower DPR cap: full-res splat rendering
+      // plus per-frame sorting tanks the frame rate on phones and tablets.
+      const coarse = window.matchMedia("(pointer: coarse)").matches;
+      renderer.setPixelRatio(
+        Math.min(window.devicePixelRatio || 1, coarse ? 1.5 : 2),
+      );
       renderer.domElement.style.display = "block";
       mount.appendChild(renderer.domElement);
 
@@ -426,7 +505,8 @@ export function SplatViewer({
       camera.aspect = w0 / h0;
       camera.updateProjectionMatrix();
 
-      // FLY INPUT — drag-look + WASD/arrows + wheel altitude + pinch dolly.
+      // FLY INPUT: drag-look, Shift-drag pan, wheel zoom, WASD/arrows, and
+      // two-finger pinch dolly + centroid pan.
       const dom = renderer.domElement;
       const detachFns: Array<() => void> = [];
       if (engine.fly) {
@@ -437,18 +517,33 @@ export function SplatViewer({
           fly.transition = null;
         };
 
-        // Pointers: 1 active → look; 2 active → pinch-dolly along the view.
+        // Pointers: 1 active → look; 2 active → pinch-dolly along the view
+        // plus centroid pan. Both gesture anchors re-seed whenever the pair
+        // changes (finger added or lifted) so nothing jumps mid-gesture.
         const pointers = new Map<number, { x: number; y: number }>();
         let pinchDist = 0;
+        let pinchMidX = 0;
+        let pinchMidY = 0;
+        const seedPinch = () => {
+          const [a, b] = [...pointers.values()];
+          pinchDist = Math.hypot(a!.x - b!.x, a!.y - b!.y);
+          pinchMidX = (a!.x + b!.x) / 2;
+          pinchMidY = (a!.y + b!.y) / 2;
+        };
         const onPointerDown = (e: PointerEvent) => {
           dom.setPointerCapture(e.pointerId);
           pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
-          if (pointers.size === 2) {
-            const [a, b] = [...pointers.values()];
-            pinchDist = Math.hypot(a!.x - b!.x, a!.y - b!.y);
-          }
+          if (pointers.size === 2) seedPinch();
           cancelGlide();
-          dom.style.cursor = "grabbing";
+          dom.style.cursor = e.shiftKey ? "move" : "grabbing";
+        };
+        // Horizontal basis for Shift-drag panning: forward = look direction
+        // flattened against `up` (same recipe as the WASD basis below).
+        const panRight = () => {
+          const dir = dirFromYawPitch(fly.yaw, fly.pitch);
+          const fwd = dir.addScaledVector(upV, -dir.dot(upV));
+          if (fwd.lengthSq() < 1e-6) fwd.set(0, 0, -1).applyQuaternion(frameQ);
+          return fwd.normalize().cross(upV).normalize();
         };
         const onPointerMove = (e: PointerEvent) => {
           const prev = pointers.get(e.pointerId);
@@ -457,15 +552,27 @@ export function SplatViewer({
           const dy = e.clientY - prev.y;
           pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
           if (pointers.size === 1) {
-            // GRAB the world (street-view style): drag right pulls the scene
-            // right, i.e. you turn LEFT; drag down pulls it down → look up.
-            // The drag writes TARGET angles; the render loop eases toward
-            // them, so the tail of each flick lands softly.
-            fly.targetYaw -= dx * 0.0024;
-            fly.targetPitch = Math.min(
-              1.45,
-              Math.max(-1.45, fly.targetPitch + dy * 0.0024),
-            );
+            if (e.shiftKey) {
+              // Shift-drag = pan, grab-the-world style like the look drag:
+              // drag right slides the scene right (you strafe left), drag up
+              // pulls it up (you descend).
+              const right = panRight();
+              camera.position.addScaledVector(right, -dx * diag * 0.000225);
+              camera.position.addScaledVector(upV, dy * diag * 0.000225);
+              clamp(camera.position);
+              dom.style.cursor = "move";
+            } else {
+              // GRAB the world (street-view style): drag right pulls the scene
+              // right, i.e. you turn LEFT; drag down pulls it down → look up.
+              // The drag writes TARGET angles; the render loop eases toward
+              // them, so the tail of each flick lands softly.
+              fly.targetYaw -= dx * 0.0012;
+              fly.targetPitch = Math.min(
+                1.45,
+                Math.max(-1.45, fly.targetPitch + dy * 0.0012),
+              );
+              dom.style.cursor = "grabbing";
+            }
           } else if (pointers.size === 2) {
             const [a, b] = [...pointers.values()];
             const dist = Math.hypot(a!.x - b!.x, a!.y - b!.y);
@@ -474,18 +581,37 @@ export function SplatViewer({
             // Pinch out → dolly forward along the current view direction.
             const dir = dirFromYawPitch(fly.yaw, fly.pitch);
             camera.position.addScaledVector(dir, delta * diag * 0.0012);
+            // Two-finger drag = pan: the centroid's movement drives the same
+            // grab-the-world math as Shift-drag, simultaneous with the dolly.
+            const midX = (a!.x + b!.x) / 2;
+            const midY = (a!.y + b!.y) / 2;
+            const right = panRight();
+            camera.position.addScaledVector(
+              right,
+              -(midX - pinchMidX) * diag * 0.000225,
+            );
+            camera.position.addScaledVector(
+              upV,
+              (midY - pinchMidY) * diag * 0.000225,
+            );
+            pinchMidX = midX;
+            pinchMidY = midY;
             clamp(camera.position);
           }
         };
         const onPointerUp = (e: PointerEvent) => {
           pointers.delete(e.pointerId);
+          // Back down to a pair (3 fingers → 2): re-anchor the pinch gesture.
+          if (pointers.size === 2) seedPinch();
           if (pointers.size === 0) dom.style.cursor = "grab";
         };
         const onWheel = (e: WheelEvent) => {
           e.preventDefault();
           cancelGlide();
-          // Scroll = altitude, the drone-style third axis.
-          camera.position.addScaledVector(upV, -e.deltaY * diag * 0.0004);
+          // Scroll = zoom: dolly along the look direction (scroll up moves
+          // forward), matching the embedding station's scroll semantics.
+          const dir = dirFromYawPitch(fly.yaw, fly.pitch);
+          camera.position.addScaledVector(dir, -e.deltaY * diag * 0.0004);
           clamp(camera.position);
         };
         // Double-click a spot → glide there at eye height, keeping heading.
@@ -733,6 +859,7 @@ export function SplatViewer({
           viewer,
           ready: false,
           failed: false,
+          progress: 0,
           promise: Promise.resolve(),
         };
         entry.promise = viewer
@@ -741,8 +868,15 @@ export function SplatViewer({
             showLoadingUI: false,
             splatAlphaRemovalThreshold: 1,
             onProgress: (percent) => {
-              if (url === engine.desired && !entry.ready) {
-                onProgressRef.current?.(Math.min(1, percent / 100));
+              // percent is undefined when the response has no Content-Length,
+              // and resets to 0 for the post-download parse phase; forward
+              // only finite, monotonically increasing values.
+              if (url !== engine.desired || entry.ready) return;
+              if (!Number.isFinite(percent)) return;
+              const frac = Math.min(1, percent / 100);
+              if (frac > entry.progress) {
+                entry.progress = frac;
+                onProgressRef.current?.(frac);
               }
             },
           })
@@ -838,6 +972,41 @@ export function SplatViewer({
       style={fill ? undefined : { height }}
     >
       <div ref={mountRef} className="absolute inset-0" />
+      {controls === "fly" && coarsePointer && (
+        <div
+          role="group"
+          aria-label="移動控制"
+          className="pointer-events-none absolute right-3 z-10 grid grid-cols-3 gap-1.5"
+          style={{ bottom: bottomOffset }}
+        >
+          <span />
+          <PadButton
+            glyph="▲"
+            label="前進"
+            onPress={() => padPress("KeyW")}
+            onRelease={() => padRelease("KeyW")}
+          />
+          <span />
+          <PadButton
+            glyph="◀"
+            label="向左移動"
+            onPress={() => padPress("KeyA")}
+            onRelease={() => padRelease("KeyA")}
+          />
+          <PadButton
+            glyph="▼"
+            label="後退"
+            onPress={() => padPress("KeyS")}
+            onRelease={() => padRelease("KeyS")}
+          />
+          <PadButton
+            glyph="▶"
+            label="向右移動"
+            onPress={() => padPress("KeyD")}
+            onRelease={() => padRelease("KeyD")}
+          />
+        </div>
+      )}
     </div>
   );
 }

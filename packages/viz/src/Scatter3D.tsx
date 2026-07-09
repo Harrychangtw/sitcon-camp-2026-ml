@@ -40,8 +40,10 @@ export interface Scatter3DProps {
   fill?: boolean;
   /** Slowly auto-rotate the camera. Default false. */
   autoRotate?: boolean;
-  /** Fires with the hovered point's `label` (or null on leave). Lets the host
-   * treat the point under the cursor as a query — highlight its neighbours, etc. */
+  /** Fires with the active point's `label` (or null when cleared). Driven by
+   * mouse hover on desktop and by tap-to-pin on touch: a tap raycasts and pins
+   * the hit, tapping it again or tapping empty space clears it. Lets the host
+   * treat the active point as a query, highlight its neighbours, etc. */
   onHover?: (label: string | null) => void;
 }
 
@@ -145,6 +147,10 @@ function paintColors(
  *
  * The GL context is created once (keyed on `data`); highlight/colorBy changes
  * only repaint the color buffer, so searching never tears down the renderer.
+ *
+ * Interaction: mouse hover picks transiently; a tap (pointerup with negligible
+ * travel, so orbit drags don't count) pins the pick through the same `onHover`
+ * callback, and tapping it again or tapping empty space clears the pin.
  */
 export function Scatter3D({
   data,
@@ -327,6 +333,30 @@ export function Scatter3D({
       const ndc = new THREE.Vector2();
       const dom = renderer.domElement;
       let lastLabel: string | null = null;
+      // TAP-TO-PIN (touch has no hover): a tap raycasts like hover does and
+      // pins the hit; tapping the same point again or empty space clears it.
+      // While pinned, hover picking and pointer leave are suspended, so a
+      // stray synthetic mouse event can never wipe the selection.
+      let pinned: string | null = null;
+      let downX = 0;
+      let downY = 0;
+      // A second finger means pinch/rotate, never a tap.
+      let multiTouch = false;
+
+      // Shared pick: front-most labeled point under the given client coords.
+      const pickAt = (clientX: number, clientY: number): string | null => {
+        const r = dom.getBoundingClientRect();
+        ndc.x = ((clientX - r.left) / r.width) * 2 - 1;
+        ndc.y = -((clientY - r.top) / r.height) * 2 + 1;
+        raycaster.setFromCamera(ndc, camera);
+        const hits = raycaster.intersectObject(points);
+        const hit = hits.find((it) => {
+          const d = it.index != null ? data[it.index] : undefined;
+          return d?.label != null;
+        });
+        return hit && hit.index != null ? data[hit.index]!.label! : null;
+      };
+
       // While orbiting/panning, the camera moves under a static cursor, so
       // picking would re-hit a different point every frame — flooding the
       // host with onHover changes (rapid flicker). Suspend picking for the
@@ -334,6 +364,8 @@ export function Scatter3D({
       let dragging = false;
       const onDragStart = () => {
         dragging = true;
+        // Orbiting must not drop a pinned selection; only live hover resets.
+        if (pinned !== null) return;
         if (lastLabel !== null) {
           lastLabel = null;
           onHoverRef.current?.(null);
@@ -348,24 +380,15 @@ export function Scatter3D({
       controls.addEventListener("end", onDragEnd);
 
       const onPointerMove = (e: PointerEvent) => {
-        if (dragging) return;
-        const r = dom.getBoundingClientRect();
-        ndc.x = ((e.clientX - r.left) / r.width) * 2 - 1;
-        ndc.y = -((e.clientY - r.top) / r.height) * 2 + 1;
-        raycaster.setFromCamera(ndc, camera);
-        const hits = raycaster.intersectObject(points);
-        // Front-most hit that actually carries a label.
-        const hit = hits.find((it) => {
-          const d = it.index != null ? data[it.index] : undefined;
-          return d?.label != null;
-        });
-        if (hit && hit.index != null) {
-          const label = data[hit.index]!.label!;
+        if (dragging || pinned !== null) return;
+        const label = pickAt(e.clientX, e.clientY);
+        if (label != null) {
           // Notify the host only when the point changes (position updates every
           // move, but the "query" is the same until a different point is hit).
           if (label !== lastLabel) onHoverRef.current?.(label);
           lastLabel = label;
           dom.style.cursor = "pointer";
+          const r = dom.getBoundingClientRect();
           setHover({ label, x: e.clientX - r.left, y: e.clientY - r.top });
         } else if (lastLabel !== null) {
           lastLabel = null;
@@ -375,17 +398,51 @@ export function Scatter3D({
         }
       };
       const onPointerLeave = () => {
-        if (lastLabel === null) return;
+        if (pinned !== null || lastLabel === null) return;
         lastLabel = null;
         onHoverRef.current?.(null);
         dom.style.cursor = "";
         setHover(null);
       };
+      const onPointerDown = (e: PointerEvent) => {
+        if (!e.isPrimary) {
+          multiTouch = true;
+          return;
+        }
+        multiTouch = false;
+        downX = e.clientX;
+        downY = e.clientY;
+      };
+      const onPointerUp = (e: PointerEvent) => {
+        if (!e.isPrimary || multiTouch) return;
+        // A tap, not an orbit drag: the pointer barely moved since it went
+        // down. Drags past the slop are OrbitControls territory.
+        if (Math.hypot(e.clientX - downX, e.clientY - downY) > 7) return;
+        const label = pickAt(e.clientX, e.clientY);
+        if (label != null && label !== pinned) {
+          pinned = label;
+          lastLabel = label;
+          onHoverRef.current?.(label);
+          const r = dom.getBoundingClientRect();
+          setHover({ label, x: e.clientX - r.left, y: e.clientY - r.top });
+        } else if (pinned !== null) {
+          // Tapped the pinned point again, or empty space: clear the pin.
+          pinned = null;
+          lastLabel = null;
+          onHoverRef.current?.(null);
+          dom.style.cursor = "";
+          setHover(null);
+        }
+      };
       dom.addEventListener("pointermove", onPointerMove);
       dom.addEventListener("pointerleave", onPointerLeave);
+      dom.addEventListener("pointerdown", onPointerDown);
+      dom.addEventListener("pointerup", onPointerUp);
       detachHover = () => {
         dom.removeEventListener("pointermove", onPointerMove);
         dom.removeEventListener("pointerleave", onPointerLeave);
+        dom.removeEventListener("pointerdown", onPointerDown);
+        dom.removeEventListener("pointerup", onPointerUp);
         controls.removeEventListener("start", onDragStart);
         controls.removeEventListener("end", onDragEnd);
       };
