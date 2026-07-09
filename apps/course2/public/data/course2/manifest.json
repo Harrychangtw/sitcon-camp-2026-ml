@@ -114,7 +114,7 @@
       "kind": "json",
       "path": "skyfall/scenes.json",
       "station": "skyfall",
-      "bytes": 10379,
+      "bytes": 10468,
       "description": "Scene catalog for the skyfall station: per-scene \u4e2d\u6587 labels, camera poses (\u4fef\u77b0/\u534a\u7a7a/\u8857\u666f), flight bounds, and the byte sizes of the pruned .splat variants (\u88dc\u5b8c\u5f8c = published Skyfall-GS fused scene; \u88dc\u5b8c\u524d = Stage-1-only, baked via the runbook). The .splat binaries are gitignored by pattern and force-added; the browser only renders them."
     },
     {
