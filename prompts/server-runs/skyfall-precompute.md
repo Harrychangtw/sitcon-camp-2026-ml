@@ -46,7 +46,9 @@ these caveats are load-bearing:
 - **Dataset**: the DFC2019 JAX / NYC satellite sets, prepared per the
   upstream README (its HF links). Download only the shipped scene ids.
 - **This repo's side needs no GPU**: the convert step is numpy + plyfile via
-  the precompute venv (`cd precompute && uv sync` — plyfile is a base dep).
+  the precompute venv (`cd precompute && uv sync` — plyfile is a base dep;
+  plain sync is fine for `precompute/.venv`, it's `server/.venv` that must
+  always be synced with `--extra gpu`, see the server-runs README).
   Keep it out of `server/.venv`; nothing here touches torch or the LM stack.
 - Disk: ~2 GB per scene for the upstream workdir + checkpoints; keep it
   outside this repo (e.g. `~/skyfall-work`).

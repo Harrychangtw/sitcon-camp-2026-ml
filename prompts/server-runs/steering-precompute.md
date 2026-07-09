@@ -30,7 +30,9 @@ high-schoolers, and because it adds zero VRAM and zero training. Computing the
 - The base deploy from `server/README.md` is in place (repo cloned,
   `server/.venv` synced, systemd replicas running).
 - `git pull` so the tree has the `steering-vectors` / `steering` cli
-  subcommands + router. No new Python dependencies.
+  subcommands + router. No new Python dependencies — no `uv sync` needed; if
+  you refresh `server/.venv` anyway, it must be `uv sync --extra gpu` (plain
+  `uv sync` drops the diffusion deps; see the server-runs README).
 
 ## 3. The commands
 
