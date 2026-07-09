@@ -97,7 +97,7 @@ fronts it with a short, phone-typeable domain:
 | `camp.harrychang.me` | `…ts.net/` (the Funnel base) |
 | `camp.harrychang.me/tokenizer` | `…ts.net/tokenizer` |
 | `camp.harrychang.me/embedding` | `…ts.net/embedding` |
-| `camp.harrychang.me/order-shuffle` | `…ts.net/order-shuffle` |
+| `camp.harrychang.me/pixel-shuffle` | `…ts.net/pixel-shuffle` |
 | `camp.harrychang.me/next-token` | `…ts.net/next-token` |
 | `camp.harrychang.me/rnn-viz` | `…ts.net/rnn-viz` |
 | `camp.harrychang.me/transformer` | `…ts.net/transformer` |
