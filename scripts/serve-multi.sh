@@ -44,6 +44,17 @@ else
 fi
 
 tmux kill-session -t "$SESSION" 2>/dev/null || true
+# kill-session only HUPs the panes. The uvicorns die on SIGHUP, but caddy
+# IGNORES it — it reparents to init and keeps sharing PROXY_PORT via
+# SO_REUSEPORT, so every relaunch used to leak one proxy (55 piled up once).
+# vite can survive the same way. Reap this repo's strays before relaunching.
+pkill -f "caddy run --config $ROOT/server/deploy/Caddyfile" 2>/dev/null || true
+pkill -f "$ROOT/apps/course2/node_modules/.*vite" 2>/dev/null || true
+for _ in $(seq 1 20); do
+  pgrep -f "caddy run --config $ROOT/server/deploy/Caddyfile" >/dev/null || break
+  sleep 0.5
+done
+
 tmux new-session -d -s "$SESSION" -c "$ROOT" -n camp
 
 for i in $(seq 0 $((NGPU - 1))); do
