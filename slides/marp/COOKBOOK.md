@@ -349,7 +349,12 @@ Default to plain text; reach for capsules only when boxing adds meaning
 Do: at most 3 capsules per slide; keep each to one line.
 Don't: use capsules as generic paragraph wrappers; most slides need none.
 
-### 2.12 station screenshot -「畫面長這樣」
+### 2.12 station screenshot -「畫面長這樣」(RETIRED)
+
+**Retired 2026-07-08 (Harry's call): do not add these slides.** Harry shares
+his live screen to point at the control instead, so the deck carries no
+station screenshots; the hand-off spine moves onto the hand-off slide (§2.9)
+itself. The archetype below is kept for reference only.
 
 Follows every station hand-off (§2.9). Trial-run feedback: describing the
 interface aloud loses students - they find the control just as the
