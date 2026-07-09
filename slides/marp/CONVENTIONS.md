@@ -20,37 +20,37 @@ Every allowed breathing beat carries a justifying comment:
 ## Station cards (every station hand-off, fixed structure)
 
 ```markdown
-# 換你動手 _順序撞牆站_
+# 換你動手 _像素撞牆站_
 
 <div class="station">
 <div class="st">
 <h4>你要動的旋鈕</h4>
 
-**shuffle** 開關；MLP(bag) ↔ RNN 切換
+「▶ 訓練」讓兩顆一樣的 MLP 同時開練；按「還原排列 π⁻¹」
 
 </div>
 <div class="st">
 <h4>試試看</h4>
 
-- 輸入「這部電影不好看」，開 shuffle 再跑一次
-- 換 RNN，同一句、同樣 shuffle，再跑一次
+- 按「▶ 訓練」，盯著兩條 loss 曲線，等它自己跑完
+- 點兩邊網路圖上同一顆隱藏神經元，再按「還原排列 π⁻¹」
 
 </div>
 <div class="st">
 <h4>你應該會看到</h4>
 
-MLP(bag) 前後輸出一模一樣；RNN 的輸出會變。
+兩條 loss 曲線疊在一起，收在同一個準度。
 
 </div>
 <div class="st check">
 <h4>檢核點</h4>
 
-我看到 shuffle 前後 MLP 輸出一模一樣。
+我看到打亂像素那顆 MLP，學得跟原始那顆一模一樣好。
 
 </div>
 </div>
 
-<span class="chip">🛠 講師畫面／各組電腦已開好（URL 開站後補）</span>
+<span class="chip">🛠 講師畫面／各組電腦已開好 · <a href="https://camp.harrychang.me/pixel-shuffle">/pixel-shuffle</a></span>
 ```
 
 - Blocks stack vertically full-width; each `.st` is a 1:3 grid — grey `<h4>`

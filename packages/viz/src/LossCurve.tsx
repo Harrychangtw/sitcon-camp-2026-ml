@@ -7,6 +7,18 @@ export interface LossSeries {
   label: string;
   /** Metric value per training step (loss, return, accuracy…). */
   values: number[];
+  /**
+   * Render as a dashed, de-emphasized reference line (e.g. a precomputed
+   * baseline the live curves are compared against). Dashed series skip the
+   * current-point marker.
+   */
+  dash?: boolean;
+  /**
+   * Stroke width override. Lets a host widen one of two coincident series so
+   * an exact overlap reads as "two lines on top of each other" instead of the
+   * later series simply hiding the earlier one.
+   */
+  width?: number;
 }
 
 export interface LossCurveProps {
@@ -163,18 +175,22 @@ export function LossCurve({
                   d={d}
                   fill="none"
                   stroke={rgbCss(color)}
-                  strokeWidth={1.8}
+                  strokeWidth={s.width ?? (s.dash ? 1.2 : 1.8)}
+                  strokeOpacity={s.dash ? 0.55 : 1}
+                  strokeDasharray={s.dash ? "5 4" : undefined}
                   strokeLinejoin="round"
                 />
                 {/* Current-point marker — the replay "cursor". */}
-                <circle
-                  cx={xScale(xOf(last))}
-                  cy={yScale(s.values[last] ?? 0)}
-                  r={3.5}
-                  fill={rgbCss(color)}
-                  className="stroke-bg"
-                  strokeWidth={1.5}
-                />
+                {s.dash ? null : (
+                  <circle
+                    cx={xScale(xOf(last))}
+                    cy={yScale(s.values[last] ?? 0)}
+                    r={3.5}
+                    fill={rgbCss(color)}
+                    className="stroke-bg"
+                    strokeWidth={1.5}
+                  />
+                )}
               </g>
             );
           })}
@@ -190,6 +206,7 @@ export function LossCurve({
                 className="h-0.5 w-3.5 rounded-full"
                 style={{
                   backgroundColor: rgbCss(seriesColors.get(s.label) ?? colors.fg),
+                  opacity: s.dash ? 0.55 : 1,
                 }}
               />
               <span className="font-mono text-[10px] text-muted">{s.label}</span>

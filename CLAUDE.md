@@ -22,6 +22,13 @@ into `apps/<course>/public/data/<course>/`. The web apps **load and play back**
 those artifacts, or run **light** inference on small ONNX models. No training,
 no big datasets, in the browser.
 
+**The one scoped exception:** the `pixel-shuffle` station trains its two toy
+MLPs live in the browser — only in a **Web Worker**, only at toy scale
+(≤ ~2,200 tiny images, ≤ ~1 M params) — because the lesson re-enacts the
+morning class's own in-browser trainer; replaying a baked curve would gut it.
+Its dataset pack and permutation are still precomputed artifacts shipped via
+`manifest.json`. No other station may cite this exception.
+
 ## Stack and why
 
 | Piece | Tech | Why |
@@ -86,7 +93,8 @@ it's specific to one lesson → keep it in the station.
 ## DO NOT
 
 - ❌ **Don't train or run heavy compute in the browser.** Precompute it; ship a
-  small artifact.
+  small artifact. (Sole carve-out: the pixel-shuffle station — see the golden
+  rule above.)
 - ❌ **Don't cross package boundaries** (e.g. fetch in `@camp/viz`, draw SVG in
   `@camp/ui`, import React in `@camp/data`).
 - ❌ **Don't import `three`/`onnxruntime-web` without a client guard** —

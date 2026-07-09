@@ -222,14 +222,14 @@
           "id": "street",
           "label": "街景視角",
           "position": [
-            38.63591729510992,
-            -204.70423889160156,
-            12.853570880416374
+            -323.4,
+            -44.3,
+            59.8
           ],
           "lookAt": [
-            116.553136983081,
-            -211.10321044921875,
-            12.853570880416374
+            11.6,
+            11.5,
+            15.1
           ]
         }
       ],
@@ -240,7 +240,14 @@
           "bytes": 25600000,
           "splats": 800000,
           "generator": "camp-precompute skyfall",
-          "generatedAt": "2026-07-09T06:50:57.006730+00:00"
+          "generatedAt": "2026-07-09T08:43:34.561504+00:00"
+        },
+        "before": {
+          "path": "skyfall/JAX_164/before.splat",
+          "bytes": 9600000,
+          "splats": 300000,
+          "generator": "camp-precompute skyfall --from-ply",
+          "generatedAt": "2026-07-09T08:11:51.121546+00:00"
         }
       }
     },
@@ -296,14 +303,14 @@
           "id": "street",
           "label": "街景視角",
           "position": [
-            -123.05712671766011,
-            -6.351679801940918,
-            -16.230735342602664
+            -228.7,
+            -208.4,
+            -16.2
           ],
           "lookAt": [
-            -56.03107988818771,
-            -10.070176124572754,
-            -16.230735342602664
+            -191.6,
+            -152.5,
+            -16.2
           ]
         }
       ],
@@ -314,7 +321,14 @@
           "bytes": 25600000,
           "splats": 800000,
           "generator": "camp-precompute skyfall",
-          "generatedAt": "2026-07-09T06:51:09.262105+00:00"
+          "generatedAt": "2026-07-09T08:43:37.492676+00:00"
+        },
+        "before": {
+          "path": "skyfall/NYC_219/before.splat",
+          "bytes": 9600000,
+          "splats": 300000,
+          "generator": "camp-precompute skyfall --from-ply",
+          "generatedAt": "2026-07-09T08:30:40.820236+00:00"
         }
       }
     },
@@ -401,5 +415,5 @@
     }
   ],
   "generator": "camp-precompute skyfall",
-  "generatedAt": "2026-07-09T06:51:09.262183+00:00"
+  "generatedAt": "2026-07-09T08:43:37.492756+00:00"
 }

@@ -122,7 +122,7 @@ strings when you write:
 |---------|-------------------------------|--------|
 | Cover / Outline | (own labels) | title + agenda |
 | Loop 0 | 文字怎麼變數字 | Tokenizer + Embedding |
-| Loop 1 | MLP 吃文字 | bag-of-embeddings → 順序撞牆 |
+| Loop 1 | MLP 吃文字 | 像素撞牆（pixel-shuffle）→ 詞序轉寫 |
 | Loop 2 | RNN | next-token + hidden state + RNN 的牆 |
 | Loop 3 | Transformer | attention + PE + residual + QKV |
 | Loop 4 | 架構即樂高 | wrap-up + 銜接第三堂 |
@@ -151,8 +151,8 @@ sits inside the 180, after Loop 1's 撞牆 (natural seam before RNN).
 | · Embedding 探索站 | 09 | 12 | 10 |
 | · debrief + bias | 10 | 6 | — |
 | · Loop 0 小結 + close | 11 | 2 | — |
-| **Loop 1** divider + bag-of-emb + 假安全感 | 12–14 | 6 | — |
-| · **順序撞牆站** (本堂核心 beat) | 15 | 16 | 14 |
+| **Loop 1** divider + 早上 MLP 回收 + 打賭 | 12–14 | 6 | — |
+| · **像素撞牆站** (本堂核心 beat) | 15 | 16 | 14 |
 | · debrief（故事/事故）+ close → RNN | 16–17 | 8 | — |
 | **☕ 休息** | — | 10 | — |
 | **Loop 2** divider + next-token hook | 18–19 | 3 | — |
@@ -223,9 +223,9 @@ TEXT (verbatim — built as GROUP HEADERS ONLY; no L1/L2 slide title)
   - item: 「Embedding 探索站 ……… P. 08」
   - item: 「語意裡的偏見 ……… P. 09」
 - Group 02 header (grey numeral + white question): 「02. 直接餵給 MLP 會怎樣?」
-  - item: 「bag-of-embeddings ……… P. 12」
-  - item: 「順序撞牆站 ……… P. 14」
-  - item: 「順序丟不得 → RNN ……… P. 16」
+  - item: 「攤平與打賭 ……… P. 12」
+  - item: 「像素撞牆站 ……… P. 14」
+  - item: 「問題不在準度，在假設 → RNN ……… P. 16」
 - Group 03 header (grey numeral + white question): 「03. 怎麼把「順序」吃進去?」
   - item: 「next-token 站 ……… P. 19」
   - item: 「RNN 視覺化 ……… P. 22」
@@ -537,12 +537,21 @@ LAYOUT
 ASSETS: none
 INTERACTIVE / STATION: none
 
-## Loop 1 — MLP 吃文字 + 順序撞牆 (~30 min) 〔本堂核心 beat〕
-Beats: 橋接（bag-of-embeddings → 上一堂 MLP，做國會情感分析，**會動、假安全感**
-「那不就 MLP 就好？」）→ **撞牆 demo**（shuffle 開關：MLP(bag) shuffle 前後輸出逐字
-相同 → 順序被丟掉；對照「故事」vs「事故」）→ 收束：MLP 沒有「順序」假設 → 需要
-**假設順序有意義**的架構 → RNN。**Loop 1 結束後接 10 分鐘休息**（撞牆後的自然斷點）。
-Station: 順序撞牆站.
+## Loop 1 — MLP 吃文字 + 像素撞牆 (~30 min) 〔本堂核心 beat〕
+
+> **2026-07 redesign:** Loop 1 now hits the wall on **pixels**, not word chips —
+> the 像素撞牆站（/pixel-shuffle，雙 MLP 原始 vs 固定 π 打亂，現場同步訓練）
+> replaced the 順序撞牆站（demoted to dev）. The shipping deck is
+> `slides/marp/deck/course2.md`; `docs/course-spec.md` § Loop 1 is the pedagogy
+> ground truth. The per-slide entries below (13–17) describe the pre-redesign
+> build and are kept for history only.
+
+Beats: 橋接（回收早上親手訓練的 CIFAR MLP：圖 = 攤平的 3,072 個數字）→ 打賭
+（像素全打亂、同一個固定 π，它還學得會嗎？）→ **撞牆 demo**（兩顆一樣的 MLP 同步
+訓練，loss 曲線疊在一起、收在同一準度；hover 權重 + 還原排列 π⁻¹）→ 轉寫到文字
+（「故事」vs「事故」：詞序對它也只是編號）→ 收束：MLP 沒有「排列有意義」的假設 →
+需要**假設順序有意義**的架構 → RNN。**Loop 1 結束後接 10 分鐘休息**（撞牆後的自然斷點）。
+Station: 像素撞牆站（/pixel-shuffle）.
 
 ### Slide 12 · section-divider · Loop 1 進場
 Footer — L: SITCON Camp 2026 · C: 12 · R: ML Course 2｜MLP 吃文字
@@ -692,7 +701,7 @@ LAYOUT
 ASSETS: none
 INTERACTIVE / STATION: none
 
-> **☕ 10-min break here** — between Loop 1 (順序撞牆) and Loop 2 (RNN). Not a
+> **☕ 10-min break here** — between Loop 1 (像素撞牆) and Loop 2 (RNN). Not a
 > slide; the section divider (slide 18) doubles as the「回來上課」re-entry. If you
 > want an explicit break slide, add one before 18 and bump TT to 36.
 
@@ -1099,7 +1108,7 @@ each link appends the station's route slug (from
 |-------|---------|-----|
 | 05 | Tokenizer 探索站 | …ts.net/**tokenizer** |
 | 09 | Embedding 探索站 | …ts.net/**embedding** |
-| 15 | 順序撞牆站 | …ts.net/**order-shuffle** |
+| 15 | 像素撞牆站 | …ts.net/**pixel-shuffle** |
 | 20 | next-token 站 | …ts.net/**next-token** |
 | 23 | RNN 視覺化 | …ts.net/**rnn-viz** |
 | 27 | Transformer 站 | …ts.net/**transformer** |
@@ -1183,7 +1192,7 @@ archetypes** off `statement` per your Image #1 / #3 note.
     platform.openai.com/tokenizer** for the coloured-token reference; also reusable
     on slide 07)
   - Slide 09 — Embedding 探索站 (2D/3D projection view)
-  - Slide 15 — 順序撞牆站 (shuffle + MLP(bag)/RNN toggle)
+  - Slide 15 — 像素撞牆站 (雙 MLP loss 對比 + 還原排列 π⁻¹)
   - Slide 20 — next-token 站 (context-window slider)
   - Slide 23 — RNN 視覺化 (hidden-state flow + loss)
   - Slide 27 — Transformer 站 (attention 連線; also referenced by 29 PE on/off,

@@ -2,6 +2,7 @@ import type { ReactElement } from "react";
 import { TokenizerStation } from "./tokenizer";
 import { EmbeddingStation } from "./embedding";
 import { OrderShuffleStation } from "./orderShuffle";
+import { PixelShuffleStation } from "./pixelShuffle/PixelShuffleStation";
 import { NextTokenStation } from "./nextToken";
 import { RnnVizStation } from "./rnnViz";
 import { TransformerStation } from "./transformer";
@@ -41,7 +42,7 @@ export interface StationMeta {
 export const stations: StationMeta[] = [
   { id: "tokenizer", title: "Tokenizer", blurb: "文字 → token", group: "lesson", element: <TokenizerStation /> },
   { id: "embedding", title: "Embedding", blurb: "token → vector：語意的幾何", group: "lesson", element: <EmbeddingStation /> },
-  { id: "order-shuffle", title: "打亂詞序", blurb: "為什麼詞序重要", group: "lesson", element: <OrderShuffleStation /> },
+  { id: "pixel-shuffle", title: "打亂像素", blurb: "打亂每一顆像素，MLP 卻毫無感覺", group: "lesson", element: <PixelShuffleStation /> },
   { id: "next-token", title: "猜下一個 token", blurb: "預測下一個 token", group: "lesson", element: <NextTokenStation /> },
   { id: "rnn-viz", title: "RNN 視覺化", blurb: "在序列中傳遞狀態", group: "lesson", element: <RnnVizStation /> },
   { id: "transformer", title: "Transformer", blurb: "看一句話流過一次 forward pass", group: "lesson", element: <TransformerStation /> },
@@ -51,6 +52,9 @@ export const stations: StationMeta[] = [
   { id: "skyfall", title: "衛星長出城市 · Skyfall-GS", blurb: "從衛星照片長出一座能飛進去的城市，近看的細節是模型想像的。方法來自 Day 1 廣度講者李杰穎的 Skyfall-GS", group: "panorama", element: <SkyfallStation /> },
   { id: "text-to-3d", title: "文字生 3D", blurb: "打一句話,長出一個能轉的 3D 物件;換顆 seed,同一句話長出不一樣的東西", group: "panorama", element: <TextTo3dStation /> },
   { id: "rl-playground", title: "RL 競技場", blurb: "只靠獎勵和自己的分身,牠學會玩、也學會搶", group: "panorama", element: <RlPlaygroundStation /> },
+  // Replaced at lesson slot 3 by pixel-shuffle (2026-07); kept URL-reachable
+  // for instructors — its artifacts and server routes are untouched.
+  { id: "order-shuffle", title: "打亂詞序", blurb: "為什麼詞序重要", group: "dev", element: <OrderShuffleStation /> },
   { id: "_reference", title: "Reference Station", blurb: "Copy me", group: "dev", element: <ReferenceStation /> },
   { id: "viz-sandbox", title: "Viz Sandbox", blurb: "All @camp/viz primitives", group: "dev", element: <VizSandbox /> },
 ];

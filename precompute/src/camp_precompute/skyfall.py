@@ -120,11 +120,24 @@ SCENES: list[SkyfallScene] = [
         id="JAX_164",
         label="傑克遜維爾 164",
         note="Jacksonville 最密的街區（市中心），從衛星照片重建",
+        # Rooftop drone pass from the west across downtown (church steeple,
+        # office blocks). Eye level is mush everywhere in this scene — every
+        # swept ground candidate was unreadable.
+        street={
+            "position": [-323.4, -44.3, 59.8],
+            "lookAt": [11.6, 11.5, 15.1],
+        },
     ),
     SkyfallScene(
         id="NYC_219",
         label="紐約 219",
         note="紐約市最密的街區，從衛星照片重建",
+        # A real street canyon: lane markings receding to a vanishing point,
+        # facades both sides. Auto pick, gaze rotated ~30° onto the road.
+        street={
+            "position": [-228.7, -208.4, -16.2],
+            "lookAt": [-191.6, -152.5, -16.2],
+        },
     ),
     SkyfallScene(
         id="JAX_214",

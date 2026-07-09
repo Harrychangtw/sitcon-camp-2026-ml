@@ -3,6 +3,8 @@
 
 export { loadJSON } from "./loadJSON";
 
+export { loadGzipBinary } from "./loadGzipBinary";
+
 export { loadManifest } from "./loadManifest";
 export type {
   CourseManifest,

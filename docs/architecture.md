@@ -78,7 +78,7 @@ the stations are pure client canvases that are simpler and faster under Vite.
 | Course | Title | Status | Stations |
 | ------ | ----- | ------ | -------- |
 | 1 | (synthetic-data course) | not built | backend reserved at shell `/api/synthetic` (501) |
-| 2 | Model architecture evolution: MLP → RNN → Transformer | **in progress** | `tokenizer`, `embedding`, `order-shuffle`, `next-token`, `rnn-viz`, `transformer`, `rl-playground` + dev: `/_reference`, `/viz-sandbox` |
+| 2 | Model architecture evolution: MLP → RNN → Transformer | **in progress** | `tokenizer`, `embedding`, `pixel-shuffle`, `next-token`, `rnn-viz`, `transformer`, `rl-playground` + dev: `/order-shuffle` (demoted 2026-07, URL-reachable for instructors), `/_reference`, `/viz-sandbox` |
 | 3 | TBD | not built | `rl-playground` (the §3-3 RL demo) ships early as Course 2's station 7: PPO policies trained offline (`camp-precompute train-rl` / `rl-export`) — the forager by **self-play** against frozen copies of itself, with an egocentric opponent obs block (in race mode the human IS the perceived opponent) — replayed live in-browser on a parity-locked env (`apps/course2/src/stations/rl/`); the training-progress ladder is ordered by measured head-to-head strength |
 
 Course 2's lesson order (`tokenizer → … → transformer`) is the teaching arc and
