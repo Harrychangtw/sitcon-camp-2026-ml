@@ -7,7 +7,8 @@
  * The agent plays LIVE: every sim step builds the observation, runs the tiny
  * MLP forward pass, and feeds argmax back into the same env the policies were
  * trained on (see env.ts's parity contract). The human critter shares the
- * world — same physics, same gems — driven by arrow keys / WASD.
+ * world — same physics, same gems — driven by arrow keys / WASD, or by the
+ * on-screen D-pad on touch devices (both feed the same key stack).
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { mix, readThemeColors, rgbCss, type ThemeColors } from "@camp/viz";
@@ -71,6 +72,13 @@ const FLASH_STEPS = 12;
 const KEY_ACTIONS: Record<string, number> = {
   ArrowUp: 1, ArrowDown: 2, ArrowLeft: 3, ArrowRight: 4,
   w: 1, s: 2, a: 3, d: 4, W: 1, S: 2, A: 3, D: 4,
+};
+
+export type DpadDirection = "up" | "down" | "left" | "right";
+
+/** Virtual D-pad presses masquerade as arrow keys: same stack, one pathway. */
+const DPAD_KEYS: Record<DpadDirection, string> = {
+  up: "ArrowUp", down: "ArrowDown", left: "ArrowLeft", right: "ArrowRight",
 };
 
 interface Sim {
@@ -305,6 +313,22 @@ export function useArena({ spec, weights, recipeId, mode, handicap }: UseArenaOp
     initWorld(true);
   }, [initWorld]);
 
+  // Virtual D-pad (touch): pushes/removes the SAME arrow-key names in the
+  // last-pressed-wins stack the window key handlers write into, so the sim
+  // never sees a second movement system.
+  const pressDpad = useCallback((dir: DpadDirection) => {
+    if (modeRef.current !== "race") return;
+    const key = DPAD_KEYS[dir];
+    const keys = keysRef.current;
+    if (!keys.includes(key)) keys.push(key);
+  }, []);
+
+  const releaseDpad = useCallback((dir: DpadDirection) => {
+    const keys = keysRef.current;
+    const i = keys.indexOf(DPAD_KEYS[dir]);
+    if (i >= 0) keys.splice(i, 1);
+  }, []);
+
   const addGem = useCallback(() => {
     const s = sim.current;
     if (!s || s.world.gems.length >= GEM_CAP) return;
@@ -421,6 +445,7 @@ export function useArena({ spec, weights, recipeId, mode, handicap }: UseArenaOp
     hud, cursor, draw,
     onPointerDown, onPointerMove, onPointerUp,
     startRace, changeMap, addGem, addLava,
+    pressDpad, releaseDpad,
     gemCap: GEM_CAP, lavaCap: LAVA_CAP,
   };
 }

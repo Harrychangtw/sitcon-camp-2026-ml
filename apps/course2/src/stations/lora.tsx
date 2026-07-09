@@ -347,7 +347,7 @@ export function LoraStation() {
             <LoadingTimer label="載入人格資料中" />
           </div>
         ) : (
-          <div className="absolute inset-0 overflow-auto px-8 pt-16 pb-32">
+          <div className="absolute inset-0 overflow-auto px-4 pt-16 pb-[calc(var(--dock-h,7rem)+1.5rem)] md:px-8">
             <div className="mx-auto flex min-h-full max-w-4xl flex-col justify-center">
               {/* The side-by-side reveal: same model, same prompt, one has a
                   紙條 glued on. Answers render in plain fg; the persona panel's

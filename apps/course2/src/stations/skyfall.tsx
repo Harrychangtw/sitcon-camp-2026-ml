@@ -24,6 +24,7 @@ import {
   GuidedTour,
   LoadingTimer,
   StationLayout,
+  useCoarsePointer,
 } from "@camp/ui";
 import { SplatViewer, type SplatPose } from "@camp/viz";
 import { loadJSON } from "@camp/data";
@@ -74,6 +75,9 @@ const defaultVariant = (s: SkyfallSceneMeta): Variant =>
   s.variants.after ? "after" : "before";
 
 export function SkyfallStation() {
+  // Touch vs mouse: the fly controls differ, so the hints and tour copy must too.
+  const coarse = useCoarsePointer();
+
   // 1. STATE — everything the canvas needs is plain component state.
   const [data, setData] = useState<SkyfallScenes | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -255,7 +259,9 @@ export function SkyfallStation() {
             },
             {
               title: "飛進去",
-              body: "用滑鼠拖曳轉頭，WASD 或方向鍵移動，滾輪控制高度，想去哪就在那個點上雙擊，鏡頭會飛過去。按下方的「街景視角」可以直接降到街上。",
+              body: coarse
+                ? "用一根手指拖曳轉頭，兩根手指捏合縮放、一起滑動平移。想去哪就在那個點上雙擊，鏡頭會飛過去。右下角的方向鍵可以前後左右走，按下方的「街景視角」可以直接降到街上。"
+                : "用滑鼠拖曳轉頭，滾輪縮放（往你看的方向前進後退），按住 Shift 拖曳可以平移和升降，習慣 WASD 或方向鍵也可以。想去哪就在那個點上雙擊，鏡頭會飛過去。按下方的「街景視角」可以直接降到街上。",
             },
             {
               title: "切到補完前",
@@ -289,6 +295,8 @@ export function SkyfallStation() {
               initialPose={initialPose}
               jumpTo={jump}
               bounds={scene.bounds}
+              // Lift the touch d-pad above the bottom-sheet dock on mobile.
+              bottomOffset="calc(var(--dock-h, 0px) + 1rem)"
               doubleClickFly={{
                 planeHeight: scene.groundZ,
                 eyeHeight: 0.012 * scene.diag,
@@ -333,9 +341,11 @@ export function SkyfallStation() {
               </div>
             ) : null}
 
-            {/* THE HONESTY READOUT — what you're seeing, and where it came from. */}
+            {/* THE HONESTY READOUT — what you're seeing, and where it came from.
+                Width cap below md leaves the bottom-right column free for the
+                touch d-pad, so the readout never slides under it. */}
             {readout ? (
-              <div className="pointer-events-none absolute bottom-28 left-4 max-w-xs rounded-md border border-border bg-panel/85 px-3 py-2 backdrop-blur-sm md:bottom-6">
+              <div className="pointer-events-none absolute bottom-[calc(var(--dock-h)+0.75rem)] left-4 max-w-[calc(100vw-13rem)] rounded-md border border-border bg-panel/85 px-3 py-2 backdrop-blur-sm md:bottom-6 md:max-w-xs">
                 <p
                   className={`font-mono text-[10px] uppercase tracking-wide ${
                     shownVariant === "after" && lowAltitude
@@ -366,10 +376,21 @@ export function SkyfallStation() {
               </div>
             ) : null}
 
+            {/* Touch controls hint — coarse pointers only; bottom corners are
+                taken by the d-pad and the readout, so it lives top-left, just
+                below the title island (top-4 would collide with it). */}
+            {coarse ? (
+              <div className="pointer-events-none absolute left-4 top-14 max-w-[65%]">
+                <p className="font-mono text-[10px] uppercase tracking-wide text-muted">
+                  拖曳 環顧 · 雙指 縮放平移 · 雙擊 飛過去 · 或用下方視角按鈕
+                </p>
+              </div>
+            ) : null}
+
             {/* Controls hint + credit — quiet micro-labels, bottom-right. */}
-            <div className="pointer-events-none absolute bottom-28 right-4 hidden flex-col items-end gap-1 md:bottom-6 md:flex">
+            <div className="pointer-events-none absolute bottom-[calc(var(--dock-h)+0.75rem)] right-4 hidden flex-col items-end gap-1 md:bottom-6 md:flex">
               <p className="font-mono text-[10px] uppercase tracking-wide text-muted">
-                拖曳 看四周 · WASD 移動 · 滾輪 升降 · 雙擊 飛過去
+                拖曳 看四周 · 滾輪 縮放 · Shift+拖曳 平移升降 · 雙擊 飛過去
               </p>
               <p className="font-mono text-[10px] uppercase tracking-wide text-muted">
                 Skyfall-GS · 第一作者 李杰穎 Jie-Ying Lee · Day 1 廣度講者

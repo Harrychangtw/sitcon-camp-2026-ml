@@ -130,10 +130,24 @@ function Arrow() {
   );
 }
 
-/** On-canvas hover tooltip (group-hover idiom shared with transformer/rnnViz). */
-function HoverTip({ children }: { children: ReactNode }) {
+/** On-canvas hover tooltip (group-hover idiom shared with transformer/rnnViz).
+    `align="right"` anchors the tip to the group's right edge: the last pipeline
+    column needs it so the caption grows back INTO the content instead of past
+    the scroll extent, where it would be cut off at the screen edge. The width
+    also clamps to the viewport so phone-size screens never clip the text. */
+function HoverTip({
+  children,
+  align = "left",
+}: {
+  children: ReactNode;
+  align?: "left" | "right";
+}) {
   return (
-    <div className="pointer-events-none absolute bottom-full left-0 z-40 mb-1.5 w-max max-w-xs rounded-md border border-border bg-panel px-3 py-2 text-xs leading-relaxed text-fg opacity-0 shadow-md transition-opacity duration-150 group-hover:opacity-100">
+    <div
+      className={`pointer-events-none absolute bottom-full z-40 mb-1.5 w-max max-w-[min(20rem,calc(100vw-2rem))] rounded-md border border-border bg-panel px-3 py-2 text-xs leading-relaxed text-fg opacity-0 shadow-md transition-opacity duration-150 group-hover:opacity-100 ${
+        align === "right" ? "right-0" : "left-0"
+      }`}
+    >
       {children}
     </div>
   );
@@ -179,10 +193,16 @@ export function PixelShuffleStation() {
   const [hover, setHover] = useState<Neuron | null>(null);
   const [pinned, setPinned] = useState<Neuron | null>(null);
   const [unshuffle, setUnshuffle] = useState(false);
+  // The pipeline is wider than any phone: track whether more content hides to
+  // the right (fade affordance) and whether the student has already discovered
+  // horizontal scrolling (the one-time 往右捲 hint).
+  const [moreRight, setMoreRight] = useState(false);
+  const [hintDone, setHintDone] = useState(false);
   const [, bump] = useReducer((x: number) => x + 1, 0);
   const reducedMotion = usePrefersReducedMotion();
   const colors = useThemeColors();
 
+  const scrollRef = useRef<HTMLDivElement | null>(null);
   const clientRef = useRef<TwinNetClient | null>(null);
   const nodesRefA = useRef<DiagramNode[]>([]);
   const nodesRefB = useRef<DiagramNode[]>([]);
@@ -318,6 +338,27 @@ export function PixelShuffleStation() {
     document.addEventListener("keydown", h);
     return () => document.removeEventListener("keydown", h);
   });
+
+  // The right-edge fade tracks real overflow (it disappears once the student
+  // reaches the end, or when the window is wide enough to fit everything).
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+    const measure = () =>
+      setMoreRight(el.scrollLeft + el.clientWidth < el.scrollWidth - 8);
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [data, ready]);
+
+  const onPipelineScroll = (e: React.UIEvent<HTMLDivElement>) => {
+    const el = e.currentTarget;
+    const more = el.scrollLeft + el.clientWidth < el.scrollWidth - 8;
+    if (more !== moreRight) setMoreRight(more);
+    // first real horizontal scroll = hint delivered, retire it for good.
+    if (!hintDone && el.scrollLeft > 24) setHintDone(true);
+  };
 
   const onDiagramMove = (net: NetId) => (e: React.MouseEvent) => {
     const rect = (e.currentTarget as HTMLCanvasElement).getBoundingClientRect();
@@ -534,7 +575,9 @@ export function PixelShuffleStation() {
             buttons={[
               { label: "‹", onClick: () => cycleInput(-1), disabled: !ready },
               { label: "›", onClick: () => cycleInput(1), disabled: !ready },
-              { label: "🎲", onClick: randomInput, disabled: !ready },
+              // 隨機 in plain text: the 🎲 emoji has no glyph in the deployed
+              // font stack and rendered as tofu (□) on students' devices.
+              { label: "隨機", onClick: randomInput, disabled: !ready },
             ]}
           />
         </DockControls>
@@ -561,8 +604,13 @@ export function PixelShuffleStation() {
         ) : (
           /* The pipeline: one horizontally-scrollable, left-to-right row with
              two vertically-aligned lanes. */
-          <div className="absolute inset-0 overflow-auto">
-            <div className="flex min-h-full min-w-max items-stretch gap-4 px-10 pt-24 pb-44">
+          <>
+          <div
+            ref={scrollRef}
+            onScroll={onPipelineScroll}
+            className="absolute inset-0 overflow-auto [touch-action:pan-x_pan-y]"
+          >
+            <div className="flex min-h-full min-w-max items-stretch gap-4 px-4 pt-24 pb-[calc(var(--dock-h,7rem)+1.5rem)] md:px-10">
               {/* 01 輸入圖片 */}
               <Column
                 index="01"
@@ -674,8 +722,8 @@ export function PixelShuffleStation() {
                         <div className="w-[300px] flex-1 rounded-md border border-border/60">
                           <canvas
                             ref={diagRefA}
-                            onMouseMove={onDiagramMove("A")}
-                            onMouseLeave={() => setHover(null)}
+                            onPointerMove={onDiagramMove("A")}
+                            onPointerLeave={() => setHover(null)}
                             onClick={onDiagramClick("A")}
                             className="block h-full w-full cursor-pointer"
                           />
@@ -688,8 +736,8 @@ export function PixelShuffleStation() {
                         <div className="w-[300px] flex-1 rounded-md border border-border/60">
                           <canvas
                             ref={diagRefB}
-                            onMouseMove={onDiagramMove("B")}
-                            onMouseLeave={() => setHover(null)}
+                            onPointerMove={onDiagramMove("B")}
+                            onPointerLeave={() => setHover(null)}
                             onClick={onDiagramClick("B")}
                             className="block h-full w-full cursor-pointer"
                           />
@@ -841,7 +889,7 @@ export function PixelShuffleStation() {
                       <div className="w-[240px] flex-1 rounded-md border border-border/60 bg-panel/40 p-1.5">
                         <canvas ref={probRefA} className="block h-full w-full" />
                       </div>
-                      <HoverTip>
+                      <HoverTip align="right">
                         目前這張驗證圖的 10 類機率。lime = 模型的猜測（argmax），
                         青色刻度 = 正確答案。
                       </HoverTip>
@@ -853,7 +901,7 @@ export function PixelShuffleStation() {
                       <div className="w-[240px] flex-1 rounded-md border border-border/60 bg-panel/40 p-1.5">
                         <canvas ref={probRefB} className="block h-full w-full" />
                       </div>
-                      <HoverTip>
+                      <HoverTip align="right">
                         打亂網路看同一張（打亂後的）圖，機率幾乎一模一樣、
                         排名完全相同：它從頭到尾沒發現圖被打亂過。
                       </HoverTip>
@@ -863,6 +911,26 @@ export function PixelShuffleStation() {
               </Column>
             </div>
           </div>
+
+          {/* Right-edge affordances: a fade that says「還有東西在右邊」plus a
+              one-time 往右捲 hint. Both are pointer-transparent overlays; the
+              hint retires itself after the first real horizontal scroll. */}
+          <div
+            aria-hidden
+            className={`pointer-events-none absolute inset-y-0 right-0 z-30 w-14 bg-gradient-to-l from-bg to-transparent ${barCls} ${
+              moreRight ? "opacity-100" : "opacity-0"
+            }`}
+          />
+          <div
+            aria-hidden
+            className={`pointer-events-none absolute right-4 z-30 rounded-full border border-border bg-panel/90 px-3 py-1.5 font-mono text-[11px] text-muted shadow-md ${barCls} ${
+              moreRight && !hintDone ? "opacity-100" : "opacity-0"
+            }`}
+            style={{ bottom: "calc(var(--dock-h, 7rem) + 1rem)" }}
+          >
+            往右捲 →
+          </div>
+          </>
         )}
       </div>
     </StationLayout>

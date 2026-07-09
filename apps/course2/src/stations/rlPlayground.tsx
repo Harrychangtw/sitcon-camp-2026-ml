@@ -20,7 +20,7 @@
  * MLP forward pass live (policy.ts). env.ts is parity-locked to the Python
  * reference env, so playback IS the training distribution.
  */
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   BlockButtons,
   BlockSlider,
@@ -28,10 +28,12 @@ import {
   DockControls,
   LoadingTimer,
   StationLayout,
+  useCoarsePointer,
 } from "@camp/ui";
 import { LossCurve } from "@camp/viz";
 import { loadJSON } from "@camp/data";
 import { ArenaCanvas } from "./rl/ArenaCanvas";
+import { VirtualDpad } from "./rl/VirtualDpad";
 import { useArena, type Mode } from "./rl/useArena";
 import type { Handicap } from "./rl/policy";
 import type { PoliciesArtifact, RecipeId } from "./rl/types";
@@ -71,6 +73,8 @@ export function RlPlaygroundStation() {
   const [recipeId, setRecipeId] = useState<RecipeId>("forager");
   const [ckIndex, setCkIndex] = useState(2); // race opens mid-ladder: beatable
   const [handicap, setHandicap] = useState<Handicap>("none");
+  const coarse = useCoarsePointer();
+  const { sentinelRef, dockH } = useDockHeight();
 
   // 2. LOAD PRECOMPUTED DATA — via @camp/data inside an effect.
   useEffect(() => {
@@ -177,7 +181,12 @@ export function RlPlaygroundStation() {
                 label="比賽"
                 buttons={[
                   {
-                    label: hud.phase === "finished" ? "再來一次" : "開始(空白鍵)",
+                    label:
+                      hud.phase === "finished"
+                        ? "再來一次"
+                        : coarse
+                          ? "開始"
+                          : "開始(空白鍵)",
                     onClick: arena.startRace,
                     disabled: racing,
                     primary: !racing,
@@ -198,6 +207,14 @@ export function RlPlaygroundStation() {
       }
     >
       <div className="relative h-full w-full">
+        {/* Zero-width sentinel whose height IS the layout's --dock-h var: a
+            ResizeObserver on it turns dock-height changes into state ticks. */}
+        <div
+          ref={sentinelRef}
+          aria-hidden="true"
+          className="pointer-events-none absolute left-0 top-0 w-0"
+          style={{ height: "var(--dock-h, 0px)" }}
+        />
         {error ? (
           <div className="flex h-full items-center justify-center">
             <p className="max-w-md text-center text-sm text-warning">
@@ -218,11 +235,13 @@ export function RlPlaygroundStation() {
               onPointerMove={arena.onPointerMove}
               onPointerUp={arena.onPointerUp}
               cursor={arena.cursor}
+              bottomInset={dockH === null ? undefined : dockH + 16}
             />
 
-            {/* Top-center: race scoreboard / result. */}
+            {/* Top-center: race scoreboard / result. Below md it drops under
+                the title island instead of colliding with it. */}
             {mode === "race" ? (
-              <div className="pointer-events-none absolute inset-x-0 top-4 z-20 flex justify-center">
+              <div className="pointer-events-none absolute inset-x-0 top-16 z-20 flex justify-center md:top-4">
                 <div className="flex items-center gap-4 rounded-md border border-border bg-panel/90 px-4 py-2 font-mono text-sm shadow-md">
                   <span className="text-accent2">你 {hud.humanGems}</span>
                   <span className="text-muted">:</span>
@@ -242,16 +261,30 @@ export function RlPlaygroundStation() {
                   30 秒內,比 AI 吃到更多寶石!
                 </p>
                 <p className="mt-1 text-sm text-muted">
-                  方向鍵 / WASD 移動,小心岩漿。按「開始」或空白鍵。
+                  {coarse
+                    ? "按住右下角的方向鈕移動,小心岩漿。"
+                    : "方向鍵 / WASD 移動,小心岩漿。按「開始」或空白鍵。"}
                 </p>
                 <p className="mt-1.5 max-w-sm text-xs text-muted/80">
                   牠感覺得到你的位置和速度,而且是跟自己的分身對打(self-play)
                   練出來的:搶寶石的本事沒有人教,是自己長出來的。
                 </p>
+                {coarse ? (
+                  <button
+                    type="button"
+                    onClick={arena.startRace}
+                    className="mt-3 min-h-11 w-full rounded-md bg-accent px-6 text-sm font-semibold text-accent-fg"
+                  >
+                    開始
+                  </button>
+                ) : null}
               </CenterCard>
             ) : null}
             {mode === "race" && hud.phase === "countdown" ? (
-              <div className="pointer-events-none absolute inset-0 z-20 flex items-center justify-center">
+              <div
+                className="pointer-events-none absolute inset-x-0 top-0 z-20 flex items-center justify-center"
+                style={{ bottom: "var(--dock-h, 0px)" }}
+              >
                 <span className="font-mono text-7xl font-bold text-accent">
                   {hud.countdown}
                 </span>
@@ -271,12 +304,22 @@ export function RlPlaygroundStation() {
                     ? "把「訓練進度」拉到最右邊,再試一次?"
                     : "沒有人教過它怎麼搶:它靠 self-play 跟自己的分身練出來的。調低訓練進度雪恥一下?"}
                 </p>
+                {coarse ? (
+                  <button
+                    type="button"
+                    onClick={arena.startRace}
+                    className="mt-3 min-h-11 w-full rounded-md bg-accent px-6 text-sm font-semibold text-accent-fg"
+                  >
+                    再來一次
+                  </button>
+                ) : null}
               </CenterCard>
             ) : null}
 
-            {/* Top-right: recipe card + training curve (sandbox). */}
+            {/* Top-right: recipe card + training curve (sandbox). Below md it
+                drops under the title island instead of colliding with it. */}
             {mode === "sandbox" && recipe ? (
-              <div className="pointer-events-none absolute right-4 top-4 z-20 w-72 rounded-md border border-border bg-panel/90 p-3 shadow-md">
+              <div className="pointer-events-none absolute right-4 top-16 z-20 w-72 max-w-[calc(100vw-2rem)] rounded-md border border-border bg-panel/90 p-3 shadow-md md:top-4">
                 <div className="flex items-baseline justify-between">
                   <span className="font-mono text-sm font-semibold text-accent">
                     {recipe.label}
@@ -335,11 +378,22 @@ export function RlPlaygroundStation() {
               </div>
             ) : null}
 
-            {/* Bottom-left: quiet interaction hint (sandbox). */}
+            {/* Bottom-left: quiet interaction hint (sandbox). Below md the
+                dock sheet is taller than 7rem, so track its measured height. */}
             {mode === "sandbox" ? (
-              <p className="pointer-events-none absolute bottom-28 left-4 z-20 text-[11px] text-muted/80">
+              <p className="pointer-events-none absolute bottom-28 left-4 z-20 text-[11px] text-muted/80 max-md:bottom-[calc(var(--dock-h,7rem)+0.75rem)]">
                 直接拖曳寶石和岩漿——牠沒背地圖,只感覺得到「最近的」寶石跟岩漿在哪。
               </p>
+            ) : null}
+
+            {/* Bottom-right: virtual D-pad, touch devices only. Floats just
+                above the dock sheet; feeds the same key stack as the keyboard.
+                Only while racing: at idle/finished it would sit on the
+                CenterCard's 開始 button. */}
+            {coarse && mode === "race" && racing ? (
+              <div className="absolute bottom-[calc(var(--dock-h,0px)+1rem)] right-3 z-30">
+                <VirtualDpad onPress={arena.pressDpad} onRelease={arena.releaseDpad} />
+              </div>
             ) : null}
           </>
         )}
@@ -350,10 +404,40 @@ export function RlPlaygroundStation() {
 
 function CenterCard({ children }: { children: React.ReactNode }) {
   return (
-    <div className="pointer-events-none absolute inset-0 z-20 flex items-center justify-center">
-      <div className="rounded-lg border border-border bg-panel/95 px-6 py-4 text-center shadow-lg">
+    // Bottom edge tracks the dock so the card centers in the VISIBLE arena:
+    // with the sheet expanded, an inset-0 center would park the 開始 button
+    // straight under the dock handle (untappable, and a tap there collapses
+    // the dock instead).
+    <div
+      className="pointer-events-none absolute inset-x-0 top-0 z-20 flex items-center justify-center px-4"
+      style={{ bottom: "var(--dock-h, 0px)" }}
+    >
+      {/* The card itself takes pointer events: on touch it hosts the real
+          開始 / 再來一次 button (Space has no thumb equivalent). */}
+      <div className="pointer-events-auto rounded-lg border border-border bg-panel/95 px-6 py-4 text-center shadow-lg">
         {children}
       </div>
     </div>
   );
+}
+
+/**
+ * Reads the dock's real occluded height. StationLayout publishes it as the
+ * inherited `--dock-h` CSS var; a zero-width sentinel element whose height IS
+ * that var (rendered by the station) turns var changes into ResizeObserver
+ * ticks. `null` until first measured, so the canvas can keep its fallback.
+ */
+function useDockHeight() {
+  const sentinelRef = useRef<HTMLDivElement | null>(null);
+  const [dockH, setDockH] = useState<number | null>(null);
+  useEffect(() => {
+    const el = sentinelRef.current;
+    if (!el) return;
+    const update = () => setDockH(el.getBoundingClientRect().height);
+    update();
+    const ro = new ResizeObserver(update);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+  return { sentinelRef, dockH };
 }

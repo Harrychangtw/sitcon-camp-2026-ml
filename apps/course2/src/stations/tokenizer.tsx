@@ -690,9 +690,11 @@ export function TokenizerStation() {
         </p> */}
 
         {/* Tokens fill the whole canvas, centered. Padding clears the floating
-            islands (top) and the bottom dock. Overflow scrolls; short inputs sit
-            centered, wrapping ones left-align for clean rows going down. */}
-        <div className="absolute inset-0 overflow-auto px-8 pt-16 pb-28">
+            islands (top) and the bottom dock (via the measured --dock-h, so the
+            phone bottom sheet never buries the last row). Overflow scrolls;
+            short inputs sit centered, wrapping ones left-align for clean rows
+            going down. */}
+        <div className="absolute inset-0 overflow-auto px-4 pt-16 pb-[calc(var(--dock-h,7rem)+1rem)] md:px-8">
           {!vocab || paragraphs.length === 0 ? (
             <div className="flex min-h-full items-center justify-center">
               <p className="font-mono text-xs text-muted">

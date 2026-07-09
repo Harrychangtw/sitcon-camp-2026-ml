@@ -17,7 +17,9 @@
  * pad (a 2-axis slider shaped like the model, layers × heads) picks which
  * attention matrix + MLP slice to show; hovering a matrix cell
  * cross-highlights the query + key tokens across the columns; hovering
- * chips/strips surfaces short explanations. The browser NEVER runs a
+ * chips/strips surfaces short explanations. On touch the same interactions run
+ * on taps: tapping a matrix cell pins the cross-highlight (the Heatmap's
+ * tap-to-pin), tapping a chip/strip toggles its tip. The browser NEVER runs a
  * transformer — it replays recorded/live JSON and does only a softmax over the
  * top-N exported logits.
  */
@@ -37,6 +39,7 @@ import {
   LoadingTimer,
   StationLayout,
   SuggestInput,
+  useCoarsePointer,
   type LiveState,
 } from "@camp/ui";
 import { Heatmap, VectorStrip } from "@camp/viz";
@@ -211,10 +214,16 @@ function Arrow() {
 }
 
 /** On-canvas hover tooltip (the rnnViz group-hover idiom). Wrap the hover
- * target in a `group relative` element and drop this inside. */
-function HoverTip({ children }: { children: ReactNode }) {
+ * target in a `group relative` element and drop this inside. Hover has no
+ * touch equivalent, so `open` force-shows it: on coarse pointers the station
+ * taps a target to open its tip and taps it again to close. */
+function HoverTip({ open = false, children }: { open?: boolean; children: ReactNode }) {
   return (
-    <div className="pointer-events-none absolute bottom-full left-0 z-40 mb-1.5 w-max max-w-xs rounded-md border border-border bg-panel px-3 py-2 text-xs leading-relaxed text-fg opacity-0 shadow-md transition-opacity duration-150 group-hover:opacity-100">
+    <div
+      className={`pointer-events-none absolute bottom-full left-0 z-40 mb-1.5 w-max max-w-xs rounded-md border border-border bg-panel px-3 py-2 text-xs leading-relaxed text-fg shadow-md transition-opacity duration-150 ${
+        open ? "opacity-100" : "opacity-0 group-hover:opacity-100"
+      }`}
+    >
       {children}
     </div>
   );
@@ -223,8 +232,9 @@ function HoverTip({ children }: { children: ReactNode }) {
 /** A concise white arrow drawn in a token-aligned column's left gutter, linking
  * the two cross-highlighted rows — from the query capsule to the key capsule —
  * so "this token attends to that token" reads off the matrix, on the embedding
- * and MLP strips too. Rendered only while a matrix cell is hovered (q ≠ k);
- * absolutely positioned so it never disturbs row layout. */
+ * and MLP strips too. Rendered only while a matrix cell is hovered, or pinned
+ * by a tap on touch (q ≠ k); absolutely positioned so it never disturbs row
+ * layout. */
 function CapsuleConnector({
   q,
   k,
@@ -269,8 +279,11 @@ function CapsuleConnector({
   );
 }
 
-// LayerHeadPad cell geometry: 8px cells on a 9px pitch. At Qwen3-0.6B's
-// 28 layers × 16 heads the pad lands at 251×143px, dock-sized.
+// LayerHeadPad cell geometry, in SVG viewBox units: 8-unit cells on a 9-unit
+// pitch. The svg renders at 100% of its container width (never below the 1:1
+// baseline: 251×143 at Qwen3-0.6B's 28 layers × 16 heads), so on a phone's
+// full-width dock sheet the cells scale UP with the container instead of the
+// pad clipping; pointer math converts client px back to viewBox units.
 const PAD_CELL = 8;
 const PAD_GAP = 1;
 const PAD_PITCH = PAD_CELL + PAD_GAP;
@@ -297,18 +310,22 @@ function LayerHeadPad({
 }) {
   const [hover, setHover] = useState<{ l: number; h: number } | null>(null);
   const [dragging, setDragging] = useState(false);
+  // ViewBox size (baseline units); the rendered svg stretches to its container.
   const padW = nLayers * PAD_PITCH - PAD_GAP;
   const padH = nHeads * PAD_PITCH - PAD_GAP;
 
   const cellAt = (e: ReactPointerEvent<SVGSVGElement>) => {
     const r = e.currentTarget.getBoundingClientRect();
+    // Client px → viewBox units: the svg usually renders wider than padW.
+    const sx = r.width > 0 ? padW / r.width : 1;
+    const sy = r.height > 0 ? padH / r.height : 1;
     const cl = Math.min(
       nLayers - 1,
-      Math.max(0, Math.floor((e.clientX - r.left) / PAD_PITCH)),
+      Math.max(0, Math.floor(((e.clientX - r.left) * sx) / PAD_PITCH)),
     );
     const ch = Math.min(
       nHeads - 1,
-      Math.max(0, Math.floor((e.clientY - r.top) / PAD_PITCH)),
+      Math.max(0, Math.floor(((e.clientY - r.top) * sy) / PAD_PITCH)),
     );
     return { l: cl, h: ch };
   };
@@ -316,16 +333,19 @@ function LayerHeadPad({
   // The bubble tracks whatever cell is "live": the hovered cell while
   // exploring, the committed selection otherwise (dragging keeps them equal).
   const live = hover ?? { l: layer, h: head };
+  // Bubble x as a % of the pad's rendered width, so it rides the live cell's
+  // center at any scale; clamped so it never spills past the pad's edges.
+  const bubbleX = ((live.l * PAD_PITCH + PAD_CELL / 2) / padW) * 100;
 
   return (
-    <div className="group/control col-span-2 grid grid-cols-subgrid items-center">
+    <div className="group/control flex flex-col gap-1.5 md:col-span-2 md:grid md:grid-cols-subgrid md:items-center">
       <InfoLabel
         label="Layer × Head"
         gloss={`模型縮圖：橫向 ${nLayers} 層，縱向每層 ${nHeads} 個 head，點或拖選一格`}
         info="每一格就是模型裡一個真實的注意力頭：橫軸選第幾層，縱軸選同一層裡的哪個 head，一次拖曳同時定兩個。淺層多半關注鄰近、表面的關係，越深越抽象；每個 head 各自學到不同的關注模式，沒有現成標籤，自己去翻。"
       />
       <div
-        className="group/pad relative flex items-start gap-1.5 py-1 outline-none focus-visible:rounded-md focus-visible:ring-1 focus-visible:ring-white"
+        className="group/pad relative flex flex-col gap-1 py-1 outline-none focus-visible:rounded-md focus-visible:ring-1 focus-visible:ring-white"
         tabIndex={0}
         role="group"
         aria-label={`Layer 與 Head 選擇：目前 L${layer}、H${head}，方向鍵可調整`}
@@ -345,90 +365,87 @@ function LayerHeadPad({
           );
         }}
       >
-        {/* Value bubble — BlockSlider's idiom, tracking the live cell. */}
-        <div
-          className={`pointer-events-none absolute -top-6 z-10 -translate-x-1/2 whitespace-nowrap rounded-sm border border-border bg-panel px-2 py-0.5 font-mono text-xs text-fg shadow-md transition-all duration-150 ${
-            hover || dragging
-              ? "scale-100 opacity-100"
-              : "scale-90 opacity-0 group-hover/pad:scale-100 group-hover/pad:opacity-100"
-          }`}
-          style={{ left: 18 + live.l * PAD_PITCH + PAD_CELL / 2 }}
-        >
-          L{live.l} · H{live.h}
-        </div>
-        {/* Head axis — top and bottom row indices. */}
-        <div
-          className="flex w-4 shrink-0 flex-col justify-between text-right font-mono text-[9px] leading-none text-muted"
-          style={{ height: padH }}
-        >
-          <span>H0</span>
-          <span>H{nHeads - 1}</span>
-        </div>
-        <div className="flex flex-col gap-1">
-          <svg
-            width={padW}
-            height={padH}
-            className="cursor-pointer touch-none opacity-80 transition-opacity duration-150 group-hover/pad:opacity-100"
-            onPointerDown={(e) => {
-              e.currentTarget.setPointerCapture(e.pointerId);
-              setDragging(true);
-              const c = cellAt(e);
-              setHover(c);
-              onPick(c.l, c.h);
-            }}
-            onPointerMove={(e) => {
-              const c = cellAt(e);
-              setHover(c);
-              if (dragging) onPick(c.l, c.h);
-            }}
-            onPointerUp={() => setDragging(false)}
-            onPointerLeave={() => {
-              if (!dragging) setHover(null);
-            }}
-          >
-            {Array.from({ length: nLayers }, (_, cl) =>
-              Array.from({ length: nHeads }, (_, ch) => {
-                const selected = cl === layer && ch === head;
-                const crosshair = cl === layer || ch === head;
-                return (
-                  <rect
-                    key={`${cl}-${ch}`}
-                    x={cl * PAD_PITCH}
-                    y={ch * PAD_PITCH}
-                    width={PAD_CELL}
-                    height={PAD_CELL}
-                    rx={1.5}
-                    className={
-                      selected
-                        ? "fill-accent"
-                        : crosshair
-                          ? "fill-fg/30"
-                          : "fill-fg/10"
-                    }
-                  />
-                );
-              }),
-            )}
-            {/* White ring on the selected cell — the crosshair's handle. */}
-            <rect
-              x={layer * PAD_PITCH - 1}
-              y={head * PAD_PITCH - 1}
-              width={PAD_CELL + 2}
-              height={PAD_CELL + 2}
-              rx={2.5}
-              className="fill-none stroke-white"
-              strokeWidth={1.25}
-            />
-          </svg>
-          {/* Layer axis — depth runs left→right, like the pipeline. */}
-          <div
-            className="flex justify-between font-mono text-[9px] leading-none text-muted"
-            style={{ width: padW }}
-          >
-            <span>L0</span>
-            <span className="opacity-70">Layer 層 →</span>
-            <span>L{nLayers - 1}</span>
+        <div className="flex items-stretch gap-1.5">
+          {/* Head axis — top and bottom row indices. */}
+          <div className="flex w-4 shrink-0 flex-col justify-between text-right font-mono text-[9px] leading-none text-muted">
+            <span>H0</span>
+            <span>H{nHeads - 1}</span>
           </div>
+          <div className="relative min-w-0 flex-1">
+            {/* Value bubble — BlockSlider's idiom, tracking the live cell. */}
+            <div
+              className={`pointer-events-none absolute -top-6 z-10 -translate-x-1/2 whitespace-nowrap rounded-sm border border-border bg-panel px-2 py-0.5 font-mono text-xs text-fg shadow-md transition-all duration-150 ${
+                hover || dragging
+                  ? "scale-100 opacity-100"
+                  : "scale-90 opacity-0 group-hover/pad:scale-100 group-hover/pad:opacity-100"
+              }`}
+              style={{ left: `clamp(2.25rem, ${bubbleX}%, calc(100% - 2.25rem))` }}
+            >
+              L{live.l} · H{live.h}
+            </div>
+            <svg
+              viewBox={`0 0 ${padW} ${padH}`}
+              style={{ display: "block", width: "100%", minWidth: padW, height: "auto" }}
+              className="cursor-pointer touch-none opacity-80 transition-opacity duration-150 group-hover/pad:opacity-100"
+              onPointerDown={(e) => {
+                e.currentTarget.setPointerCapture(e.pointerId);
+                setDragging(true);
+                const c = cellAt(e);
+                setHover(c);
+                onPick(c.l, c.h);
+              }}
+              onPointerMove={(e) => {
+                const c = cellAt(e);
+                setHover(c);
+                if (dragging) onPick(c.l, c.h);
+              }}
+              onPointerUp={() => setDragging(false)}
+              onPointerLeave={() => {
+                if (!dragging) setHover(null);
+              }}
+            >
+              {Array.from({ length: nLayers }, (_, cl) =>
+                Array.from({ length: nHeads }, (_, ch) => {
+                  const selected = cl === layer && ch === head;
+                  const crosshair = cl === layer || ch === head;
+                  return (
+                    <rect
+                      key={`${cl}-${ch}`}
+                      x={cl * PAD_PITCH}
+                      y={ch * PAD_PITCH}
+                      width={PAD_CELL}
+                      height={PAD_CELL}
+                      rx={1.5}
+                      className={
+                        selected
+                          ? "fill-accent"
+                          : crosshair
+                            ? "fill-fg/30"
+                            : "fill-fg/10"
+                      }
+                    />
+                  );
+                }),
+              )}
+              {/* White ring on the selected cell — the crosshair's handle. */}
+              <rect
+                x={layer * PAD_PITCH - 1}
+                y={head * PAD_PITCH - 1}
+                width={PAD_CELL + 2}
+                height={PAD_CELL + 2}
+                rx={2.5}
+                className="fill-none stroke-white"
+                strokeWidth={1.25}
+              />
+            </svg>
+          </div>
+        </div>
+        {/* Layer axis — depth runs left→right, like the pipeline. pl matches
+            the head-axis column (w-4 + gap-1.5) so L0 sits under column 0. */}
+        <div className="flex justify-between pl-[22px] font-mono text-[9px] leading-none text-muted">
+          <span>L0</span>
+          <span className="opacity-70">Layer 層 →</span>
+          <span>L{nLayers - 1}</span>
         </div>
       </div>
     </div>
@@ -444,9 +461,20 @@ export function TransformerStation() {
   const [layer, setLayer] = useState(0);
   const [head, setHead] = useState(0);
   const [temperature, setTemperature] = useState(1);
-  /** Hovered attention cell: q = query row, k = key column. */
+  /** Hovered attention cell: q = query row, k = key column. On touch this is
+   * driven by the Heatmap's tap-to-pin (same onHoverCell callback), so a tap
+   * pins the cross-highlight until the next tap. */
   const [hovered, setHovered] = useState<{ q: number; k: number } | null>(null);
   const reducedMotion = usePrefersReducedMotion();
+  const coarse = useCoarsePointer();
+  /** Touch path for the group-hover HoverTips: the id of the tapped-open tip
+   * (chips/strips/bars have no hover on a phone). Tap toggles; only wired on
+   * coarse pointers so mouse clicks keep plain hover semantics. */
+  const [openTip, setOpenTip] = useState<string | null>(null);
+  const toggleTip = (id: string) => {
+    if (!coarse) return;
+    setOpenTip((cur) => (cur === id ? null : id));
+  };
 
   // 2. LOAD PRECOMPUTED DATA — recorded real Qwen pipeline payloads.
   useEffect(() => {
@@ -544,9 +572,10 @@ export function TransformerStation() {
     return { kind: "idle" };
   }, [livePending, liveRejected, liveFailed, liveShown, showingLive, liveMs]);
 
-  // A new sentence has different tokens — reset the hover.
+  // A new sentence has different tokens — reset the hover and any open tip.
   useEffect(() => {
     setHovered(null);
+    setOpenTip(null);
   }, [sentenceId]);
 
   // 3. DERIVED — the picked (layer, head) slice, indices clamped so a stale
@@ -566,6 +595,28 @@ export function TransformerStation() {
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const matrixRef = useRef<HTMLDivElement | null>(null);
   const didMount = useRef(false);
+
+  // MOBILE SCROLL AFFORDANCE: on a phone most of the pipeline starts
+  // off-screen and touch shows no scrollbar. Track "is there more content to
+  // the right" (drives a right-edge fade) and "has the view scrolled yet"
+  // (a one-time 往右捲 hint that fades out after the first horizontal scroll).
+  const [canScrollRight, setCanScrollRight] = useState(false);
+  const [hasScrolledX, setHasScrolledX] = useState(false);
+  useEffect(() => {
+    const c = scrollRef.current;
+    if (!c) return;
+    const update = () => {
+      setCanScrollRight(c.scrollLeft + c.clientWidth < c.scrollWidth - 8);
+      if (c.scrollLeft > 24) setHasScrolledX(true);
+    };
+    update();
+    c.addEventListener("scroll", update, { passive: true });
+    window.addEventListener("resize", update);
+    return () => {
+      c.removeEventListener("scroll", update);
+      window.removeEventListener("resize", update);
+    };
+  }, [sentenceId, data]);
 
   useEffect(() => {
     if (!didMount.current) return;
@@ -686,7 +737,11 @@ export function TransformerStation() {
   const tokenChip = (i: number, tip: ReactNode) => {
     const role = roleOf(i);
     return (
-      <div className="group relative flex items-center gap-1.5" style={{ height: rowH }}>
+      <div
+        className="group relative flex items-center gap-1.5"
+        style={{ height: rowH }}
+        onClick={() => toggleTip(`tok-${i}`)}
+      >
         <span className="w-5 shrink-0 text-right font-mono text-[9px] text-muted opacity-60">
           {String(i).padStart(2, "0")}
         </span>
@@ -711,7 +766,7 @@ export function TransformerStation() {
             </span>
           ) : null}
         </span>
-        <HoverTip>{tip}</HoverTip>
+        <HoverTip open={openTip === `tok-${i}`}>{tip}</HoverTip>
       </div>
     );
   };
@@ -803,9 +858,16 @@ export function TransformerStation() {
             <LoadingTimer label="pipeline 資料載入中" />
           </div>
         ) : (
-          /* The pipeline: one horizontally-scrollable, left-to-right row. */
-          <div ref={scrollRef} className="absolute inset-0 overflow-auto">
-            <div className="flex min-h-full min-w-max items-stretch gap-4 px-10 pt-28 pb-64">
+          /* The pipeline: one horizontally-scrollable, left-to-right row.
+             touch-action pan-x/pan-y keeps one-finger panning working in both
+             axes on touch; the bottom padding tracks the dock's real measured
+             height (--dock-h) so the last rows clear the sheet on a phone. */
+          <>
+          <div
+            ref={scrollRef}
+            className="absolute inset-0 overflow-auto [touch-action:pan-x_pan-y]"
+          >
+            <div className="flex min-h-full min-w-max items-stretch gap-4 px-4 pt-28 pb-[calc(var(--dock-h,7rem)+1.5rem)] md:px-10">
               {/* 01 — 輸入 */}
               <Column index="01" title="輸入">
                 <div className="max-w-[200px] rounded-md border border-border/60 bg-panel px-4 py-3 text-sm leading-relaxed text-fg">
@@ -856,6 +918,7 @@ export function TransformerStation() {
                           key={`emb-${i}`}
                           className="group relative flex items-center pl-4"
                           style={{ height: rowH }}
+                          onClick={() => toggleTip(`emb-${i}`)}
                         >
                           {/* flex (not block) so the highlight hugs the 10px
                               strip instead of the taller inline line-box. */}
@@ -869,7 +932,7 @@ export function TransformerStation() {
                               ariaLabel={`embedding of ${displayTokens[i]}`}
                             />
                           </div>
-                          <HoverTip>
+                          <HoverTip open={openTip === `emb-${i}`}>
                             <span className="font-mono text-accent">
                               {displayTokens[i]}
                             </span>{" "}
@@ -940,7 +1003,12 @@ export function TransformerStation() {
                         cell rows would sit 1px above the plain token rows; this
                         lands matrix row i on the same line as every column. */}
                     <div style={{ width: matrixW, marginTop: HEATMAP_GAP / 2 }}>
+                      {/* Keyed by sentence: the station resets `hovered` on a
+                          sentence change, so the Heatmap must remount to drop
+                          its internal tap-pin too, or the stale pin would keep
+                          swallowing hover events with nothing highlighted. */}
                       <Heatmap
+                        key={sentence.sentenceId}
                         matrix={matrix}
                         rowLabels={displayTokens}
                         colLabels={displayTokens}
@@ -967,7 +1035,10 @@ export function TransformerStation() {
                         never resizes the rail or shifts the group's centering. */}
                     <p
                       className="absolute top-full mt-2 h-8 font-mono text-[10px] leading-snug text-muted"
-                      style={{ width: Math.max(matrixW, 320) }}
+                      style={{
+                        width: Math.max(matrixW, 320),
+                        maxWidth: "calc(100vw - 2rem)",
+                      }}
                     >
                       {hovered && hoveredW !== undefined && Number.isFinite(hoveredW) ? (
                         <>
@@ -985,7 +1056,10 @@ export function TransformerStation() {
                         sits under the hover readout, still inside column 04. */}
                     <p
                       className="absolute top-full mt-12 text-[11px] leading-snug text-muted"
-                      style={{ width: Math.max(matrixW, 320), maxWidth: 420 }}
+                      style={{
+                        width: Math.max(matrixW, 320),
+                        maxWidth: "min(420px, calc(100vw - 2rem))",
+                      }}
                     >
                       一層是模型的一個處理階段；每一層裡有 {nHeads} 個
                       head，各自注意字和字之間不同的關係。模型把 {nLayers}{" "}
@@ -995,7 +1069,11 @@ export function TransformerStation() {
                   </div>
 
                   {/* MLP：attention 混完，MLP 逐 token 變換 */}
-                  <div className="group relative flex flex-col" style={{ height: railH }}>
+                  <div
+                    className="group relative flex flex-col"
+                    style={{ height: railH }}
+                    onClick={() => toggleTip("mlp")}
+                  >
                     {topZone(
                       <>
                         MLP · <span className="text-accent">L{l}</span>
@@ -1038,7 +1116,7 @@ export function TransformerStation() {
                             height={railH}
                           />
                         ) : null}
-                        <HoverTip>
+                        <HoverTip open={openTip === "mlp"}>
                           attention 把整句的資訊混進每個 token 之後，MLP
                           再對每個 token 各自做一次非線性變換。這是 L{l} 真實的
                           activation，全長 {sentence.mlp?.fullDims} 維，只畫得下{" "}
@@ -1061,7 +1139,10 @@ export function TransformerStation() {
               {/* 05 — 輸出（next-token 站的機率長條） */}
               <Column index="05" title="Next Token 下一個 token">
                 {outputProbs.length ? (
-                  <div className="group relative flex w-64 flex-col gap-1.5">
+                  <div
+                    className="group relative flex w-64 flex-col gap-1.5"
+                    onClick={() => toggleTip("out")}
+                  >
                     {outputProbs.map((p, i) => {
                       const isArgmax = i === 0;
                       return (
@@ -1088,7 +1169,7 @@ export function TransformerStation() {
                         </div>
                       );
                     })}
-                    <HoverTip>
+                    <HoverTip open={openTip === "out"}>
                       疊完 {nLayers} 層之後，最後一個 token 的向量 softmax
                       成下一個 token 的機率，和 Next Token 站是同一條長條。
                       這是真實的 top-{sentence.output?.length ?? 0}
@@ -1103,6 +1184,25 @@ export function TransformerStation() {
               </Column>
             </div>
           </div>
+          {/* Right-edge fade: says "the pipeline keeps going" while there is
+              still off-screen content to the right. Sibling of the scroll
+              container so it stays put while the content scrolls. */}
+          <div
+            aria-hidden
+            className={`pointer-events-none absolute inset-y-0 right-0 w-16 bg-gradient-to-l from-bg to-transparent transition-opacity duration-300 ${
+              canScrollRight ? "opacity-100" : "opacity-0"
+            }`}
+          />
+          {/* One-time nudge: fades out after the first horizontal scroll. */}
+          <div
+            aria-hidden
+            className={`pointer-events-none absolute right-4 bottom-[calc(var(--dock-h,7rem)+0.75rem)] rounded-full border border-border bg-panel/90 px-3 py-1.5 font-mono text-[11px] text-muted shadow-md transition-opacity duration-500 ${
+              canScrollRight && !hasScrolledX ? "opacity-100" : "opacity-0"
+            }`}
+          >
+            往右捲，生產線還有下一站 →
+          </div>
+          </>
         )}
       </div>
     </StationLayout>

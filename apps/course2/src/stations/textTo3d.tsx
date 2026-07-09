@@ -23,6 +23,7 @@ import {
   InfoLabel,
   LoadingTimer,
   StationLayout,
+  useCoarsePointer,
 } from "@camp/ui";
 import { SplatViewer, type SplatPose } from "@camp/viz";
 import { loadJSON } from "@camp/data";
@@ -92,6 +93,10 @@ export function TextTo3dStation() {
   const [presetId, setPresetId] = useState<string | null>(null);
   const [seed, setSeed] = useState<number | null>(null);
   const [autorotate, setAutorotate] = useState(true);
+  // Touch devices have no hover: tapping the ACTIVE preset card toggles the
+  // English-prompt reveal instead (promptOpen), so the reveal stays reachable.
+  const coarse = useCoarsePointer();
+  const [promptOpen, setPromptOpen] = useState(false);
   // The two-beat copy flips to its second line once the student flips a seed.
   const [seedFlipped, setSeedFlipped] = useState(false);
   // Fresh object per click → SplatViewer re-fires the framed viewpoint.
@@ -155,6 +160,17 @@ export function TextTo3dStation() {
     setAutorotate(true);
   };
 
+  // One tap handler for both preset rails: a new card picks it, tapping the
+  // already-active card on a coarse pointer toggles the English-prompt reveal.
+  const tapPreset = (id: string) => {
+    if (id !== presetId) {
+      pickPreset(id);
+      setPromptOpen(false);
+      return;
+    }
+    if (coarse) setPromptOpen((v) => !v);
+  };
+
   const pickSeed = (s: number) => {
     if (s === seed) return;
     setSeed(s);
@@ -212,7 +228,7 @@ export function TextTo3dStation() {
           <InfoLabel
             label="提示詞 PROMPT"
             gloss={preset?.prompt ?? ""}
-            info="模型讀到的其實是這句英文 prompt。TRELLIS 是用英文訓練的,中文標籤只是給你看的;把游標移到左邊的句子卡上,也會看到餵給模型的英文。"
+            info="模型讀到的其實是這句英文 prompt。TRELLIS 是用英文訓練的,中文標籤只是給你看的;把游標移到句子卡上,或在手機上點一下已選中的卡片,也會看到餵給模型的英文。"
           />
         </DockControls>
       }
@@ -281,8 +297,10 @@ export function TextTo3dStation() {
 
             {/* PRESET PICKER — the "挑一句話" rail. Thumbnail + zh label; the
                 English prompt reveals on hover (students SEE the model was fed
-                English). Lime ring on the active card. */}
-            <div className="pointer-events-auto absolute bottom-24 left-4 top-16 flex w-36 flex-col gap-2 overflow-y-auto pr-1 md:w-40">
+                English), or by tapping the active card on touch. Lime ring on
+                the active card. Vertical left rail on md+, hidden on phones
+                (the horizontal strip below the canvas takes over there). */}
+            <div className="pointer-events-auto absolute bottom-24 left-4 top-16 hidden w-36 flex-col gap-2 overflow-y-auto pr-1 md:flex md:w-40">
               <p className="sticky top-0 z-10 bg-gradient-to-b from-bg via-bg/90 to-transparent pb-1 font-mono text-[10px] uppercase tracking-wide text-muted">
                 挑一句話
               </p>
@@ -290,7 +308,7 @@ export function TextTo3dStation() {
                 <button
                   key={p.id}
                   type="button"
-                  onClick={() => pickPreset(p.id)}
+                  onClick={() => tapPreset(p.id)}
                   aria-label={p.label}
                   className={`group/card relative flex-none overflow-hidden rounded-md border text-left transition-all ${
                     p.id === presetId
@@ -317,8 +335,15 @@ export function TextTo3dStation() {
                   >
                     {p.label}
                   </span>
-                  {/* Hover reveal: the exact English prompt fed to TRELLIS. */}
-                  <span className="pointer-events-none absolute left-full top-0 z-40 ml-2 hidden w-max max-w-[15rem] rounded-md border border-border bg-panel px-3 py-2 text-xs leading-relaxed text-fg shadow-md group-hover/card:block">
+                  {/* Hover reveal (or tap-toggled on touch): the exact English
+                      prompt fed to TRELLIS. */}
+                  <span
+                    className={`pointer-events-none absolute left-full top-0 z-40 ml-2 w-max max-w-[15rem] rounded-md border border-border bg-panel px-3 py-2 text-xs leading-relaxed text-fg shadow-md ${
+                      promptOpen && p.id === presetId
+                        ? "block"
+                        : "hidden group-hover/card:block"
+                    }`}
+                  >
                     <span className="mb-1 block font-mono text-[10px] uppercase tracking-wide text-muted">
                       模型讀到的英文
                     </span>
@@ -326,6 +351,88 @@ export function TextTo3dStation() {
                   </span>
                 </button>
               ))}
+            </div>
+
+            {/* MOBILE STACK (< md): everything that must sit above the dock
+                sheet, stacked bottom-up so nothing collides: horizontal preset
+                strip, then the touch hint + reset row, then the prompt reveal,
+                then the two-beat copy. Anchored to the measured dock height. */}
+            <div className="pointer-events-none absolute inset-x-0 bottom-[calc(var(--dock-h)+0.5rem)] flex flex-col gap-2 md:hidden">
+              {beat ? (
+                <div className="mx-auto w-fit max-w-[calc(100%-1.5rem)] rounded-md border border-border bg-panel/85 px-3 py-2 text-center backdrop-blur-sm">
+                  <p className="font-mono text-[10px] uppercase tracking-wide text-accent">
+                    {seedLabel(seed ?? 0)} · {preset.label}
+                  </p>
+                  <p className="mt-1 text-xs leading-relaxed text-fg">{beat}</p>
+                </div>
+              ) : null}
+              {/* Tap-toggled English prompt (tap the active card below to open,
+                  tap this panel to close). */}
+              {promptOpen ? (
+                <button
+                  type="button"
+                  onClick={() => setPromptOpen(false)}
+                  className="pointer-events-auto mx-3 rounded-md border border-border bg-panel/95 px-3 py-2 text-left text-xs leading-relaxed text-fg shadow-md"
+                >
+                  <span className="mb-1 block font-mono text-[10px] uppercase tracking-wide text-muted">
+                    模型讀到的英文
+                  </span>
+                  {preset.prompt}
+                </button>
+              ) : null}
+              <div className="flex items-end justify-between px-3">
+                {coarse ? (
+                  <p className="font-mono text-[10px] uppercase tracking-wide text-muted">
+                    拖曳旋轉 · 雙指縮放
+                  </p>
+                ) : (
+                  <span />
+                )}
+                <button
+                  type="button"
+                  onClick={resetView}
+                  className="pointer-events-auto rounded border border-border bg-panel/80 px-2 py-1 font-mono text-[10px] uppercase tracking-wide text-muted transition-colors hover:text-fg"
+                >
+                  重置視角
+                </button>
+              </div>
+              {/* Horizontal thumbnail strip: same presets as the desktop rail,
+                  docked just above the dock sheet. */}
+              <div className="pointer-events-auto flex touch-pan-x gap-2 overflow-x-auto px-3 pb-1">
+                {data.presets.map((p) => (
+                  <button
+                    key={p.id}
+                    type="button"
+                    onClick={() => tapPreset(p.id)}
+                    aria-label={p.label}
+                    className={`relative h-[4.5rem] w-[4.5rem] flex-none overflow-hidden rounded-md border text-left transition-all ${
+                      p.id === presetId
+                        ? "border-accent ring-1 ring-accent"
+                        : "border-border opacity-80"
+                    }`}
+                  >
+                    {p.objects[0]?.thumb ? (
+                      <img
+                        src={`${DATA_ROOT}/${p.objects[0].thumb}`}
+                        alt=""
+                        className="h-full w-full bg-black object-cover"
+                        draggable={false}
+                      />
+                    ) : (
+                      <div className="flex h-full w-full items-center justify-center bg-black">
+                        <span className="font-mono text-[10px] text-muted">3D</span>
+                      </div>
+                    )}
+                    <span
+                      className={`absolute inset-x-0 bottom-0 truncate bg-gradient-to-t from-black/80 to-transparent px-1.5 pb-0.5 pt-2 text-[10px] ${
+                        p.id === presetId ? "text-accent" : "text-white"
+                      }`}
+                    >
+                      {p.label}
+                    </span>
+                  </button>
+                ))}
+              </div>
             </div>
 
             {/* FIRST LOAD — objects are ≤2 MB so this is quick, but count it. */}
@@ -349,9 +456,11 @@ export function TextTo3dStation() {
               </div>
             ) : null}
 
-            {/* THE TWO-BEAT COPY — what the student is looking at, and the point. */}
+            {/* THE TWO-BEAT COPY — what the student is looking at, and the
+                point. Desktop position; on phones it lives in the mobile
+                stack above the dock. */}
             {beat ? (
-              <div className="pointer-events-none absolute bottom-6 left-1/2 max-w-sm -translate-x-1/2 rounded-md border border-border bg-panel/85 px-3 py-2 text-center backdrop-blur-sm">
+              <div className="pointer-events-none absolute bottom-6 left-1/2 hidden max-w-sm -translate-x-1/2 rounded-md border border-border bg-panel/85 px-3 py-2 text-center backdrop-blur-sm md:block">
                 <p className="font-mono text-[10px] uppercase tracking-wide text-accent">
                   {seedLabel(seed ?? 0)} · {preset.label}
                 </p>
@@ -359,11 +468,13 @@ export function TextTo3dStation() {
               </div>
             ) : null}
 
-            {/* Reset-view affordance — orbit can wander; snap back to the frame. */}
+            {/* Reset-view affordance — orbit can wander; snap back to the
+                frame. Desktop only; the phone version sits in the mobile
+                stack so it never collides with the thumbnail strip. */}
             <button
               type="button"
               onClick={resetView}
-              className="pointer-events-auto absolute right-4 bottom-24 rounded border border-border bg-panel/80 px-2 py-1 font-mono text-[10px] uppercase tracking-wide text-muted transition-colors hover:text-fg md:bottom-6"
+              className="pointer-events-auto absolute bottom-6 right-4 hidden rounded border border-border bg-panel/80 px-2 py-1 font-mono text-[10px] uppercase tracking-wide text-muted transition-colors hover:text-fg md:block"
             >
               重置視角
             </button>
@@ -382,10 +493,11 @@ export function TextTo3dStation() {
               </div>
             ) : null}
 
-            {/* Controls hint + credit — quiet micro-labels, bottom-right. */}
+            {/* Controls hint + credit — quiet micro-labels, bottom-right.
+                Coarse pointers (touch tablets) get touch wording instead. */}
             <div className="pointer-events-none absolute bottom-14 right-4 hidden flex-col items-end gap-1 md:flex">
               <p className="font-mono text-[10px] uppercase tracking-wide text-muted">
-                拖曳 繞著轉 · 滾輪 拉遠拉近
+                {coarse ? "拖曳旋轉 · 雙指縮放" : "拖曳 繞著轉 · 滾輪 拉遠拉近"}
               </p>
               <p className="font-mono text-[10px] uppercase tracking-wide text-muted">
                 Microsoft TRELLIS · 文字生 3D · MIT

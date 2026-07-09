@@ -37,16 +37,26 @@ export interface ArenaCanvasProps {
   onPointerUp?: (e: ArenaPointerEvent) => void;
   /** CSS cursor for the canvas (the host hit-tests and decides). */
   cursor?: string;
+  /**
+   * Real dock occlusion in CSS px (station measures StationLayout's --dock-h
+   * and adds breathing room). Falls back to a desktop-dock estimate.
+   */
+  bottomInset?: number;
 }
 
 /** Reserve breathing room for the floating title (top) and dock (bottom).
- *  The RL dock is a 3-row control stack (~190px tall), so the bottom inset
- *  clears it — otherwise the arena's lower half hides behind the dock. */
+ *  `bottom` is only a FALLBACK sized to the desktop dock (~190px stack +
+ *  margin); the station passes the measured dock height as `bottomInset` so
+ *  the arena clears the mobile bottom sheet too. */
 const INSET = { top: 56, bottom: 210, x: 24 };
 
-export function arenaRect(width: number, height: number): ArenaRect {
+export function arenaRect(
+  width: number,
+  height: number,
+  bottomInset: number = INSET.bottom,
+): ArenaRect {
   const availW = width - INSET.x * 2;
-  const availH = height - INSET.top - INSET.bottom;
+  const availH = height - INSET.top - bottomInset;
   const side = Math.max(Math.min(availW, availH), 40);
   return {
     left: (width - side) / 2,
@@ -61,12 +71,15 @@ export function ArenaCanvas({
   onPointerMove,
   onPointerUp,
   cursor = "default",
+  bottomInset,
 }: ArenaCanvasProps) {
   const wrapRef = useRef<HTMLDivElement | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   // Keep the latest callbacks without re-subscribing the rAF loop.
   const drawRef = useRef(draw);
   drawRef.current = draw;
+  const insetRef = useRef(bottomInset);
+  insetRef.current = bottomInset;
 
   useEffect(() => {
     const wrap = wrapRef.current;
@@ -94,7 +107,7 @@ export function ArenaCanvas({
       if (ctx && width > 0 && height > 0) {
         const dpr = window.devicePixelRatio || 1;
         ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-        drawRef.current(ctx, arenaRect(width, height), width, height, nowMs);
+        drawRef.current(ctx, arenaRect(width, height, insetRef.current), width, height, nowMs);
       }
       raf = requestAnimationFrame(frame);
     };
@@ -109,7 +122,7 @@ export function ArenaCanvas({
   const toWorld = (e: React.PointerEvent<HTMLCanvasElement>): ArenaPointerEvent => {
     const canvas = canvasRef.current!;
     const bounds = canvas.getBoundingClientRect();
-    const rect = arenaRect(bounds.width, bounds.height);
+    const rect = arenaRect(bounds.width, bounds.height, bottomInset);
     return {
       x: (e.clientX - bounds.left - rect.left) / rect.side,
       y: (e.clientY - bounds.top - rect.top) / rect.side,

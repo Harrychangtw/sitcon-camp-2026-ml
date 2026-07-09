@@ -391,9 +391,11 @@ export function NextTokenStation() {
           </div>
         ) : (
           // The bar field is the whole page: vertically centered, capped to a
-          // readable column, clear of the top island and bottom dock. Minimal
-          // header labels name what each column is; no caption, no heatmap.
-          <div className="absolute inset-0 overflow-auto px-8 pt-16 pb-28">
+          // readable column, clear of the top island and bottom dock (via the
+          // measured --dock-h, so the phone bottom sheet never buries the last
+          // bar). Minimal header labels name what each column is; no caption,
+          // no heatmap.
+          <div className="absolute inset-0 overflow-auto px-4 pt-16 pb-[calc(var(--dock-h,7rem)+1rem)] md:px-8">
             <div className="mx-auto flex min-h-full max-w-xl flex-col justify-center">
               {/* Context strip: the prompt's real pieces, in read order. The
                   ones the window trims off are dimmed + struck through (the

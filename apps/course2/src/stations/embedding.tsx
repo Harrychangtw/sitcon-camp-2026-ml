@@ -243,8 +243,18 @@ export function EmbeddingStation() {
   // Pointing at any point in the cloud previews it as if searched: the hovered
   // word takes precedence over the typed query, so its neighbours light up and
   // the readout panel fills. Reverts to the query the moment the cursor leaves.
+  // On touch the Scatter primitives fire the same callback from tap-to-pin, so
+  // a tapped point sticks here until the pin is cleared.
   const [hoverWord, setHoverWord] = useState<string | null>(null);
   const shownWord = hoverWord ?? activeWord;
+
+  // Mobile-only (< md) disclosure state for the two top overlays. At phone
+  // width the glossary and the legend can't float side by side without
+  // covering the title or each other, so both fold into tap-to-expand lines
+  // and default closed to leave the point cloud the screen. >= md ignores
+  // these entirely and always shows both expanded.
+  const [glossaryOpen, setGlossaryOpen] = useState(false);
+  const [legendOpen, setLegendOpen] = useState(false);
 
   const nearest = useMemo<Neighbor[]>(() => {
     if (!shownWord) return [];
@@ -330,21 +340,6 @@ export function EmbeddingStation() {
       }
     >
       <div className="relative h-full w-full">
-        {/* Always-visible glossary caption (no hover needed): the plain-language
-            identity of the two jargon terms students meet here, floating just
-            under the title island. Quiet secondary text; the deeper
-            how-embeddings-are-learned story is out of scope for this station. */}
-        <div className="pointer-events-none absolute left-9 top-14 z-20 flex max-w-md flex-col gap-1">
-          <p className="text-xs leading-relaxed text-muted">
-            <span className="font-mono">embedding</span>
-            ：把每個 token 變成一排數字（向量），意思相近的字，數字也相近
-          </p>
-          <p className="text-xs leading-relaxed text-muted">
-            <span className="font-mono">token</span>
-            ：模型把句子切成的小單位，可能比一個字還小
-          </p>
-        </div>
-
         {/* The point cloud fills the whole canvas. */}
         <div className="absolute inset-0">
           {dim === "3d" ? (
@@ -369,61 +364,137 @@ export function EmbeddingStation() {
         </div>
 
 
-        {/* Readout thrown outside the dock, floating top-right. Two modes: with
-            a word focused (searched OR hovered) it's the neighbour list (the
-            "距離 ≈ 相似度" beat); idle, it's the taxonomy legend that decodes the
-            point colors — the model's own semantic clusters. */}
-        <div className="absolute right-3 top-4 z-20 w-60 max-w-[70vw]">
-          {shownWord ? (
-            <div className="rounded-md border border-border bg-panel p-3 shadow-md">
-              <span className="font-mono text-xs text-accent">
-                {shownWord.slice(0, 10) + (shownWord.length > 10 ? "..." : "")} · 最近的 {nearest.length} 個
-              </span>
-              <ol className="mt-2 flex flex-col gap-1">
-                {nearest.map((n, i) => (
-                  <li
-                    key={n.word}
-                    className="flex items-baseline justify-between gap-2 font-mono text-xs"
-                  >
-                    <span className="text-fg">
-                      <span className="text-muted">
-                        {String(i + 1).padStart(2, "0")}
-                      </span>{" "}
-                      {n.word}
-                      {langOf.get(n.word) ? (
-                        <span className="text-muted uppercase">
-                          {" "}
-                          {langOf.get(n.word)}
-                        </span>
-                      ) : null}
-                    </span>
-                    <span className="text-muted">{n.score.toFixed(3)}</span>
-                  </li>
-                ))}
-              </ol>
+        {/* Top overlays. >= md the wrapper dissolves (md:contents) and the two
+            children float exactly where they always did: the glossary caption
+            under the title island (left), the readout island top-right. < md
+            the wrapper is a flow column under the title, so title, glossary and
+            readout stack and can never cover each other at phone width. */}
+        <div className="pointer-events-none absolute inset-x-4 top-14 z-20 flex flex-col gap-2 md:contents">
+          {/* Glossary caption (no hover needed): the plain-language identity of
+              the two jargon terms students meet here. Always visible on >= md;
+              on phones it folds into a tap-to-expand line. Quiet secondary
+              text; the deeper how-embeddings-are-learned story is out of scope
+              for this station. */}
+          <div className="self-start md:pointer-events-none md:absolute md:left-9 md:top-14 md:z-20 md:max-w-md">
+            <button
+              type="button"
+              aria-expanded={glossaryOpen}
+              onClick={() => setGlossaryOpen((v) => !v)}
+              className="pointer-events-auto flex items-center gap-1.5 rounded-md border border-border bg-panel/85 px-2.5 py-1.5 font-mono text-[11px] text-muted backdrop-blur-sm transition-colors hover:text-fg md:hidden"
+            >
+              <svg
+                viewBox="0 0 24 24"
+                className={`h-3 w-3 transition-transform duration-200 ${
+                  glossaryOpen ? "rotate-180" : ""
+                }`}
+                fill="none"
+                stroke="currentColor"
+                strokeWidth={2.5}
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                aria-hidden="true"
+              >
+                <path d="M6 9l6 6 6-6" />
+              </svg>
+              <span>embedding、token 是什麼？</span>
+            </button>
+            <div
+              className={`${
+                glossaryOpen ? "flex" : "hidden"
+              } mt-2 max-w-md flex-col gap-1 rounded-md border border-border bg-panel/85 px-3 py-2 backdrop-blur-sm md:mt-0 md:flex md:rounded-none md:border-0 md:bg-transparent md:p-0 md:backdrop-blur-none`}
+            >
+              <p className="text-xs leading-relaxed text-muted">
+                <span className="font-mono">embedding</span>
+                ：把每個 token 變成一排數字（向量），意思相近的字，數字也相近
+              </p>
+              <p className="text-xs leading-relaxed text-muted">
+                <span className="font-mono">token</span>
+                ：模型把句子切成的小單位，可能比一個字還小
+              </p>
             </div>
-          ) : (
-            <div className="rounded-md border border-border bg-panel p-3 shadow-md">
-              <span className="font-mono text-xs text-accent">
-                語意分群 · {taxonomy.length} 類
-              </span>
-              <ul className="mt-2 flex flex-col gap-1.5">
-                {taxonomy.map((t) => (
-                  <li
-                    key={t.category}
-                    className="flex items-center gap-2 font-mono text-xs"
+          </div>
+
+          {/* Readout thrown outside the dock. Two modes: with a word focused
+              (searched, hovered, or tap-pinned) it's the neighbour list (the
+              "距離 ≈ 相似度" beat); idle, it's the taxonomy legend that decodes
+              the point colors, the model's own semantic clusters. On phones the
+              idle legend collapses to its header line and the neighbour list
+              caps its height with an inner scroll. */}
+          <div className="pointer-events-auto w-60 max-w-full self-end md:absolute md:right-3 md:top-4 md:z-20 md:max-w-[70vw]">
+            {shownWord ? (
+              <div className="rounded-md border border-border bg-panel p-3 shadow-md max-md:max-h-60 max-md:overflow-y-auto">
+                <span className="font-mono text-xs text-accent">
+                  {shownWord.slice(0, 10) + (shownWord.length > 10 ? "..." : "")} · 最近的 {nearest.length} 個
+                </span>
+                <ol className="mt-2 flex flex-col gap-1">
+                  {nearest.map((n, i) => (
+                    <li
+                      key={n.word}
+                      className="flex items-baseline justify-between gap-2 font-mono text-xs"
+                    >
+                      <span className="text-fg">
+                        <span className="text-muted">
+                          {String(i + 1).padStart(2, "0")}
+                        </span>{" "}
+                        {n.word}
+                        {langOf.get(n.word) ? (
+                          <span className="text-muted uppercase">
+                            {" "}
+                            {langOf.get(n.word)}
+                          </span>
+                        ) : null}
+                      </span>
+                      <span className="text-muted">{n.score.toFixed(3)}</span>
+                    </li>
+                  ))}
+                </ol>
+              </div>
+            ) : (
+              <div className="rounded-md border border-border bg-panel p-3 shadow-md">
+                <button
+                  type="button"
+                  aria-expanded={legendOpen}
+                  onClick={() => setLegendOpen((v) => !v)}
+                  className="flex w-full items-center justify-between gap-2 font-mono text-xs text-accent md:pointer-events-none"
+                >
+                  <span>語意分群 · {taxonomy.length} 類</span>
+                  <svg
+                    viewBox="0 0 24 24"
+                    className={`h-3 w-3 transition-transform duration-200 ${
+                      legendOpen ? "rotate-180" : ""
+                    } md:hidden`}
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth={2.5}
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    aria-hidden="true"
                   >
-                    <span
-                      className="h-3 w-3 shrink-0 rounded-sm"
-                      style={{ backgroundColor: t.color }}
-                    />
-                    <span className="truncate text-fg">{t.label}</span>
-                    <span className="ml-auto text-muted">{t.count}</span>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
+                    <path d="M6 9l6 6 6-6" />
+                  </svg>
+                </button>
+                <ul
+                  className={`${
+                    legendOpen ? "flex" : "hidden"
+                  } mt-2 flex-col gap-1.5 md:flex`}
+                >
+                  {taxonomy.map((t) => (
+                    <li
+                      key={t.category}
+                      className="flex items-center gap-2 font-mono text-xs"
+                    >
+                      <span
+                        className="h-3 w-3 shrink-0 rounded-sm"
+                        style={{ backgroundColor: t.color }}
+                      />
+                      <span className="truncate text-fg">{t.label}</span>
+                      <span className="ml-auto text-muted">{t.count}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+          </div>
         </div>
       </div>
     </StationLayout>

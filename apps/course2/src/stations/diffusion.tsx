@@ -330,7 +330,9 @@ export function DiffusionStation() {
             <LoadingTimer label="載入去噪軌跡中" />
           </div>
         ) : (
-          <div className="absolute inset-0 flex flex-col items-center justify-center gap-5 px-6 py-8">
+          // pb tracks the dock's measured height so the caption + filmstrip
+          // never hide behind the bottom sheet on phones.
+          <div className="absolute inset-0 flex flex-col items-center justify-center gap-5 px-6 pt-8 pb-[calc(var(--dock-h,7rem)+1rem)]">
             {/* THE FRAME — the current step, large. */}
             <div className="flex w-full max-w-md flex-col items-center gap-3">
               <div className="relative aspect-square w-full max-w-sm overflow-hidden rounded-lg border border-border bg-black">
@@ -397,28 +399,32 @@ export function DiffusionStation() {
             </div>
 
             {/* FILMSTRIP — the trajectory laid out; click a frame to jump. It
-                grew from noise (left) to image (right). */}
-            <div className="flex w-full max-w-md items-center justify-center gap-1.5 overflow-x-auto">
-              {frames.map((src, i) => (
-                <button
-                  key={`${view?.key}-${i}`}
-                  type="button"
-                  onClick={() => scrub(i)}
-                  aria-label={`跳到第 ${i + 1} 步`}
-                  className={`h-11 w-11 flex-none overflow-hidden rounded border transition-all ${
-                    i === clampedIdx
-                      ? "border-accent ring-1 ring-accent"
-                      : "border-border opacity-60 hover:opacity-100"
-                  }`}
-                >
-                  <img
-                    src={src}
-                    alt=""
-                    className="h-full w-full object-cover"
-                    draggable={false}
-                  />
-                </button>
-              ))}
+                grew from noise (left) to image (right). The w-max + mx-auto
+                inner row centers when it fits and scrolls from frame 1 when it
+                overflows (justify-center would clip the left frames). */}
+            <div className="w-full max-w-md overflow-x-auto">
+              <div className="mx-auto flex w-max items-center gap-1.5">
+                {frames.map((src, i) => (
+                  <button
+                    key={`${view?.key}-${i}`}
+                    type="button"
+                    onClick={() => scrub(i)}
+                    aria-label={`跳到第 ${i + 1} 步`}
+                    className={`h-11 w-11 flex-none overflow-hidden rounded border transition-all ${
+                      i === clampedIdx
+                        ? "border-accent ring-1 ring-accent"
+                        : "border-border opacity-60 hover:opacity-100"
+                    }`}
+                  >
+                    <img
+                      src={src}
+                      alt=""
+                      className="h-full w-full object-cover"
+                      draggable={false}
+                    />
+                  </button>
+                ))}
+              </div>
             </div>
 
             {presets.sample ? (

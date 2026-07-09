@@ -63,6 +63,9 @@ export function RnnVizStation() {
   const [error, setError] = useState<string | null>(null);
   const [sequenceId, setSequenceId] = useState<string | null>(null);
   const [step, setStep] = useState(0);
+  // 影響 row explanation: hover reveals it on hover-capable devices (pure CSS
+  // group-hover below); this state gives touch a real toggle on tap.
+  const [influenceInfoOpen, setInfluenceInfoOpen] = useState(false);
 
   // 2. LOAD PRECOMPUTED DATA — via @camp/data inside an effect.
   useEffect(() => {
@@ -279,7 +282,10 @@ export function RnnVizStation() {
           // once the sequence overflows it scrolls horizontally while the left
           // label gutter stays frozen (sticky) so the labels never scroll out of
           // view.
-          <div className="absolute inset-0 overflow-auto pt-16 pb-28">
+          // Bottom padding tracks the dock's measured height (--dock-h), so the
+          // colour legend at the end of the column always scrolls fully clear of
+          // the phone bottom sheet instead of hiding half behind it.
+          <div className="absolute inset-0 overflow-auto pt-16 pb-[calc(var(--dock-h,7rem)+1rem)]">
             <div className="flex min-h-full flex-col justify-center px-8">
               {/* Visible glosses: the canonical wording, once, before the grid. */}
               <div className="mx-auto mb-3 max-w-2xl space-y-1 text-center">
@@ -386,12 +392,25 @@ export function RnnVizStation() {
                       key-token) ablation matrix — token c's strength at step q is
                       influence[q][c] (1.0 the step it enters, decaying after), so
                       the most recent token reads full and the first token fades as
-                      generation advances. Frozen label + hover tooltip. */}
+                      generation advances. Frozen label; the explanation opens on
+                      hover (hover-capable devices) or tap (everywhere). */}
                   <div className="group sticky left-0 z-20 mt-1 flex h-4 items-center border-r border-border/40 bg-bg">
-                    <span className="cursor-help font-mono text-[10px] leading-none text-accent underline decoration-dotted underline-offset-2">
+                    <button
+                      type="button"
+                      aria-expanded={influenceInfoOpen}
+                      onClick={() => setInfluenceInfoOpen((v) => !v)}
+                      // after: extends the tap target well past the 1rem row.
+                      className="relative cursor-help font-mono text-[10px] leading-none text-accent underline decoration-dotted underline-offset-2 after:absolute after:-inset-x-2 after:-inset-y-3 after:content-['']"
+                    >
                       影響
-                    </span>
-                    <div className="pointer-events-none absolute bottom-full left-0 z-40 mb-1.5 w-max max-w-xs rounded-md border border-border bg-panel px-3 py-2 text-xs leading-relaxed text-fg opacity-0 shadow-md transition-opacity duration-150 group-hover:opacity-100">
+                    </button>
+                    <div
+                      className={`pointer-events-none absolute bottom-full left-0 z-40 mb-1.5 w-max max-w-[min(20rem,calc(100vw-6rem))] rounded-md border border-border bg-panel px-3 py-2 text-xs leading-relaxed text-fg shadow-md transition-opacity duration-150 ${
+                        influenceInfoOpen
+                          ? "opacity-100"
+                          : "opacity-0 group-hover:opacity-100"
+                      }`}
+                    >
                       生成下一個 token 時，模型對每個先前 token 的參考強度。越接近現在的位置參考越強，
                       第一個 token（&ldquo;{seq.tokens[0]}&rdquo;）隨著生成往後推進逐漸被沖淡，
                       這正是 RNN 撞到的長距離依賴牆。
