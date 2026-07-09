@@ -17,6 +17,24 @@ footer: Cover
 
 ---
 
+<!-- _class: sparse -->
+<!-- footer: 關於我 -->
+
+# 帶課的人 _Harry 張祺煒_
+
+
+- 臺大資工準新生（特殊選才）
+- 奧義智慧（CyCraft）研究實習生
+- 研究「怎麼讓 AI 更安全」：發過兩篇論文（TMLR、EACL）
+- SITCON 2025、2026 年會講者
+- 下課想聊的都歡迎：攝影、剪片、英文辯論
+
+<!--
+
+-->
+
+---
+
 <!-- footer: Outline -->
 
 ![bg cover](../assets/bg/toc.png)
