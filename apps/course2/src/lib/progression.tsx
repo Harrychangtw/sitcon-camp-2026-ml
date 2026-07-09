@@ -88,9 +88,3 @@ export function isLocked(stationId: string, unlockedCount: number): boolean {
   const index = lessonStations.findIndex((s) => s.id === stationId);
   return index >= unlockedCount;
 }
-
-/** The last currently-unlocked lesson station — where locked routes redirect to. */
-export function highestUnlockedId(unlockedCount: number): string {
-  const open = lessonStations.slice(0, Math.max(1, unlockedCount));
-  return open[open.length - 1]?.id ?? lessonStations[0]?.id ?? "tokenizer";
-}

@@ -2,10 +2,12 @@ import { useEffect, useRef, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { stations } from "../stations/registry";
 import { isLocked, useUnlockedCount } from "../lib/progression";
+import { stationClosed, useClassroom } from "../lib/classroom";
 
 // Lesson stations show first (locked/unlocked per progression); panorama
-// stations follow under their own section label and never lock. Dev stations
-// are reachable by URL only.
+// stations follow under their own section label and lock only when the
+// instructor closes them (lib/classroom `closed`). Dev stations are reachable
+// by URL only.
 const menuStations = stations.filter((s) => s.group === "lesson");
 const panoramaStations = stations.filter((s) => s.group === "panorama");
 
@@ -23,6 +25,7 @@ export function StationNav({ title }: { title: string }) {
   const ref = useRef<HTMLDivElement>(null);
   const currentId = location.pathname.replace(/^\//, "");
   const unlockedCount = useUnlockedCount();
+  const { closed } = useClassroom();
 
   useEffect(() => {
     if (!open) return;
@@ -82,13 +85,20 @@ export function StationNav({ title }: { title: string }) {
           >
             {[...menuStations, ...panoramaStations].map((s, i) => {
               const active = s.id === currentId;
-              const locked = isLocked(s.id, unlockedCount);
-              // Section rule + label where the panorama block starts.
+              const locked =
+                isLocked(s.id, unlockedCount) || stationClosed(closed, s.id);
+              // Section label above the lesson block (the 建構演變 session),
+              // and rule + label where the panorama block starts.
+              const firstLesson = i === 0;
               const firstPanorama =
                 panoramaStations.length > 0 && i === menuStations.length;
               return (
                 <div key={s.id}>
-                  {firstPanorama ? (
+                  {firstLesson ? (
+                    <div className="mx-3 mb-1 mt-0.5 font-mono text-[10px] uppercase tracking-wide text-muted">
+                      建構演變
+                    </div>
+                  ) : firstPanorama ? (
                     <div className="mx-3 mb-1 mt-1.5 border-t border-border/50 pt-1.5 font-mono text-[10px] uppercase tracking-wide text-muted">
                       全景
                     </div>

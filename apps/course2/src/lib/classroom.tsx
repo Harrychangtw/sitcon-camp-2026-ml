@@ -19,6 +19,12 @@ import { stations } from "../stations/registry";
  *   - goto: a one-shot "everyone switch to station X". Each browser tab follows
  *     a given broadcast at most once (seq remembered in sessionStorage) and
  *     only while it is fresh, so it moves students without pinning them.
+ *   - closed: station ids that are closed for now (e.g. afternoon stations
+ *     during the morning). Unlike `lock`, this is a progression-style gate:
+ *     the nav grays them out and their routes redirect away (see App's
+ *     StationGate). Works on ANY non-dev station, not just the lesson line —
+ *     it generalizes the unlocked.txt prefix lock (lib/progression), and the
+ *     two compose: a station is gated if either says so.
  *
  * Missing / unreadable / malformed file → fail OPEN (no lock, no redirect),
  * the same contract as the progression lock (lib/progression).
@@ -46,6 +52,8 @@ export interface ClassroomGoto {
 export interface ClassroomState {
   lock: ClassroomLock | null;
   goto: ClassroomGoto | null;
+  /** Station ids currently closed (progression-style gate, not the overlay). */
+  closed: string[];
 }
 
 const CLASSROOM_URL = `${import.meta.env.BASE_URL}classroom.json`;
@@ -57,7 +65,7 @@ const POLL_MS = 2000;
 const GOTO_FRESH_MS = 60_000;
 const GOTO_SEQ_KEY = "camp-classroom-goto-seq";
 
-const EMPTY: ClassroomState = { lock: null, goto: null };
+const EMPTY: ClassroomState = { lock: null, goto: null, closed: [] };
 const ClassroomContext = createContext<ClassroomState>(EMPTY);
 
 /** Coerce whatever the file contains into a safe state — garbage fails open. */
@@ -102,7 +110,11 @@ function sanitize(raw: unknown): ClassroomState {
     }
   }
 
-  return { lock, goto };
+  const closed = Array.isArray(o.closed)
+    ? o.closed.filter((s): s is string => typeof s === "string")
+    : [];
+
+  return { lock, goto, closed };
 }
 
 async function fetchState(): Promise<ClassroomState> {
@@ -180,4 +192,11 @@ export function lockApplies(
 ): boolean {
   if (!lock) return false;
   return lock.scope === "all" || lock.scope.includes(stationId);
+}
+
+/** Is this station closed by the instructor? Dev stations never close. */
+export function stationClosed(closed: string[], stationId: string): boolean {
+  const station = stations.find((s) => s.id === stationId);
+  if (!station || station.group === "dev") return false;
+  return closed.includes(stationId);
 }

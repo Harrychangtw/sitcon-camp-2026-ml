@@ -1,9 +1,13 @@
 #!/usr/bin/env bash
 # V100-box prod launcher: the whole system in ONE tmux session —
-#   panes 0..3 = live-inference backends, one per GPU (CUDA_VISIBLE_DEVICES=i,
-#                port BASE_PORT+1+i, bound to 127.0.0.1)
-#   pane  4    = caddy load balancer on 127.0.0.1:PROXY_PORT (deploy/Caddyfile)
-#   pane  5    = course2 frontend (vite, :5173)
+#   window "camp":
+#     panes 0..3 = live-inference backends, one per GPU (CUDA_VISIBLE_DEVICES=i,
+#                  port BASE_PORT+1+i, bound to 127.0.0.1)
+#     pane  4    = caddy load balancer on 127.0.0.1:PROXY_PORT (deploy/Caddyfile)
+#     pane  5    = course2 frontend (vite, :5173)
+#   window "classroom": the classroom control TUI (scripts/classroom.mjs) —
+#     global lock / per-station open-close / goto broadcasts. Quitting it (q)
+#     drops to a shell in that window; rerun with `node scripts/classroom.mjs`.
 #
 # The two tailscale funnels are UNTOUCHED: the frontend funnel keeps serving
 # 5173, and the backend funnel keeps targeting PROXY_PORT — only what sits
@@ -73,6 +77,13 @@ tmux split-window -t "$SESSION" -c "$ROOT"
 tmux send-keys -t "$SESSION" "$FRONTEND" C-m
 tmux select-layout -t "$SESSION" tiled
 
+# Separate window for the classroom control TUI (lock / open-close / goto).
+# "$SESSION:" (trailing colon) — bare "camp" would match the WINDOW named camp.
+tmux new-window -t "$SESSION:" -c "$ROOT" -n classroom
+tmux send-keys -t "$SESSION:classroom" "node scripts/classroom.mjs" C-m
+
+# Land on the serve window; the TUI is one `next-window` (prefix-n) away.
+tmux select-window -t "$SESSION:camp"
 tmux select-pane -t "$SESSION".0
 if [ -t 0 ]; then exec tmux attach -t "$SESSION"; else
   echo "started detached — attach with: tmux attach -t $SESSION"

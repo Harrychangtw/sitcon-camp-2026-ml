@@ -5,10 +5,9 @@ import { AuthGate } from "./components/AuthGate";
 import { ClassroomLockOverlay } from "./components/ClassroomLockOverlay";
 import { StationNav } from "./components/StationNav";
 import { stations } from "./stations/registry";
-import { ClassroomProvider } from "./lib/classroom";
+import { ClassroomProvider, stationClosed, useClassroom } from "./lib/classroom";
 import {
   ProgressionProvider,
-  highestUnlockedId,
   isLocked,
   useUnlockedCount,
 } from "./lib/progression";
@@ -16,14 +15,22 @@ import {
 const firstId = stations[0]?.id ?? "tokenizer";
 
 /**
- * Route-level lock: a student who types the URL of a not-yet-unlocked lesson
- * station is redirected to the furthest unlocked one, so the nav gate can't be
- * bypassed by hand. Dev stations are never locked.
+ * Route-level lock: a student who types the URL of a gated station — locked by
+ * the lesson progression (lib/progression) or closed by the instructor
+ * (lib/classroom `closed`) — is redirected to the furthest open station, so the
+ * nav gate can't be bypassed by hand. Dev stations are never gated.
  */
 function StationGate({ id, children }: { id: string; children: ReactElement }) {
   const unlockedCount = useUnlockedCount();
-  if (isLocked(id, unlockedCount)) {
-    return <Navigate to={`/${highestUnlockedId(unlockedCount)}`} replace />;
+  const { closed } = useClassroom();
+  const gated = (stationId: string) =>
+    isLocked(stationId, unlockedCount) || stationClosed(closed, stationId);
+  if (gated(id)) {
+    const open = stations.filter((s) => s.group !== "dev" && !gated(s.id));
+    const target = open[open.length - 1]?.id;
+    // Everything closed → nowhere sensible to send them; stay put (the global
+    // lock overlay is what covers that scenario).
+    if (target) return <Navigate to={`/${target}`} replace />;
   }
   return children;
 }
