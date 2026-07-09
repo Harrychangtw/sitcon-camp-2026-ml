@@ -79,6 +79,13 @@
           "splats": 800000,
           "generator": "camp-precompute skyfall",
           "generatedAt": "2026-07-08T04:52:03.534378+00:00"
+        },
+        "before": {
+          "path": "skyfall/JAX_004/before.splat",
+          "bytes": 9600000,
+          "splats": 300000,
+          "generator": "camp-precompute skyfall --from-ply",
+          "generatedAt": "2026-07-09T05:44:26.685014+00:00"
         }
       }
     },
@@ -153,6 +160,13 @@
           "splats": 800000,
           "generator": "camp-precompute skyfall",
           "generatedAt": "2026-07-08T04:52:05.501717+00:00"
+        },
+        "before": {
+          "path": "skyfall/NYC_004/before.splat",
+          "bytes": 9600000,
+          "splats": 300000,
+          "generator": "camp-precompute skyfall --from-ply",
+          "generatedAt": "2026-07-09T06:22:46.299793+00:00"
         }
       }
     },
@@ -238,6 +252,6 @@
       }
     }
   ],
-  "generator": "camp-precompute skyfall",
-  "generatedAt": "2026-07-08T04:52:05.501785+00:00"
+  "generator": "camp-precompute skyfall --from-ply",
+  "generatedAt": "2026-07-09T06:22:46.299854+00:00"
 }
