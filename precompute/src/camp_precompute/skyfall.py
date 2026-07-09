@@ -90,9 +90,10 @@ class SkyfallScene:
     street: dict | None = None
 
 
-# The published scenes this station knows how to fetch. Ship JAX_004 (smallest
-# source, 158 MB) + NYC_004 (a second city for variety); more fit the byte
-# budget if ever wanted.
+# The published scenes this station knows how to fetch. Shipped: JAX_004
+# (smallest source, 158 MB), NYC_004 (a second city for variety), plus the two
+# densest blocks JAX_164 + NYC_219 — self-hosted deploy, so the old 80 MB
+# splat budget no longer binds.
 SCENES: list[SkyfallScene] = [
     SkyfallScene(
         id="JAX_004",
@@ -114,6 +115,16 @@ SCENES: list[SkyfallScene] = [
             "position": [25.0, 165.0, -21.0],
             "lookAt": [-92.0, -8.0, -16.0],
         },
+    ),
+    SkyfallScene(
+        id="JAX_164",
+        label="傑克遜維爾 164",
+        note="Jacksonville 最密的街區（市中心），從衛星照片重建",
+    ),
+    SkyfallScene(
+        id="NYC_219",
+        label="紐約 219",
+        note="紐約市最密的街區，從衛星照片重建",
     ),
     SkyfallScene(
         id="JAX_214",
