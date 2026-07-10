@@ -193,11 +193,11 @@ QUESTS: list[Quest] = [
         points=2,
         choices=(
             "attention 只看最後一個 token，前面的直接丟掉",
+            "每個 token 都能直接看到前面所有 token",
             "attention 的參數比較多，所以記性比較好",
-            "每個 token 都能一跳直接看到前面所有 token，不用靠狀態一格一格傳",
-            "attention 算得比較快，所以比較不會出錯",
+            "attention 算得比較快，所以比較不容易出錯",
         ),
-        answer=2,
+        answer=1,
     ),
     Quest(
         id="causal-mask",
@@ -209,11 +209,11 @@ QUESTS: list[Quest] = [
         ),
         points=2,
         choices=(
-            "那些格子的數值太小，螢幕上畫不出來",
-            "每個 token 只能看自己和左邊的 token，不能偷看還沒出現的字",
-            "伺服器為了省流量，只回傳半張矩陣",
-            "右上半是保留給下一句用的",
+            "那些格子的數值太小，螢幕上根本畫不出來",
+            "伺服器為了省流量，每個 head 只回傳半張矩陣",
+            "每個 token 只能看自己和左邊，不能偷看後面",
+            "右上半是預先保留給下一個句子用的空間",
         ),
-        answer=1,
+        answer=2,
     ),
 ]
