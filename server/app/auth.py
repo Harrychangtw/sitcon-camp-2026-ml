@@ -36,8 +36,8 @@ from typing import Literal, Optional
 # Cookie name carrying the signed session. HttpOnly, so client JS never reads it.
 SESSION_COOKIE = "camp_session"
 
-Role = Literal["student", "staff", "admin"]
-_ROLES: frozenset[str] = frozenset(("student", "staff", "admin"))
+Role = Literal["student", "mentor", "staff", "admin"]
+_ROLES: frozenset[str] = frozenset(("student", "mentor", "staff", "admin"))
 
 
 @dataclass(frozen=True)

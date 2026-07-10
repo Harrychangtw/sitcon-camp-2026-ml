@@ -45,7 +45,7 @@ class AuthResponse(BaseModel):
     ok: Literal[True]
     expiresInSeconds: int
     name: str
-    role: Literal["student", "staff", "admin"]
+    role: Literal["student", "mentor", "staff", "admin"]
 
 
 # --- tokenizer -----------------------------------------------------------------
@@ -337,6 +337,81 @@ class OrderBagResponse(BaseModel):
 
     vectors: dict[str, list[float]]
     fingerprintDims: int
+
+
+# --- quests ----------------------------------------------------------------------
+
+
+class QuestPublic(BaseModel):
+    """The public face of one quest (app/quests/base.py) plus THIS caller's
+    status. Never carries the mcq answer index or any hunt verifier detail —
+    that is the whole point of server-side quests."""
+
+    id: str
+    kind: Literal["hunt", "mcq"]
+    title: str
+    prompt: str
+    choices: list[str] = []
+    points: int
+    done: bool
+    # ★ eligibility: done with no wrong attempt before the first correct one.
+    firstTry: bool
+
+
+class QuestListResponse(BaseModel):
+    station: str
+    quests: list[QuestPublic]
+
+
+class QuestAttemptRequest(BaseModel):
+    """One attempt: MCQs post `choice` (an index into choices), hunts post
+    `evidence` (a small station-specific dict the server re-verifies)."""
+
+    choice: Optional[int] = Field(default=None, ge=0, le=15)
+    evidence: Optional[dict] = None
+
+
+class QuestAttemptResponse(BaseModel):
+    """Outcome of one attempt. `points` is what THIS attempt scored (0 on a
+    repeat completion — scoring is idempotent). A wrong answer reveals nothing
+    beyond `correct: false`."""
+
+    correct: bool
+    done: bool
+    points: int
+    firstTry: bool
+
+
+class LeaderboardEntry(BaseModel):
+    """One student's row: display fields only (name + 小隊 label — never any
+    other roster/groups-CSV column)."""
+
+    name: str
+    group: str
+    points: int
+    stars: int
+    # ts of the LAST point-scoring event — the "who got there first" tiebreak.
+    lastScoreAt: Optional[float] = None
+    # station id → quests completed there (denominators in questTotals).
+    stations: dict[str, int] = {}
+
+
+class LeaderboardTeam(BaseModel):
+    group: str
+    # Students who have attempted at least one quest (not the full team size —
+    # the groups CSV may not be deployed yet).
+    members: int
+    points: int
+    stars: int
+    lastScoreAt: Optional[float] = None
+
+
+class LeaderboardResponse(BaseModel):
+    individuals: list[LeaderboardEntry]
+    teams: list[LeaderboardTeam]
+    # station id → total quests defined there (the completion-dot denominators).
+    questTotals: dict[str, int]
+    generatedAt: float
 
 
 # --- health ----------------------------------------------------------------------

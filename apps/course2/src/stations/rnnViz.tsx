@@ -14,7 +14,7 @@
  * weights on the live GPU server. The browser NEVER runs the RNN — it replays
  * JSON; the displayed state is a pure function of (sequence, step).
  */
-import { Fragment, useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   BlockSlider,
   DockControls,
@@ -26,6 +26,7 @@ import {
 } from "@camp/ui";
 import { mix, rgbCss, useThemeColors } from "@camp/viz";
 import { liveInferTimed, loadJSON } from "@camp/data";
+import { QuestDock } from "../components/QuestDock";
 
 interface RnnSequence {
   sequenceId: string;
@@ -174,6 +175,19 @@ export function RnnVizStation() {
   const steps = seq?.tokens.length ?? 0;
   const lastStep = Math.max(steps - 1, 0);
 
+  // QUEST EVIDENCE: the hunt reads the canvas state as-is (which PRESET is
+  // loaded + where the 閱讀進度 slider sits). Null when a live typed sequence
+  // is showing (the server only verifies presets) or nothing is loaded yet,
+  // so the dock shows the hint instead of submitting.
+  const collectQuestEvidence = useCallback(
+    (questId: string): Record<string, unknown> | null => {
+      if (questId !== "forget-subject") return null;
+      if (!seq || seq.sequenceId.startsWith("live-")) return null;
+      return { sequenceId: seq.sequenceId, position: Math.min(step, lastStep) };
+    },
+    [seq, step, lastStep],
+  );
+
   // Reset the step whenever the sequence changes (lengths differ — never index
   // past the shorter one).
   useEffect(() => {
@@ -263,6 +277,11 @@ export function RnnVizStation() {
       }
     >
       <div className="relative h-full w-full">
+        <QuestDock
+          station="rnn-viz"
+          collectEvidence={collectQuestEvidence}
+          hint="先從選單挑一個預設句，把閱讀進度拖到你要回報的那一步"
+        />
         {error ? (
           <div className="flex h-full items-center justify-center">
             <p className="max-w-md text-center text-sm text-warning">

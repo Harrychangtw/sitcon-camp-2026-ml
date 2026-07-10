@@ -29,6 +29,8 @@ import {
 } from "@camp/ui";
 import { liveInferTimed, loadJSON } from "@camp/data";
 import { CATEGORY_COLORS } from "../palette";
+import { QuestDock } from "../components/QuestDock";
+import type { HuntEvidence } from "../lib/quests";
 
 interface TokenLogit {
   token: string;
@@ -147,6 +149,31 @@ function applyTopK(probs: Prob[], k: number): Prob[] {
   return kept.map((p) => ({ ...p, prob: p.prob / sum }));
 }
 
+// ---- 我來猜 (guess-commit): the honest interaction behind the guess-streak
+// quest. The student commits a guess while the bars are still masked, then
+// reveals; the station keeps the last STREAK_LEN consecutive hits as
+// (context, guess) pairs and the SERVER re-verifies each one is a real top-1
+// (server/app/quests/next_token.py). A miss resets the run.
+
+const STREAK_LEN = 3;
+/** Server-side minimum context length (quests/next_token.py mirrors this). */
+const MIN_GUESS_CONTEXT_CHARS = 4;
+
+interface GuessPair {
+  context: string;
+  guess: string;
+}
+
+/** MUST mirror `_guess_matches` in server/app/quests/next_token.py: undo the
+ * station's ␣/⏎ display substitutions, then forgive only surrounding
+ * whitespace ("the" counts for " the"). */
+function guessMatches(guess: string, token: string): boolean {
+  const g = guess.replace(/␣/g, " ").replace(/⏎/g, "\n");
+  if (g === token) return true;
+  if (!g.trim() || !token.trim()) return false;
+  return g.trim() === token.trim();
+}
+
 export function NextTokenStation() {
   // 1. STATE — everything the canvas needs is plain component state.
   const [dist, setDist] = useState<Distributions | null>(null);
@@ -158,6 +185,22 @@ export function NextTokenStation() {
   const [temperature, setTemperature] = useState(1);
   const [topK, setTopK] = useState(8);
   const [decoding, setDecoding] = useState<Decoding>("sampling");
+
+  // 我來猜 mode (the guess-streak quest's honest interaction): the student
+  // commits a guess while the bars are still masked, then reveals.
+  // `revealedFor` is the prompt whose bars are open; anything else stays
+  // masked while the mode is on. `seenAnswers` remembers every prompt whose
+  // bars were EVER shown unmasked this visit, so "peek first, guess second"
+  // never extends the streak (the preloaded default prompt is auto-excluded).
+  const [guessMode, setGuessMode] = useState(false);
+  const [guessText, setGuessText] = useState("");
+  const [revealedFor, setRevealedFor] = useState<string | null>(null);
+  const [guessNote, setGuessNote] = useState<{
+    tone: "hit" | "miss";
+    text: string;
+  } | null>(null);
+  const [streak, setStreak] = useState<GuessPair[]>([]);
+  const seenAnswers = useRef<Set<string>>(new Set());
 
   // 2. LOAD PRECOMPUTED DATA — recorded real-model outputs for the presets.
   useEffect(() => {
@@ -297,6 +340,102 @@ export function NextTokenStation() {
 
   const maxProb = probs.length ? probs[0]!.prob : 1;
 
+  // ---- 我來猜 derived state + handlers -------------------------------------
+
+  // A new context voids the pending guess (a guess belongs to ONE context).
+  useEffect(() => {
+    if (!guessMode) return;
+    setGuessText("");
+    setGuessNote(null);
+  }, [guessMode, trimmed]);
+
+  // Masked = guess mode is on and the bars on screen belong to a prompt the
+  // student has not revealed yet. Keyed on basePrompt (what is DISPLAYED),
+  // not on the input text, so clearing the input can't leak a pending answer.
+  const masked = guessMode && basePrompt !== "" && revealedFor !== basePrompt;
+
+  useEffect(() => {
+    if (!masked && basePrompt) seenAnswers.current.add(basePrompt);
+  }, [masked, basePrompt]);
+
+  // Why 揭曉 is disabled right now (null = ready). Mirrors the server-side
+  // evidence rules in server/app/quests/next_token.py.
+  const revealBlock = ((): string | null => {
+    if (!guessMode) return null;
+    if (!trimmed) return "先輸入一段前文";
+    if (trimmed.length < MIN_GUESS_CONTEXT_CHARS)
+      return `前文至少要 ${MIN_GUESS_CONTEXT_CHARS} 個字`;
+    if (contextTokens !== null) return "把上下文視窗調到「全部」再猜";
+    if (revealedFor === trimmed) return "這段已經揭曉，換一段新的前文";
+    if (stale || base.length === 0) return "等模型算好這段前文";
+    if (!guessText.trim()) return "先寫下你猜的下一個 token";
+    return null;
+  })();
+
+  function enterGuessMode() {
+    setGuessMode(true);
+    setContextTokens(null); // the streak counts at full context only
+    setRevealedFor(null);
+    setGuessNote(null);
+  }
+
+  function revealGuess() {
+    if (revealBlock !== null) return;
+    // revealBlock guarantees the on-screen distribution IS this prompt's.
+    const top = base.reduce((a, b) => (b.logit > a.logit ? b : a));
+    const alreadySeen = seenAnswers.current.has(trimmed);
+    const committed = guessText.trim();
+    setRevealedFor(trimmed);
+    if (!guessMatches(committed, top.token)) {
+      setStreak([]);
+      setGuessNote({
+        tone: "miss",
+        text: `沒中，第一名是「${displayToken(top.token)}」，連中紀錄歸零。換一段前文再試`,
+      });
+      return;
+    }
+    if (alreadySeen) {
+      setGuessNote({
+        tone: "hit",
+        text: "猜中了！不過你已經看過這段的答案，換一段全新的前文才算連中",
+      });
+      return;
+    }
+    const next = [...streak, { context: trimmed, guess: committed }].slice(
+      -STREAK_LEN,
+    );
+    setStreak(next);
+    setGuessNote(
+      next.length >= STREAK_LEN
+        ? {
+            tone: "hit",
+            text: `連中 ${STREAK_LEN} 次達成！打開右上角的「任務」回報`,
+          }
+        : {
+            tone: "hit",
+            text: `猜中了！第一名就是「${displayToken(top.token)}」，目前連中 ${next.length} 次`,
+          },
+    );
+  }
+
+  // Evidence the QuestDock hands to the server (verified there; see
+  // server/app/quests/next_token.py). Null = nothing to report yet.
+  const collectEvidence = (questId: string): HuntEvidence | null => {
+    if (questId === "guess-streak") {
+      if (streak.length < STREAK_LEN) return null;
+      return { pairs: streak.slice(-STREAK_LEN) };
+    }
+    if (questId === "confident-context") {
+      // Only the prompt whose FULL-window distribution is on screen (the
+      // student must be looking at the thing they claim).
+      if (trimmed.length < MIN_GUESS_CONTEXT_CHARS) return null;
+      if (contextTokens !== null) return null;
+      if (stale || base.length === 0) return null;
+      return { context: trimmed };
+    }
+    return null;
+  };
+
   // Slider extent. Until a live/preset response reports the real prompt length,
   // fall back to a sensible fixed max so the slider is usable; once known (from
   // the live promptTokens or the recorded preset pieces), clamp to it so the
@@ -378,6 +517,11 @@ export function NextTokenStation() {
       }
     >
       <div className="relative h-full w-full">
+        <QuestDock
+          station="next-token"
+          collectEvidence={collectEvidence}
+          hint="先在畫布上達成條件再回報：找開頭要把視窗調到「全部」，等結果出現；猜 token 要先連中 3 次"
+        />
         {error ? (
           <div className="flex h-full items-center justify-center">
             <p className="max-w-md text-center text-sm text-warning">
@@ -470,6 +614,80 @@ export function NextTokenStation() {
                 </div>
               ) : null}
 
+              {/* 我來猜: commit a guess BEFORE the bars reveal. Sits between
+                  the context strip and the distribution, exactly where the
+                  prediction is about to appear. */}
+              {!guessMode ? (
+                <div className="mb-4 flex justify-center">
+                  <button
+                    type="button"
+                    onClick={enterGuessMode}
+                    className="min-h-11 rounded-md border border-border bg-panel px-3 font-mono text-xs uppercase tracking-wide text-muted transition-colors hover:border-accent hover:text-accent md:min-h-9"
+                  >
+                    我來猜下一個 token
+                  </button>
+                </div>
+              ) : (
+                <div className="mb-4 rounded-md border border-border bg-panel p-3">
+                  <div className="mb-2 flex items-center justify-between gap-2">
+                    <span className="font-mono text-[10px] uppercase tracking-wide text-muted">
+                      我來猜：揭曉前先寫下你的猜測
+                    </span>
+                    <div className="flex shrink-0 items-center gap-3">
+                      <span
+                        className={`font-mono text-[10px] uppercase tracking-wide ${
+                          streak.length >= STREAK_LEN ? "text-accent" : "text-muted"
+                        }`}
+                      >
+                        連中 {streak.length}/{STREAK_LEN}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => setGuessMode(false)}
+                        className="font-mono text-[10px] uppercase tracking-wide text-muted transition-colors hover:text-accent"
+                      >
+                        退出
+                      </button>
+                    </div>
+                  </div>
+                  <div className="flex items-stretch gap-2">
+                    <input
+                      value={guessText}
+                      onChange={(e) => setGuessText(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter" && !e.nativeEvent.isComposing)
+                          revealGuess();
+                      }}
+                      aria-label="你猜的下一個 token"
+                      placeholder="你猜的下一個 token，例如：山"
+                      maxLength={32}
+                      className="min-h-11 w-0 flex-1 rounded-md border border-border bg-bg px-3 font-mono text-sm text-fg outline-none transition-colors focus:border-accent md:min-h-9"
+                    />
+                    <button
+                      type="button"
+                      onClick={revealGuess}
+                      disabled={revealBlock !== null}
+                      className="min-h-11 shrink-0 rounded-md border border-accent/60 px-3 font-mono text-xs uppercase tracking-wide text-accent transition-opacity hover:opacity-80 disabled:opacity-40 md:min-h-9"
+                    >
+                      揭曉
+                    </button>
+                  </div>
+                  {guessNote ? (
+                    <p
+                      className={`mt-2 text-xs leading-relaxed ${
+                        guessNote.tone === "hit" ? "text-accent" : "text-warning"
+                      }`}
+                    >
+                      {guessNote.text}
+                    </p>
+                  ) : revealBlock ? (
+                    <p className="mt-2 font-mono text-[10px] uppercase tracking-wide text-muted">
+                      {revealBlock}
+                    </p>
+                  ) : null}
+                </div>
+              )}
+
               {/* Column headers — light, mono, aligned to the row structure. */}
               <div className="mb-3 flex items-center gap-3">
                 <span className="w-24 shrink-0 text-left font-mono text-[10px] uppercase tracking-wide text-muted">
@@ -488,7 +706,24 @@ export function NextTokenStation() {
               </div>
 
               {/* Bar field: thin bars, single lime hue, magnitude via width +
-                  opacity; the argmax is the one mark in full lime. */}
+                  opacity; the argmax is the one mark in full lime. While a
+                  guess is pending (我來猜, not yet revealed) the rows render
+                  as placeholders: no real token ever reaches the DOM. */}
+              {masked ? (
+                <div aria-hidden className="flex flex-col gap-1.5">
+                  {Array.from({ length: Math.max(probs.length, 3) }).map((_, i) => (
+                    <div key={i} className="flex items-center gap-3">
+                      <span className="w-24 shrink-0 text-left font-mono text-xs text-muted/50">
+                        ？？？
+                      </span>
+                      <div className="h-4 flex-1 rounded-sm bg-panel" />
+                      <span className="w-12 shrink-0 text-right font-mono text-[10px] text-muted/50">
+                        ？
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              ) : (
               <div className="flex flex-col gap-1.5">
                 {probs.map((p, i) => {
                   // By index, not token string: two byte-fragment tokens can
@@ -525,6 +760,7 @@ export function NextTokenStation() {
                   );
                 })}
               </div>
+              )}
             </div>
           </div>
         )}

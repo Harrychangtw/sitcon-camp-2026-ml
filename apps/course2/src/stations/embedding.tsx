@@ -24,6 +24,7 @@ import {
 } from "@camp/ui";
 import { Scatter2D, Scatter3D, type Scatter3DPoint } from "@camp/viz";
 import { liveInferTimed, loadJSON } from "@camp/data";
+import { QuestDock } from "../components/QuestDock";
 import { CATEGORY_COLORS } from "../palette";
 
 type Dim = "2d" | "3d";
@@ -340,6 +341,19 @@ export function EmbeddingStation() {
       }
     >
       <div className="relative h-full w-full">
+        {/* Quest dock. Both embedding hunts verify "the word the station is
+            focused on": the searched (or live-embedded) word, or the
+            hovered / tap-pinned point. The dock submits that one word and the
+            server re-derives the whole claim with the same model code, so no
+            extra evidence wiring is needed. Anchored LEFT of the top-right
+            readout island (w-60 at right-3) on >= md so the two never overlap. */}
+        <QuestDock
+          station="embedding"
+          collectEvidence={() => (shownWord ? { word: shownWord } : null)}
+          hint="先搜尋或點住一個詞，再回來回報"
+          anchorClassName="right-3 top-3.5 md:right-[16.5rem] md:top-4"
+        />
+
         {/* The point cloud fills the whole canvas. */}
         <div className="absolute inset-0">
           {dim === "3d" ? (

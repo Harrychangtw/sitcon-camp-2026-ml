@@ -44,6 +44,7 @@ import {
 } from "@camp/ui";
 import { Heatmap, VectorStrip } from "@camp/viz";
 import { liveInferOutcome, loadJSON } from "@camp/data";
+import { QuestDock } from "../components/QuestDock";
 
 interface TokenLogit {
   token: string;
@@ -724,6 +725,15 @@ export function TransformerStation() {
 
   const barCls = reducedMotion ? "" : "transition-[width,opacity] duration-300";
 
+  // Quest evidence: the canvas selection as-is. Both transformer hunts share
+  // one shape; the server re-checks the claim against the same recorded
+  // tensors this station renders. Only preset sentences count: a live typed
+  // sentence has no server-side ground truth, so the dock shows the hint.
+  const collectQuestEvidence = () => {
+    if (!sentence || showingLive) return null;
+    return { sentenceId: sentence.sentenceId, layer: l, head: h };
+  };
+
   const hoveredQTok = hovered ? displayTokens[hovered.q] : null;
   const hoveredKTok = hovered ? displayTokens[hovered.k] : null;
   const hoveredW = hovered ? matrix[hovered.q]?.[hovered.k] : undefined;
@@ -846,6 +856,11 @@ export function TransformerStation() {
       }
     >
       <div className="relative h-full w-full">
+        <QuestDock
+          station="transformer"
+          collectEvidence={collectQuestEvidence}
+          hint="先選一句預設句子，再用模型縮圖選好 Layer 和 Head，回來按回報"
+        />
         {error ? (
           <div className="flex h-full items-center justify-center">
             <p className="max-w-md text-center text-sm text-warning">

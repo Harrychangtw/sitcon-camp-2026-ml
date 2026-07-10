@@ -42,6 +42,7 @@ import {
 import { LossCurve, useThemeColors } from "@camp/viz";
 import type { LossSeries } from "@camp/viz";
 import { loadJSON } from "@camp/data";
+import { QuestDock } from "../../components/QuestDock";
 import { TwinNetClient } from "./client";
 import {
   REFERENCE_URL,
@@ -535,6 +536,17 @@ export function PixelShuffleStation() {
     );
   };
 
+  // Quest evidence (attested station: the server sanity-bounds these numbers,
+  // it cannot re-run the browser training). Report the CURRENT run state the
+  // worker last posted: net B's val accuracy + the real step count. Null until
+  // the first val measurement lands, so the dock shows the hint instead.
+  const collectQuestEvidence = (questId: string) => {
+    if (questId !== "train-shuffled-30") return null;
+    const c = clientRef.current;
+    if (!c || c.step <= 0 || c.valAccB == null) return null;
+    return { accuracy: c.valAccB, steps: c.step };
+  };
+
   const classZh = meta && snap ? meta.classNames_zh[snap.label] : null;
   const valIndex = meta ? currentInput - meta.trainN : 0;
 
@@ -590,6 +602,11 @@ export function PixelShuffleStation() {
       }
     >
       <div className="relative h-full w-full">
+        <QuestDock
+          station="pixel-shuffle"
+          collectEvidence={collectQuestEvidence}
+          hint="先按 ▶ 開始訓練，等打亂那行的 val 出現數字再回報"
+        />
         {error ? (
           <div className="flex h-full items-center justify-center">
             <p className="max-w-md text-center text-sm text-warning">
