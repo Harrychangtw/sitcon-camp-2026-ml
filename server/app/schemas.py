@@ -382,33 +382,39 @@ class QuestAttemptResponse(BaseModel):
     firstTry: bool
 
 
-class LeaderboardEntry(BaseModel):
-    """One student's row: display fields only (name + 小隊 label — never any
-    other roster/groups-CSV column)."""
+class LeaderboardMe(BaseModel):
+    """The CALLER's own standing — the only per-person scoring that ever
+    leaves the server. Names of other people never ride the leaderboard
+    payload, so the public projector view cannot single anyone out (and
+    neither can a devtools tab)."""
 
-    name: str
     group: str
     points: int
     stars: int
-    # ts of the LAST point-scoring event — the "who got there first" tiebreak.
-    lastScoreAt: Optional[float] = None
+    # 1-based rank among everyone who has scored, and how many that is.
+    rank: int
+    of: int
     # station id → quests completed there (denominators in questTotals).
     stations: dict[str, int] = {}
 
 
 class LeaderboardTeam(BaseModel):
     group: str
-    # Students who have attempted at least one quest (not the full team size —
+    # People who have attempted at least one quest (not the full team size —
     # the groups CSV may not be deployed yet).
     members: int
     points: int
     stars: int
     lastScoreAt: Optional[float] = None
+    # Per-member point totals, sorted descending, NO names: the anonymous
+    # "how is the effort spread inside this team" signal.
+    memberPoints: list[int] = []
 
 
 class LeaderboardResponse(BaseModel):
-    individuals: list[LeaderboardEntry]
     teams: list[LeaderboardTeam]
+    # The caller's own row (students/mentors with ≥1 attempt), else None.
+    me: Optional[LeaderboardMe] = None
     # station id → total quests defined there (the completion-dot denominators).
     questTotals: dict[str, int]
     generatedAt: float

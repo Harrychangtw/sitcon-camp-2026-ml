@@ -55,7 +55,7 @@ export const stations: StationMeta[] = [
   { id: "skyfall", title: "衛星長出城市 · Skyfall-GS", blurb: "從衛星照片長出一座能飛進去的城市，近看的細節是模型想像的。方法來自 Day 1 廣度講者李杰穎的 Skyfall-GS", group: "panorama", element: <SkyfallStation /> },
   { id: "text-to-3d", title: "文字生 3D", blurb: "打一句話,長出一個能轉的 3D 物件;換顆 seed,同一句話長出不一樣的東西", group: "panorama", element: <TextTo3dStation /> },
   { id: "rl-playground", title: "RL 競技場", blurb: "只靠獎勵和自己的分身,牠學會玩、也學會搶", group: "panorama", element: <RlPlaygroundStation /> },
-  { id: "leaderboard", title: "排行榜", blurb: "任務積分：小隊與個人排名", group: "meta", element: <LeaderboardStation /> },
+  { id: "leaderboard", title: "排行榜", blurb: "任務積分：小隊排名", group: "meta", element: <LeaderboardStation /> },
   // Replaced at lesson slot 3 by pixel-shuffle (2026-07); kept URL-reachable
   // for instructors — its artifacts and server routes are untouched.
   { id: "order-shuffle", title: "打亂詞序", blurb: "為什麼詞序重要", group: "dev", element: <OrderShuffleStation /> },

@@ -34,7 +34,7 @@ from ..quests.storage import (
     load_progress,
 )
 from ..schemas import (
-    LeaderboardEntry,
+    LeaderboardMe,
     LeaderboardResponse,
     LeaderboardTeam,
     QuestAttemptRequest,
@@ -176,31 +176,27 @@ def attempt(
 
 @router.get("/leaderboard", response_model=LeaderboardResponse)
 def leaderboard(request: Request) -> LeaderboardResponse:
-    """Individual + 小隊 rankings. Students and 隊輔 rank (mentors score for
-    their own team so the flow is testable end to end); staff/admin attempts
-    are accepted but never rank. Sorted by points desc, ties broken by the
-    EARLIER last point-scoring event; teams aggregate their members the same
-    way. Any logged-in session may read this — it powers the projector too."""
+    """小隊 rankings only — per-person scoring is deliberately NOT public.
+    Names never ride this payload: each team carries an anonymous
+    ``memberPoints`` spread, and the only personal row is the CALLER's own
+    (``me``). Students and 隊輔 rank (mentors score for their own team so the
+    flow is testable end to end); staff/admin attempts are accepted but never
+    rank. Sorted by points desc, ties broken by the EARLIER last point-scoring
+    event. Any logged-in session may read this — it powers the projector too."""
     usage_dir = request.app.state.quests_usage_dir
     groups: dict[str, str] = request.app.state.groups
+    ident = request.state.camp_identity
 
-    individuals: list[LeaderboardEntry] = []
+    # (points, stars, last_score_ts, group, stations) per ranked person —
+    # internal only; what leaves the function is anonymized.
+    people: dict[str, tuple[int, int, float | None, str, dict[str, int]]] = {}
     teams: dict[str, LeaderboardTeam] = {}
     for user, progress in load_progress(usage_dir).items():
         if progress.role not in ("student", "mentor"):
             continue
         points, stars, last_score_ts, by_station = progress.score()
         group = groups.get(user, UNGROUPED)
-        individuals.append(
-            LeaderboardEntry(
-                name=user,
-                group=group,
-                points=points,
-                stars=stars,
-                lastScoreAt=last_score_ts,
-                stations=by_station,
-            )
-        )
+        people[user] = (points, stars, last_score_ts, group, by_station)
         team = teams.setdefault(
             group,
             LeaderboardTeam(group=group, members=0, points=0, stars=0),
@@ -208,22 +204,45 @@ def leaderboard(request: Request) -> LeaderboardResponse:
         team.members += 1
         team.points += points
         team.stars += stars
+        team.memberPoints.append(points)
         if last_score_ts is not None:
             team.lastScoreAt = (
                 last_score_ts
                 if team.lastScoreAt is None
                 else max(team.lastScoreAt, last_score_ts)
             )
+    for team in teams.values():
+        team.memberPoints.sort(reverse=True)
 
-    def rank_key(row: LeaderboardEntry | LeaderboardTeam) -> tuple:
+    def person_key(item: tuple[str, tuple]) -> tuple:
+        user, (points, _stars, last_ts, _group, _stations) = item
         # Earlier last-scoring event wins the tie; no score at all sorts last.
-        tiebreak = row.lastScoreAt if row.lastScoreAt is not None else float("inf")
-        name = row.name if isinstance(row, LeaderboardEntry) else row.group
-        return (-row.points, tiebreak, name)
+        return (-points, last_ts if last_ts is not None else float("inf"), user)
+
+    ranked = sorted(people.items(), key=person_key)
+    me: LeaderboardMe | None = None
+    for rank, (user, (points, stars, _ts, group, stations)) in enumerate(ranked, 1):
+        if user == ident.username:
+            me = LeaderboardMe(
+                group=group,
+                points=points,
+                stars=stars,
+                rank=rank,
+                of=len(ranked),
+                stations=stations,
+            )
+            break
 
     return LeaderboardResponse(
-        individuals=sorted(individuals, key=rank_key),
-        teams=sorted(teams.values(), key=rank_key),
+        teams=sorted(
+            teams.values(),
+            key=lambda t: (
+                -t.points,
+                t.lastScoreAt if t.lastScoreAt is not None else float("inf"),
+                t.group,
+            ),
+        ),
+        me=me,
         questTotals=quest_totals(),
         generatedAt=round(time.time(), 3),
     )

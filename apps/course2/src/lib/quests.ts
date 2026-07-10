@@ -34,12 +34,14 @@ export interface AttemptResult {
   firstTry: boolean;
 }
 
-export interface LeaderboardEntry {
-  name: string;
+/** The caller's own standing: the only per-person scoring the server ever
+ * sends. Other people's names never ride the leaderboard payload. */
+export interface LeaderboardMe {
   group: string;
   points: number;
   stars: number;
-  lastScoreAt: number | null;
+  rank: number;
+  of: number;
   stations: Record<string, number>;
 }
 
@@ -49,11 +51,13 @@ export interface LeaderboardTeam {
   points: number;
   stars: number;
   lastScoreAt: number | null;
+  /** Per-member point totals, sorted descending, anonymous. */
+  memberPoints: number[];
 }
 
 export interface LeaderboardData {
-  individuals: LeaderboardEntry[];
   teams: LeaderboardTeam[];
+  me: LeaderboardMe | null;
   questTotals: Record<string, number>;
   generatedAt: number;
 }
