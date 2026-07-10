@@ -7,7 +7,9 @@ Students log in with their roster name and their birthday as an 8-digit
 password (separators forgiven: 20110922, 2011-09-22 and 2011/09/22 all work).
 
 Staff log in as their own display name with the shared STAFF_PASSWORD, so the
-usage log can still tell staff members apart. The fixed username ``admin``
+usage log can still tell staff members apart. 隊輔 listed in the groups CSV
+(app/groups.py) log in with their listed name + MENTOR_PASSWORD as role
+"mentor" (leaderboard-ranked under their 小隊). The fixed username ``admin``
 with ADMIN_PASSWORD unlocks the /admin routes.
 """
 
@@ -69,11 +71,13 @@ def authenticate(
     roster: dict[str, str],
     staff_password: str,
     admin_password: str,
+    mentors: Optional[dict[str, str]] = None,
+    mentor_password: str = "",
 ) -> Optional[Identity]:
-    """Check credentials against admin, then the roster, then the staff
-    password; None means rejected. Every password comparison is constant-time
-    (`secrets.compare_digest`), so a wrong guess carries no timing tell about
-    how close it was."""
+    """Check credentials against admin, then the roster, then the 隊輔 list,
+    then the staff password; None means rejected. Every password comparison is
+    constant-time (`secrets.compare_digest`), so a wrong guess carries no
+    timing tell about how close it was."""
     username = username.strip()
     password = password.strip()
     if not username or not password:
@@ -85,6 +89,17 @@ def authenticate(
     birthday = roster.get(username)
     if birthday is not None and secrets.compare_digest(_digits(password), birthday):
         return Identity(username=username, role="student")
+    # 隊輔 log in with their name from the groups CSV's 隊輔 column plus the
+    # shared MENTOR_PASSWORD (app/groups.py). Role "mentor" ranks on the
+    # leaderboard under their own 小隊, so staff can exercise the quest flow
+    # end to end. Disabled entirely when MENTOR_PASSWORD is unset.
+    if (
+        mentors
+        and mentor_password
+        and username in mentors
+        and secrets.compare_digest(password, mentor_password)
+    ):
+        return Identity(username=username, role="mentor")
     # Off-roster name, or a roster name with a non-birthday password: the staff
     # password grants a staff session under whatever name they typed, so staff
     # stay individually attributable in the usage log.

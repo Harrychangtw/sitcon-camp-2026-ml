@@ -36,8 +36,17 @@ class Settings:
     staff_password: str
     # Password for the fixed `admin` username; unlocks /admin/usage.
     admin_password: str
+    # Shared password for 隊輔 accounts (names from the groups CSV's 隊輔
+    # column, app/groups.py). Role "mentor": ranks on the leaderboard under
+    # its 小隊 so the quest flow is testable end to end. Empty → 隊輔 login
+    # disabled (soft, like the groups file itself).
+    mentor_password: str
     # Roster CSV of `名字,YYYY-MM-DD` rows (PII: gitignored, box-only).
     students_csv: Path
+    # 小隊 mapping CSV for the quest leaderboard (PII: gitignored, pasted onto
+    # the box by hand; only the 姓名/組別 columns are ever read — app/groups.py).
+    # Unlike the roster this loads SOFT: missing file → students rank 未分組.
+    groups_csv: Path
     # Where per-replica usage-<port>.jsonl logs and controls.json live.
     usage_dir: Path
     session_ttl_hours: int  # session cookie lifetime (short: a camp day or less)
@@ -113,15 +122,24 @@ def load_settings() -> Settings:
     ]
 
     students_csv = os.environ.get("STUDENTS_CSV", "").strip()
+    groups_csv = os.environ.get("GROUPS_CSV", "").strip()
     usage_dir = os.environ.get("USAGE_DIR", "").strip()
+
+    # Optional by design: without it 隊輔 simply cannot log in. "change-me"
+    # is treated as unset so the example file's value can never be a password.
+    mentor_password = os.environ.get("MENTOR_PASSWORD", "").strip()
+    if mentor_password == "change-me":
+        mentor_password = ""
 
     return Settings(
         camp_token=token,
         staff_password=staff_password,
         admin_password=admin_password,
+        mentor_password=mentor_password,
         # Roster + usage live outside git: the CSV is PII, the logs are runtime
         # state. Defaults keep the single-.env-per-box convention.
         students_csv=Path(students_csv) if students_csv else root / "students-bd.csv",
+        groups_csv=Path(groups_csv) if groups_csv else root / "student-group-id.csv",
         usage_dir=Path(usage_dir) if usage_dir else server_dir / "usage",
         # Short by design: a session is a convenience for the class period, not a
         # long-lived credential. Daily password rotation gates new logins on top.

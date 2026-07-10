@@ -58,12 +58,13 @@ precompute/artifacts/
 # passwords). The real file lives OUTSIDE the repo (see STUDENTS_CSV in
 # server/.env); this pattern is a safety net so a stray copy can't land.
 students-bd.csv
-# student → 小隊 mapping (names + room numbers + diet etc. = PII). The real
-# file is pasted onto the box by hand (see GROUPS_CSV in server/.env); the
-# server reads ONLY the 姓名 and 組別 columns.
+# 小隊 mapping for the quest leaderboard (names + camp logistics = PII). The
+# real file is pasted onto the box by hand (see GROUPS_CSV in server/.env);
+# only student-group-id.example.csv (fake names) is committed.
 student-group-id.csv
-# per-person usage logs + ban/throttle state (runtime state written by
-# server/app/usage.py and server/scripts/usagetui.py)
+# per-person usage logs + ban/throttle state + quest attempt logs (runtime
+# state written by server/app/usage.py, scripts/usagetui.py and
+# server/app/quests/storage.py)
 server/usage/
 
 # classroom progression lock — runtime state written by scripts/unlock.sh

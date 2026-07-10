@@ -33,6 +33,7 @@ import {
   type LiveState,
 } from "@camp/ui";
 import { liveInferTimed, liveInferenceEnabled, loadJSON } from "@camp/data";
+import { QuestDock } from "../components/QuestDock";
 import { CATEGORY_COLORS } from "../palette";
 
 type Scheme = "char" | "word" | "bpe";
@@ -564,6 +565,38 @@ export function TokenizerStation() {
   // Live tokens win only when they belong to exactly what's on screen now.
   const liveHit = bpeLive && liveEnc?.sig === text ? liveEnc : null;
 
+  // QUEST EVIDENCE (server/app/quests/tokenizer.py verifies). Evidence only
+  // exists while the LIVE Qwen result for exactly the current text is on
+  // screen: the rule-based fallback BPE may disagree with the server's
+  // verifier, so a fallback canvas is not a reportable state. `liveHit`
+  // truthy already implies scheme === "bpe". The verifier re-tokenizes each
+  // word ALONE; that matches the canvas because a newline is its own Qwen
+  // token and resets tokenization, hence the 一行一個詞 rule below.
+  const collectEvidence = (questId: string): Record<string, unknown> | null => {
+    if (!liveHit) return null;
+    const trimmed = text.trim();
+    if (!trimmed) return null;
+    if (questId === "split-four") {
+      // One word: no whitespace inside, bounded (mirrors the server checks).
+      if (/\s/.test(trimmed) || [...trimmed].length > 30) return null;
+      return { word: trimmed };
+    }
+    if (questId === "shared-prefix") {
+      // Exactly two different words, one per line, each a single word.
+      const lines = trimmed
+        .split(/\n+/)
+        .map((line) => line.trim())
+        .filter((line) => line.length > 0);
+      if (lines.length !== 2) return null;
+      const [a, b] = lines;
+      if (!a || !b || a === b) return null;
+      if (/\s/.test(a) || /\s/.test(b)) return null;
+      if ([...a].length > 30 || [...b].length > 30) return null;
+      return { wordA: a, wordB: b };
+    }
+    return null;
+  };
+
   // 2. DERIVED CANVAS DATA — tokens grouped into paragraphs so the canvas reads
   //    top-to-bottom like a document. The source text is split on blank lines
   //    (rule-based path) or at Qwen's newline tokens (live path); either way we
@@ -661,6 +694,19 @@ export function TokenizerStation() {
       }
     >
       <div className="relative h-full w-full">
+        {/* Quest pill placement dodges the token-count readout (which owns the
+            default top-right corner, right-4 + w-44 at every breakpoint). On
+            md+ the pill sits just LEFT of it (12.5rem clears w-44 + right-4
+            with a small gap); below md that offset would shove the pill under
+            the left-anchored title island, so it drops BELOW the readout
+            instead (8.5rem clears the readout's tallest, BPE-mode height). */}
+        <QuestDock
+          station="tokenizer"
+          collectEvidence={collectEvidence}
+          hint="切到 BPE 模式，照任務說明輸入文字，等畫布顯示即時結果再按回報"
+          anchorClassName="right-3 top-[8.5rem] md:right-[12.5rem] md:top-4"
+        />
+
         {/* Readout thrown outside the dock: the token counts, docked to the top
             edge, just left of the 重點 badge. */}
         <div className="absolute right-4 top-4 z-20 w-44 rounded-md border border-border bg-panel p-3 shadow-md">

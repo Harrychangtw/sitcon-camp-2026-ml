@@ -26,7 +26,11 @@ function StationGate({ id, children }: { id: string; children: ReactElement }) {
   const gated = (stationId: string) =>
     isLocked(stationId, unlockedCount) || stationClosed(closed, stationId);
   if (gated(id)) {
-    const open = stations.filter((s) => s.group !== "dev" && !gated(s.id));
+    // Redirect to a real teaching station: meta pages (the leaderboard) are
+    // never gated, but they'd be a bewildering landing spot.
+    const open = stations.filter(
+      (s) => (s.group === "lesson" || s.group === "panorama") && !gated(s.id),
+    );
     const target = open[open.length - 1]?.id;
     // Everything closed → nowhere sensible to send them; stay put (the global
     // lock overlay is what covers that scenario).

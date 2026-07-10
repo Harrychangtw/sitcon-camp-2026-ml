@@ -27,8 +27,10 @@ from fastapi.responses import JSONResponse
 from .auth import SESSION_COOKIE, issue_session, verify_session
 from .config import load_settings
 from .controls import CONTROLS_FILENAME, Controls
+from .groups import load_groups
 from .limits import InferenceLimiter, RateLimitConfig
 from .loader import load_models
+from .quests.storage import QuestLog
 from .roster import authenticate, load_roster
 from .usage import UsageLog, aggregate
 from .routers import (
@@ -37,6 +39,7 @@ from .routers import (
     lora,
     next_token,
     order_shuffle,
+    quests,
     rnn,
     steering,
     tokenizer,
@@ -57,6 +60,13 @@ log.info("roster: %d students loaded from %s", len(roster), settings.students_cs
 # with the usage TUI (controls.py). One usage file per replica, keyed by port.
 usage_log = UsageLog(settings.usage_dir, settings.port)
 controls = Controls(settings.usage_dir / CONTROLS_FILENAME)
+
+# Quest system state: the per-replica attempt log (same JSONL-per-replica
+# pattern as usage.py) and the 小隊 mapping + 隊輔 accounts. The groups CSV
+# loads SOFT — the real file is pasted onto the box by hand later; until then
+# students rank under 未分組 and no 隊輔 can log in (app/groups.py).
+quest_log = QuestLog(settings.usage_dir, settings.port)
+groups_data = load_groups(settings.groups_csv)
 
 limiter = InferenceLimiter(
     RateLimitConfig(
@@ -91,6 +101,13 @@ app = FastAPI(
     lifespan=lifespan,
     **_docs_urls,
 )
+
+# Handed to the quest routes (routers/quests.py) via app.state so the router
+# module stays import-cycle-free. The attempt log is read box-wide (all
+# replicas' quests-*.jsonl under USAGE_DIR), written per-replica.
+app.state.quest_log = quest_log
+app.state.quests_usage_dir = settings.usage_dir
+app.state.groups = groups_data.groups
 
 app.add_middleware(
     CORSMiddleware,
@@ -130,7 +147,13 @@ def auth(req: AuthRequest, response: Response) -> AuthResponse:
     attempt (success or not, with the claimed username) lands in the usage
     log so brute-forcing is attributable."""
     ident = authenticate(
-        req.username, req.password, roster, settings.staff_password, settings.admin_password
+        req.username,
+        req.password,
+        roster,
+        settings.staff_password,
+        settings.admin_password,
+        mentors=groups_data.mentors,
+        mentor_password=settings.mentor_password,
     )
     if ident is None:
         usage_log.record(user=req.username.strip(), role="unknown", route="/auth", status=401)
@@ -218,6 +241,16 @@ app.include_router(order_shuffle.router, dependencies=GUARDS)
 app.include_router(lora.router, dependencies=GUARDS)
 app.include_router(steering.router, dependencies=GUARDS)
 app.include_router(diffusion.router, dependencies=GUARDS)
+
+# Quest routes: session + rate limit but NO gpu_slot — they are not inference
+# routes. Hunt verifiers that do touch a model serialize on store.lm_lock like
+# every inference router, and the wrong-attempt cooldown (quests/storage.py)
+# damps repeat verification, so the GPU stays protected without a slot.
+QUEST_GUARDS = [
+    Depends(require_session),
+    Depends(limiter.rate_limit),
+]
+app.include_router(quests.router, dependencies=QUEST_GUARDS)
 
 
 @app.get(

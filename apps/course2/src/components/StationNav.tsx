@@ -6,10 +6,12 @@ import { stationClosed, useClassroom } from "../lib/classroom";
 
 // Lesson stations show first (locked/unlocked per progression); panorama
 // stations follow under their own section label and lock only when the
-// instructor closes them (lib/classroom `closed`). Dev stations are reachable
-// by URL only.
+// instructor closes them (lib/classroom `closed`); meta pages (the quest
+// 排行榜) come last, always visible and never progression-locked. Dev
+// stations are reachable by URL only.
 const menuStations = stations.filter((s) => s.group === "lesson");
 const panoramaStations = stations.filter((s) => s.group === "panorama");
+const metaStations = stations.filter((s) => s.group === "meta");
 
 /**
  * The station switcher, folded into the header's top-left title slot (replaces
@@ -92,15 +94,19 @@ export function StationNav({ title }: { title: string }) {
             // short or landscape phone viewports.
             className="max-h-[min(70dvh,32rem)] w-56 overflow-y-auto rounded-lg border border-border bg-panel py-1 shadow-lg"
           >
-            {[...menuStations, ...panoramaStations].map((s, i) => {
+            {[...menuStations, ...panoramaStations, ...metaStations].map((s, i) => {
               const active = s.id === currentId;
               const locked =
                 isLocked(s.id, unlockedCount) || stationClosed(closed, s.id);
               // Section label above the lesson block (the 建構演變 session),
-              // and rule + label where the panorama block starts.
+              // rule + label where the panorama block starts, and a bare rule
+              // before the meta block (排行榜).
               const firstLesson = i === 0;
               const firstPanorama =
                 panoramaStations.length > 0 && i === menuStations.length;
+              const firstMeta =
+                metaStations.length > 0 &&
+                i === menuStations.length + panoramaStations.length;
               return (
                 <div key={s.id}>
                   {firstLesson ? (
@@ -111,6 +117,8 @@ export function StationNav({ title }: { title: string }) {
                     <div className="mx-3 mb-1 mt-1.5 border-t border-border/50 pt-1.5 font-mono text-[10px] uppercase tracking-wide text-muted">
                       全景
                     </div>
+                  ) : firstMeta ? (
+                    <div className="mx-3 mt-1.5 border-t border-border/50 pt-1.5" />
                   ) : null}
                 <button
                   type="button"

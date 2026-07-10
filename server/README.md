@@ -29,6 +29,9 @@ transformer — using it for the RNN lesson would defeat the lesson).
 | `POST /transformer/attention` | one element of `attention.json sentences[]` | `{text}` → `{sentenceId, tokens, layers, nLayers, nHeads}` — real Qwen attention, all 28 layers × 16 heads (gzip on the wire). Max ~24 tokens (canvas legibility, not a model limit). |
 | `POST /order-shuffle/score` | one element of `predictions.json arrangements[]` | `{tokens}` → `{tokens, text, avgLogProb, ppl}` — Qwen sequence log-prob of the ordered arrangement (the order-SENSITIVE side). |
 | `POST /order-shuffle/bag` | a slice of `predictions.json wordVectors` | `{words}` → `{vectors, fingerprintDims}` — per-word embedding fingerprints; the browser mean-pools them (the order-INVARIANT side). The request takes a word *set*, so reordering can't even change it. |
+| `GET /quests/{station}` | — | Session required. The station's quests in their public shape (id/kind/title/prompt/choices/points) plus THIS caller's done/★ status. MCQ answers and hunt verifiers never leave `app/quests/*`. |
+| `POST /quests/{station}/{quest_id}/attempt` | — | Session required. MCQ: `{choice}` (an index); hunt: `{evidence: {...}}`, re-verified server-side with the same model code the inference routers use. → `{correct, done, points, firstTry}`. Idempotent (repeat completions score 0), ~5 s cooldown after a wrong attempt, wrong answers reveal nothing. |
+| `GET /leaderboard` | — | Session required (any role — it powers the projector view). `{teams, me, questTotals, generatedAt}`: 小隊 rankings with an anonymous per-member `memberPoints` spread, plus the CALLER's own standing (`me`). **No one else's name ever rides this payload** — per-person scoring is deliberately not public. Students + mentors rank, sorted by points desc with earlier-last-score tiebreak; 小隊 labels come from `GROUPS_CSV`, unmapped students rank under `未分組`. |
 
 All inference routes require a valid **session cookie**, minted by `POST /auth`
 from per-person credentials (see "Auth" below). CORS is restricted to
@@ -65,6 +68,27 @@ written to `USAGE_DIR/controls.json`, which every replica hot-reloads within
 inference call, throttles shrink only that person's rate bucket
 (`app/limits.py`). Remote/scriptable view: `GET /admin/usage` with an admin
 session.
+
+**Quests + leaderboard.** Each lesson station defines 3–5 server-side quests
+(`app/quests/<station>.py` — scavenger *hunts* the server re-verifies from
+submitted evidence, and first-try-★ *MCQs*). Attempts append to this replica's
+`quests-<port>.jsonl` under `USAGE_DIR` (same multi-replica pattern as the
+usage log; any replica answers box-wide), and scoring is **derived from the
+raw log on every read** — idempotent completions, server-side firstTry, a ~5 s
+cooldown after a wrong attempt — so nothing the client claims is trusted
+(sole exception: the pixel-shuffle station trains in the browser, so its hunt
+only sanity-bounds the claimed numbers; accepted at camp scale with named
+accounts + the ban hammer). The 小隊 mapping comes from `GROUPS_CSV` (default
+`<repo>/student-group-id.csv`): **paste the real camp CSV onto the box by
+hand** — it is PII, gitignored, and only the 姓名/組別 columns are ever read
+(`app/groups.py`; the repo ships `student-group-id.example.csv` with fake
+names for the shape). Missing/malformed groups file → the server still boots
+and everyone ranks under 未分組; drop the file in and restart to pick it up.
+Banned students can't log in, so they can't score. The CSV's 隊輔 column also
+creates **mentor accounts**: each listed 隊輔 logs in with their name +
+`MENTOR_PASSWORD` (role `mentor`) and ranks under their own 小隊 — handy for
+testing the flow end to end, and it means 隊輔 answers add to their team's
+score (ban or unset `MENTOR_PASSWORD` if that's unwanted on camp day).
 
 **Abuse guards.** A student who knows the password can still drive the GPU, so
 to bound the blast radius every inference route runs behind a **global

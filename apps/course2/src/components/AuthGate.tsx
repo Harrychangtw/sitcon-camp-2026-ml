@@ -88,7 +88,7 @@ function LoginScreen({ onEnter }: { onEnter: () => void }) {
             if (status !== "checking") setStatus("idle");
           }}
           autoComplete="off"
-          placeholder="生日 8 碼（例：20110922）"
+          placeholder="生日 8 碼（例：20190214）"
           aria-label="密碼：生日 8 碼"
           className="w-full rounded-md border border-border bg-bg px-3 py-2 text-fg outline-none focus:border-accent"
         />
