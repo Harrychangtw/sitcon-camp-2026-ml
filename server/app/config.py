@@ -28,11 +28,18 @@ def find_repo_root(start: Path) -> Path:
 class Settings:
     # Server-only HMAC key that signs session cookies (see app/auth.py). Was the
     # client `X-Camp-Token`; that shipped in the Vite bundle and is gone now — a
-    # student authenticates with CAMP_PASSWORD instead. This never leaves the box.
+    # person authenticates with their own credentials instead. Never leaves the box.
     camp_token: str
-    # Shared class password, spoken to students, posted to /auth to mint a
-    # session. Rotated daily (see README). Compared with secrets.compare_digest.
-    camp_password: str
+    # Shared staff password: staff log in as their own display name plus this
+    # (roster.py). Replaces the old single class-wide CAMP_PASSWORD; students
+    # now use their roster name + birthday instead.
+    staff_password: str
+    # Password for the fixed `admin` username; unlocks /admin/usage.
+    admin_password: str
+    # Roster CSV of `名字,YYYY-MM-DD` rows (PII: gitignored, box-only).
+    students_csv: Path
+    # Where per-replica usage-<port>.jsonl logs and controls.json live.
+    usage_dir: Path
     session_ttl_hours: int  # session cookie lifetime (short: a camp day or less)
     cookie_secure: bool  # True → Secure + SameSite=None (https); False → dev http
     allowed_origins: list[str]
@@ -72,12 +79,19 @@ def load_settings() -> Settings:
             "server-only secret shared across replicas. Set it in server/.env."
         )
 
-    password = os.environ.get("CAMP_PASSWORD", "").strip()
-    if not password or password == "change-me":
+    staff_password = os.environ.get("STAFF_PASSWORD", "").strip()
+    if not staff_password or staff_password == "change-me":
         raise SystemExit(
-            "camp-server: CAMP_PASSWORD is unset (or still 'change-me'). The "
-            "inference routes are gated by a session minted from this shared "
-            "password (spoken to students) — refusing to serve without one. "
+            "camp-server: STAFF_PASSWORD is unset (or still 'change-me'). "
+            "Staff sessions are minted from it (roster.py); refusing to serve "
+            "without one. Set it in server/.env."
+        )
+
+    admin_password = os.environ.get("ADMIN_PASSWORD", "").strip()
+    if not admin_password or admin_password == "change-me":
+        raise SystemExit(
+            "camp-server: ADMIN_PASSWORD is unset (or still 'change-me'). "
+            "It gates /admin/usage; refusing to serve without one. "
             "Set it in server/.env."
         )
 
@@ -98,9 +112,17 @@ def load_settings() -> Settings:
         if p.strip()
     ]
 
+    students_csv = os.environ.get("STUDENTS_CSV", "").strip()
+    usage_dir = os.environ.get("USAGE_DIR", "").strip()
+
     return Settings(
         camp_token=token,
-        camp_password=password,
+        staff_password=staff_password,
+        admin_password=admin_password,
+        # Roster + usage live outside git: the CSV is PII, the logs are runtime
+        # state. Defaults keep the single-.env-per-box convention.
+        students_csv=Path(students_csv) if students_csv else root / "students-bd.csv",
+        usage_dir=Path(usage_dir) if usage_dir else server_dir / "usage",
         # Short by design: a session is a convenience for the class period, not a
         # long-lived credential. Daily password rotation gates new logins on top.
         session_ttl_hours=_env_int("SESSION_TTL_HOURS", 8),

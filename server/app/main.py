@@ -14,7 +14,7 @@ Run:  uvicorn app.main:app --host 0.0.0.0 --port $PORT  (see README runbook)
 from __future__ import annotations
 
 import logging
-import secrets
+import time
 from contextlib import asynccontextmanager
 from typing import Annotated
 
@@ -26,8 +26,11 @@ from fastapi.responses import JSONResponse
 
 from .auth import SESSION_COOKIE, issue_session, verify_session
 from .config import load_settings
+from .controls import CONTROLS_FILENAME, Controls
 from .limits import InferenceLimiter, RateLimitConfig
 from .loader import load_models
+from .roster import authenticate, load_roster
+from .usage import UsageLog, aggregate
 from .routers import (
     diffusion,
     embedding,
@@ -46,6 +49,15 @@ log = logging.getLogger("camp.server")
 
 settings = load_settings()
 
+# Fail at boot, not at first login, if the roster CSV is missing or malformed.
+roster = load_roster(settings.students_csv)
+log.info("roster: %d students loaded from %s", len(roster), settings.students_csv)
+
+# Per-person usage attribution (usage.py) + manual ban/throttle state shared
+# with the usage TUI (controls.py). One usage file per replica, keyed by port.
+usage_log = UsageLog(settings.usage_dir, settings.port)
+controls = Controls(settings.usage_dir / CONTROLS_FILENAME)
+
 limiter = InferenceLimiter(
     RateLimitConfig(
         max_concurrent=settings.max_concurrent_infer,
@@ -53,7 +65,8 @@ limiter = InferenceLimiter(
         rate_per_min=settings.rate_limit_per_min,
         rate_burst=settings.rate_limit_burst,
         trusted_proxies=frozenset(settings.trusted_proxies),
-    )
+    ),
+    controls=controls,
 )
 
 
@@ -106,19 +119,31 @@ async def log_validation_error(request: Request, exc: RequestValidationError):
 
 @app.post("/auth", response_model=AuthResponse, dependencies=[Depends(limiter.rate_limit)])
 def auth(req: AuthRequest, response: Response) -> AuthResponse:
-    """Exchange the shared class password for a short-lived session cookie.
+    """Exchange per-person credentials for a short-lived session cookie.
 
-    Constant-time compare against CAMP_PASSWORD (a wrong password is a 401 with
-    no timing tell). On success we set an HttpOnly + Secure + SameSite session
-    cookie (app/auth.py) the browser then sends on every inference call — so no
-    secret ever ships in the client bundle. Rate-limited (shared with the
-    inference bucket) to blunt password guessing behind the funnel."""
-    if not secrets.compare_digest(req.password, settings.camp_password):
-        raise HTTPException(status_code=401, detail="invalid password")
+    Students: roster name + birthday. Staff: own name + STAFF_PASSWORD. Admin:
+    `admin` + ADMIN_PASSWORD. (Checks in app/roster.py; every compare is
+    constant-time.) On success we set an HttpOnly + Secure + SameSite session
+    cookie carrying the signed identity (app/auth.py) that the browser sends
+    on every inference call — so no secret ever ships in the client bundle.
+    Rate-limited to blunt password guessing behind the funnel, and every
+    attempt (success or not, with the claimed username) lands in the usage
+    log so brute-forcing is attributable."""
+    ident = authenticate(
+        req.username, req.password, roster, settings.staff_password, settings.admin_password
+    )
+    if ident is None:
+        usage_log.record(user=req.username.strip(), role="unknown", route="/auth", status=401)
+        raise HTTPException(status_code=401, detail="invalid username or password")
+    if ident.username in controls.current().banned:
+        usage_log.record(user=ident.username, role=ident.role, route="/auth", status=403)
+        raise HTTPException(
+            status_code=403, detail="account disabled by staff — 帳號已被工作人員停用"
+        )
     ttl = settings.session_ttl_hours * 3600
     response.set_cookie(
         key=SESSION_COOKIE,
-        value=issue_session(settings.camp_token, ttl),
+        value=issue_session(ident, settings.camp_token, ttl),
         max_age=ttl,
         httponly=True,
         secure=settings.cookie_secure,
@@ -127,18 +152,51 @@ def auth(req: AuthRequest, response: Response) -> AuthResponse:
         samesite="none" if settings.cookie_secure else "lax",
         path="/",
     )
-    return AuthResponse(ok=True, expiresInSeconds=ttl)
+    usage_log.record(user=ident.username, role=ident.role, route="/auth", status=200)
+    return AuthResponse(ok=True, expiresInSeconds=ttl, name=ident.username, role=ident.role)
 
 
 def require_session(
+    request: Request,
     camp_session: Annotated[str, Cookie(alias=SESSION_COOKIE)] = "",
 ) -> None:
     """Gate: a valid, unexpired, correctly-signed session cookie or 401. The
-    frontend treats 401 as 'log in again' (re-shows the password screen) while
+    verified identity is attached to request.state so the rate limiter can key
+    per-person and the usage middleware can attribute the request. The
+    frontend treats 401 as 'log in again' (re-shows the login screen) while
     still falling back to precomputed JSON, so a logged-out student sees the
     class keep working."""
-    if not verify_session(camp_session, settings.camp_token):
+    ident = verify_session(camp_session, settings.camp_token)
+    if ident is None:
         raise HTTPException(status_code=401, detail="no valid session — POST /auth")
+    request.state.camp_identity = ident
+
+
+def require_admin(request: Request) -> None:
+    """Gate (after require_session): admin sessions only."""
+    if request.state.camp_identity.role != "admin":
+        raise HTTPException(status_code=403, detail="admin only")
+
+
+@app.middleware("http")
+async def record_usage(request: Request, call_next):
+    """Attribute every authenticated request to its person in the usage log,
+    with wall-time ms (inference routes: dominated by GPU work, so this is the
+    per-person compute-intensity signal the TUI ranks by). Runs outside the
+    dependency stack, so it also sees the limiter's 429/403 outcomes. /auth
+    logs itself inside the endpoint (no identity on request.state there)."""
+    start = time.perf_counter()
+    response = await call_next(request)
+    ident = getattr(request.state, "camp_identity", None)
+    if ident is not None:
+        usage_log.record(
+            user=ident.username,
+            role=ident.role,
+            route=request.url.path,
+            status=response.status_code,
+            ms=(time.perf_counter() - start) * 1000,
+        )
+    return response
 
 
 # Every inference route runs, in order: session auth (unauth requests never touch
@@ -160,6 +218,21 @@ app.include_router(order_shuffle.router, dependencies=GUARDS)
 app.include_router(lora.router, dependencies=GUARDS)
 app.include_router(steering.router, dependencies=GUARDS)
 app.include_router(diffusion.router, dependencies=GUARDS)
+
+
+@app.get(
+    "/admin/usage",
+    dependencies=[Depends(require_session), Depends(require_admin), Depends(limiter.rate_limit)],
+)
+def admin_usage() -> JSONResponse:
+    """Box-wide per-person usage summary (all replicas' JSONL files) plus the
+    live ban/throttle state. Admin session only. The heavier interactive view
+    is the usage TUI on the box (scripts/usagetui.py); this endpoint is the
+    remote/scriptable equivalent: `curl -b <cookie> /admin/usage | jq`."""
+    data = aggregate(settings.usage_dir)
+    state = controls.current()
+    data["controls"] = {"banned": sorted(state.banned), "throttle": state.throttle}
+    return JSONResponse(data)
 
 
 @app.get("/health", response_model=HealthResponse)

@@ -1,10 +1,13 @@
 """Backend abuse guards: a global concurrency cap plus a forgiving rate limit.
 
-The routes are gated by a shared class password → session cookie (app/auth.py),
-but every student in the room holds that password, so a valid session can still
-call the GPU directly. These guards bound the blast radius so a holder of a valid
-session still can't peg the box. (They also throttle /auth to blunt password
-guessing — /auth carries the rate-limit dependency but not the GPU slot.)
+The routes are gated by per-person credentials → session cookie (app/auth.py,
+app/roster.py), and every valid session can still call the GPU directly. These
+guards bound the blast radius so a holder of a valid session still can't peg
+the box: inference buckets key on the session's USERNAME (rate_limit below),
+and staff can manually ban/throttle one person via controls.json (controls.py,
+written by scripts/usagetui.py). (/auth also carries the rate-limit dependency
+to blunt password guessing, but not the GPU slot; it keys per-IP/global since
+there is no identity yet.)
 
 What actually protects the GPU here is the **concurrency cap**, not the rate
 limit. It is source-independent: no matter how a flood arrives, at most
@@ -41,6 +44,8 @@ from dataclasses import dataclass
 from typing import Optional
 
 from fastapi import HTTPException, Request
+
+from .controls import Controls
 
 log = logging.getLogger("camp.server.limits")
 
@@ -85,8 +90,10 @@ class InferenceLimiter:
     counter check nor the bucket update awaits mid-update, they need no lock.
     """
 
-    def __init__(self, cfg: RateLimitConfig) -> None:
+    def __init__(self, cfg: RateLimitConfig, controls: Optional[Controls] = None) -> None:
         self.cfg = cfg
+        # Manual ban/throttle state shared with the usage TUI (controls.py).
+        self._controls = controls
         # Constructed at import time (no running loop): fine on Python ≥3.10,
         # where asyncio.Semaphore no longer binds to a loop at construction.
         self._sem: Optional[asyncio.Semaphore] = (
@@ -119,19 +126,19 @@ class InferenceLimiter:
 
     # -- rate limit (forgiving backstop) --------------------------------------
 
-    def _allow(self, key: str) -> bool:
-        if self.cfg.rate_per_min <= 0:  # 0 disables the rate limit entirely
+    def _allow(self, key: str, rate_per_min: int, burst: int) -> bool:
+        if rate_per_min <= 0:  # 0 disables the rate limit entirely
             return True
         now = time.monotonic()
         b = self._buckets.get(key)
         if b is None:
-            b = _Bucket(tokens=float(self.cfg.rate_burst), updated=now)
+            b = _Bucket(tokens=float(burst), updated=now)
             self._buckets[key] = b
             if len(self._buckets) > _MAX_BUCKETS:
                 self._buckets.popitem(last=False)  # evict oldest
         else:
             elapsed = now - b.updated
-            b.tokens = min(self.cfg.rate_burst, b.tokens + elapsed * self._refill_per_sec)
+            b.tokens = min(burst, b.tokens + elapsed * rate_per_min / 60.0)
             b.updated = now
             self._buckets.move_to_end(key)
         if b.tokens >= 1.0:
@@ -140,8 +147,36 @@ class InferenceLimiter:
         return False
 
     async def rate_limit(self, request: Request) -> None:
-        """Dependency: 429 when the (per-IP or global) bucket is empty."""
-        if not self._allow(self.client_key(request)):
+        """Dependency: 429 when the bucket is empty; 403 when the person is
+        banned.
+
+        Buckets are keyed by USERNAME once the auth gate has attached an
+        identity to request.state (GUARDS order puts require_session first),
+        so one student hammering the box gets throttled while everyone else
+        keeps working; this replaces the useless-behind-the-funnel per-IP
+        keying for the inference routes. /auth carries no identity yet and
+        still keys per-IP/global. Manual throttles from the usage TUI shrink
+        one person's bucket without touching anyone else's."""
+        rate, burst = self.cfg.rate_per_min, self.cfg.rate_burst
+        ident = getattr(request.state, "camp_identity", None)
+        if ident is None:
+            key = self.client_key(request)
+        else:
+            key = f"user:{ident.username}"
+            if self._controls is not None:
+                state = self._controls.current()
+                if ident.username in state.banned:
+                    raise HTTPException(
+                        status_code=403,
+                        detail="account disabled by staff — 帳號已被工作人員停用",
+                    )
+                limit = state.throttle.get(ident.username)
+                if limit is not None:
+                    # Enforce the manual throttle even when the default rate
+                    # limit is disabled (rate_per_min = 0).
+                    rate = min(rate, limit) if rate > 0 else limit
+                    burst = min(burst, limit) if burst > 0 else limit
+        if not self._allow(key, rate, burst):
             raise HTTPException(
                 status_code=429,
                 detail="rate limit exceeded — showing precomputed results",

@@ -21,7 +21,8 @@ transformer — using it for the RNN lesson would defeat the lesson).
 | Route | Mirrors artifact | Notes |
 | --- | --- | --- |
 | `GET /health` | — | No auth (Caddy least_conn health-checks it). Public body is coarse — `{status, device_kind}`. The exact card name + loaded-model list are exposed only when `ENABLE_DOCS=1`, so a passer-by can't fingerprint the box. |
-| `POST /auth` | — | No auth (this is how you get it). `{password}` → constant-time compare with `CAMP_PASSWORD`; on match sets an HttpOnly + Secure + SameSite session cookie (`{ok, expiresInSeconds}` body carries no secret), else `401`. Rate-limited. |
+| `POST /auth` | — | No auth (this is how you get it). `{username, password}` → per-person check (`app/roster.py`): students use roster name + birthday (8 digits, separators forgiven), staff use their own name + `STAFF_PASSWORD`, `admin` + `ADMIN_PASSWORD` unlocks `/admin`. On match sets an HttpOnly + Secure + SameSite session cookie (`{ok, expiresInSeconds, name, role}` body carries no secret), else `401` (`403` if banned). Rate-limited; every attempt lands in the usage log with the claimed username. |
+| `GET /admin/usage` | — | Admin session only. Box-wide per-person usage aggregate (all replicas' JSONL files) plus the live ban/throttle state. The interactive equivalent is the usage TUI (`scripts/usagetui.py`, in `scripts/serve-multi.sh`'s "control" window). |
 | `POST /embedding/lookup` | one word of `points.json` + `neighbors.json` | `{word}` → `{inVocab, point, neighbors, suggestions}`. One shared zh+en space (`Qwen/Qwen3-Embedding-0.6B`). In-vocab words return the shipped values verbatim; novel words are embedded live with the same multilingual model + PCA/cluster params. |
 | `POST /next-token/predict` | one prompt of `distributions.json prompts{}` | `{prompt}` → `{prompt, model, topN, entries}` — real Qwen top-N log-probs over the full vocab; tokens are real subword pieces. Long prompts are truncated to the last 48 tokens, not rejected. |
 | `POST /rnn/forward` | one element of `activations.json sequences[]` | `{text}` or `{tokens}` → `{sequenceId, label, tokens, hiddenSize, hidden, influence}` from the **trained** GRU (`rnn_state.npz`). Out-of-vocab words map to `<unk>`. Max 24 tokens. |
@@ -30,23 +31,40 @@ transformer — using it for the RNN lesson would defeat the lesson).
 | `POST /order-shuffle/bag` | a slice of `predictions.json wordVectors` | `{words}` → `{vectors, fingerprintDims}` — per-word embedding fingerprints; the browser mean-pools them (the order-INVARIANT side). The request takes a word *set*, so reordering can't even change it. |
 
 All inference routes require a valid **session cookie**, minted by `POST /auth`
-from the shared `CAMP_PASSWORD` (see "Auth" below). CORS is restricted to
+from per-person credentials (see "Auth" below). CORS is restricted to
 `ALLOWED_ORIGINS` and runs with `allow_credentials=True` so the cookie rides
 along. Input lengths are capped; bad input gets a 4xx with a clear message,
 never a stack trace.
 
-**Auth (password → session cookie).** There is **no secret in the client
-bundle**. A student types the shared class password (spoken aloud) into the
-login popup, which `POST`s it to `/auth`; the server constant-time-compares it
-with `CAMP_PASSWORD` and, on a match, sets a short-lived **HttpOnly + Secure +
+**Auth (per-person credentials → session cookie).** There is **no secret in
+the client bundle**. Each person logs in as themselves (`app/roster.py`):
+students with their name on the roster CSV (`STUDENTS_CSV`) + birthday as an
+8-digit password (separators forgiven), staff with their own display name +
+`STAFF_PASSWORD` (so staff stay individually attributable), and the fixed
+username `admin` + `ADMIN_PASSWORD` for `/admin/usage`. Every compare is
+constant-time. On a match the server sets a short-lived **HttpOnly + Secure +
 SameSite** session cookie (`app/auth.py`). The cookie is a stateless
-`"<expiry>.<hmac>"` signed with `CAMP_TOKEN` — a strong, **server-only** secret
-shared across replicas via `.env`, so any replica behind the LB verifies a
-cookie any other minted, and a restart doesn't log the class out. The frontend
-sends inference calls with `credentials: "include"`; on a `401` it re-shows the
-login popup, and if the server is unreachable it falls back to precomputed JSON
-(so a dead backend never traps the class). Rotate the password daily — see
-"Rotating the class password" below.
+`"<expiry>.<role>.<b64u(name)>.<hmac>"` signed with `CAMP_TOKEN` — a strong,
+**server-only** secret shared across replicas via `.env` — so any replica
+behind the LB verifies a cookie any other minted AND attributes the request to
+a person (usage log + per-person rate buckets), and a restart doesn't log the
+class out. The frontend sends inference calls with `credentials: "include"`;
+on a `401` it re-shows the login popup, and if the server is unreachable it
+falls back to precomputed JSON (so a dead backend never traps the class).
+
+**Usage attribution + manual controls.** Every authenticated request (and
+every login attempt) is appended to this replica's `usage-<port>.jsonl` under
+`USAGE_DIR` (default `server/usage/`, gitignored) with user, role, route,
+status and wall-time ms — see `app/usage.py`. Watch it live with the usage TUI
+(`uv run python scripts/usagetui.py`, auto-started in the "control" window of
+`scripts/serve-multi.sh`, below the classroom lock/unlock TUI): it ranks
+people by summed inference ms and can
+**ban** (`b`) or **throttle** (`t`, max req/min) a person. Those controls are
+written to `USAGE_DIR/controls.json`, which every replica hot-reloads within
+~1s (`app/controls.py`) — banned people get 403 on login and on every
+inference call, throttles shrink only that person's rate bucket
+(`app/limits.py`). Remote/scriptable view: `GET /admin/usage` with an admin
+session.
 
 **Abuse guards.** A student who knows the password can still drive the GPU, so
 to bound the blast radius every inference route runs behind a **global
@@ -222,8 +240,9 @@ python3 -c "import secrets; print(secrets.token_urlsafe(32))"   # → CAMP_TOKEN
 ```
 
 Edit `.env`: set `CAMP_TOKEN` (the server-only cookie-signing secret — use the
-strong value above), set `CAMP_PASSWORD` (the short, speakable password you'll
-tell students — rotate it daily), set `ALLOWED_ORIGINS` to the deployed course2
+strong value above), set `STAFF_PASSWORD` + `ADMIN_PASSWORD`, point
+`STUDENTS_CSV` at the roster CSV (`名字,YYYY-MM-DD` rows — PII: keep it
+OUTSIDE the repo, mode 600), set `ALLOWED_ORIGINS` to the deployed course2
 origin (plus `http://localhost:5173` for dev), pick `PORT`, leave `DEVICE=auto`.
 For pure-http localhost dev also set `COOKIE_SECURE=0` (the cookie can't be
 `Secure` over plain http). **Nothing else changes between the 3090 and the V100
@@ -311,9 +330,9 @@ First authenticate to get a session cookie into a jar, then one call per route
 
 ```bash
 BASE=http://<host>:<port>; JAR=/tmp/camp.cookies
-# Exchange the password for the session cookie (saved into $JAR). Wrong password → 401.
+# Exchange credentials for the session cookie (saved into $JAR). Wrong → 401.
 curl -s -c $JAR -X POST $BASE/auth -H "Content-Type: application/json" \
-  -d '{"password":"<your CAMP_PASSWORD>"}'    # {"ok":true,"expiresInSeconds":28800}
+  -d '{"username":"<name>","password":"<birthday or STAFF_PASSWORD>"}'  # {"ok":true,...,"role":"staff"}
 curl -s -b $JAR -X POST $BASE/embedding/lookup -H "Content-Type: application/json" \
   -d '{"word":"貓"}'                         # inVocab:true, point+neighbors == artifact values (en words mixed in)
 curl -s -b $JAR -X POST $BASE/embedding/lookup -H "Content-Type: application/json" \
@@ -356,28 +375,25 @@ OFF, just leave `VITE_LIVE_INFERENCE_URL` unset at build time — no code change
 > a caddy/nginx reverse proxy or a Cloudflare tunnel) — for a camp-LAN dev
 > serve over http this doesn't apply.
 
-### 7. Rotating the class password
+### 7. Rotating passwords
 
-The **password** (`CAMP_PASSWORD`) is the only thing students hold, and it never
-ships in the bundle — so unlike the old token, rotating it needs **no frontend
-rebuild**. Rotate it **daily** (and immediately if it leaks). Because sessions
-are signed with `CAMP_TOKEN`, not the password, existing sessions survive a
-password change until they expire (`SESSION_TTL_HOURS`, default 8h) — set a
-shorter TTL if you want a password rotation to also expire live sessions sooner.
+Students hold only their own name + birthday; the shared secrets are
+`STAFF_PASSWORD` (staff logins) and `ADMIN_PASSWORD` (`/admin/usage`), and
+neither ships in the bundle — rotating them needs **no frontend rebuild**.
+Rotate immediately if one leaks. Because sessions are signed with
+`CAMP_TOKEN`, not the passwords, existing sessions survive a rotation until
+they expire (`SESSION_TTL_HOURS`, default 8h). A misbehaving individual does
+not need a rotation at all: ban or throttle them from the usage TUI (`b` /
+`t` in serve-multi.sh's "control" window) — bans bite existing sessions
+within ~1s.
 
 ```bash
-# 1. Pick a fresh, speakable password (anything you can say to the room).
-NEW=neuron-4f2a         # e.g.
-
-# 2. Set it on the backend (server/.env — gitignored, never committed)
-#    edit CAMP_PASSWORD=$NEW   (or: sed -i "s/^CAMP_PASSWORD=.*/CAMP_PASSWORD=$NEW/" server/.env)
-
-# 3. Restart the backend workers so they pick up the new password.
+# 1. Edit the secret(s) in server/.env (gitignored, never committed):
+#      STAFF_PASSWORD=...   ADMIN_PASSWORD=...
+# 2. Restart the backend workers so they pick up the change.
 #    multi-GPU (this box, via scripts/serve-multi.sh): restart that; or systemd:
 #      sudo systemctl restart camp-server@0 camp-server@1 camp-server@2 camp-server@3
 #    single process: sudo systemctl restart camp-server
-
-# 4. Tell the room the new password. Done — no rebuild, no redeploy.
 ```
 
 To invalidate **every** live session at once (e.g. suspected abuse), also rotate
@@ -405,9 +421,11 @@ web-console security group**. In the console, open **only** the one service
 port (TCP, source as narrow as the venue allows). Outside smoke test:
 `curl http://203.145.221.64:<PORT>/health` — if it hangs, the security group
 is still closed. Because this box has a public IP: expose only the one port,
-rotate `CAMP_PASSWORD` daily (see "Rotating the class password" — no secret
-ships in the bundle now), keep `CAMP_TOKEN` a strong server-only value, and rely
-on the built-in concurrency cap + rate limit (`app/limits.py`) to bound abuse.
+keep `STAFF_PASSWORD`/`ADMIN_PASSWORD` unspoken outside the team (see
+"Rotating passwords" — no secret ships in the bundle now), keep `CAMP_TOKEN` a
+strong server-only value, and rely on the built-in per-person rate buckets +
+concurrency cap (`app/limits.py`) and the usage TUI's ban/throttle to bound
+abuse.
 Docs/schema are off by default (`ENABLE_DOCS` unset).
 
 ## Sidebar B — Home 3090 box

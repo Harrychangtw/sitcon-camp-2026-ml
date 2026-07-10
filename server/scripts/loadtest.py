@@ -12,9 +12,10 @@ imported by app/.
   .venv/bin/python scripts/loadtest.py --base http://127.0.0.1:8300 \
       --route /transformer/attention -n 60
 
-Auth: POSTs the password to /auth once, then reuses the session cookie for the
-burst. Password resolution: --password flag, else $CAMP_PASSWORD, else
-server/.env. NB the cookie is Secure — over plain http (a local 127.0.0.1 run)
+Auth: POSTs credentials to /auth once (username "loadtest" + the staff
+password by default; override with --username/--password), then reuses the
+session cookie for the burst. Password resolution: --password flag, else
+$STAFF_PASSWORD, else server/.env. NB the cookie is Secure — over plain http (a local 127.0.0.1 run)
 the client won't send it back, so either test against the https funnel or start
 the server with COOKIE_SECURE=0 for a local http benchmark.
 
@@ -48,14 +49,14 @@ PAYLOADS: dict[str, dict] = {
 def resolve_password(cli_password: str | None) -> str:
     if cli_password:
         return cli_password
-    if os.environ.get("CAMP_PASSWORD"):
-        return os.environ["CAMP_PASSWORD"]
+    if os.environ.get("STAFF_PASSWORD"):
+        return os.environ["STAFF_PASSWORD"]
     env_file = Path(__file__).resolve().parent.parent / ".env"
     if env_file.exists():
         for line in env_file.read_text().splitlines():
-            if line.startswith("CAMP_PASSWORD="):
+            if line.startswith("STAFF_PASSWORD="):
                 return line.split("=", 1)[1].strip()
-    sys.exit("loadtest: no password (use --password, $CAMP_PASSWORD, or server/.env)")
+    sys.exit("loadtest: no password (use --password, $STAFF_PASSWORD, or server/.env)")
 
 
 async def one_request(
@@ -70,7 +71,9 @@ async def one_request(
         return time.perf_counter() - t0, -1
 
 
-async def run(base: str, route: str, password: str, n: int, timeout: float) -> int:
+async def run(
+    base: str, route: str, username: str, password: str, n: int, timeout: float
+) -> int:
     payload = PAYLOADS[route]
     headers = {"Content-Type": "application/json"}
     limits = httpx.Limits(max_connections=n, max_keepalive_connections=n)
@@ -79,7 +82,9 @@ async def run(base: str, route: str, password: str, n: int, timeout: float) -> i
         base_url=base, headers=headers, timeout=timeout, limits=limits
     ) as client:
         # Authenticate once → session cookie into the client's jar.
-        auth = await client.post("/auth", json={"password": password})
+        auth = await client.post(
+            "/auth", json={"username": username, "password": password}
+        )
         if auth.status_code != 200:
             sys.exit(f"loadtest: /auth got {auth.status_code}: {auth.text[:200]}")
         # Warmup (untimed): CUDA kernels, HTTP connections, proxy health state.
@@ -126,11 +131,16 @@ def main() -> None:
     ap.add_argument("--base", default=os.environ.get("BASE", "http://127.0.0.1:8300"))
     ap.add_argument("--route", default="/transformer/attention", choices=PAYLOADS)
     ap.add_argument("-n", type=int, default=60, help="burst size (default 60)")
+    ap.add_argument("--username", default="loadtest")
     ap.add_argument("--password", default=None)
     ap.add_argument("--timeout", type=float, default=120.0)
     args = ap.parse_args()
     password = resolve_password(args.password)
-    sys.exit(asyncio.run(run(args.base, args.route, password, args.n, args.timeout)))
+    sys.exit(
+        asyncio.run(
+            run(args.base, args.route, args.username, password, args.n, args.timeout)
+        )
+    )
 
 
 if __name__ == "__main__":

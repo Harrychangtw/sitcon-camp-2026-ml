@@ -5,9 +5,12 @@
 #                  port BASE_PORT+1+i, bound to 127.0.0.1)
 #     pane  4    = caddy load balancer on 127.0.0.1:PROXY_PORT (deploy/Caddyfile)
 #     pane  5    = course2 frontend (vite, :5173)
-#   window "classroom": the classroom control TUI (scripts/classroom.mjs) —
-#     global lock / per-station open-close / goto broadcasts. Quitting it (q)
-#     drops to a shell in that window; rerun with `node scripts/classroom.mjs`.
+#   window "control": the control room — top pane the classroom TUI
+#     (scripts/classroom.mjs: global lock / per-station open-close / goto),
+#     bottom pane the per-person usage TUI (server/scripts/usagetui.py:
+#     live req + inference-ms ranking, b = ban, t = throttle). Quitting either
+#     (q) drops that pane to a shell; rerun with `node scripts/classroom.mjs`
+#     or `uv run python scripts/usagetui.py` (from server/).
 #
 # The two tailscale funnels are UNTOUCHED: the frontend funnel keeps serving
 # 5173, and the backend funnel keeps targeting PROXY_PORT — only what sits
@@ -77,12 +80,18 @@ tmux split-window -t "$SESSION" -c "$ROOT"
 tmux send-keys -t "$SESSION" "$FRONTEND" C-m
 tmux select-layout -t "$SESSION" tiled
 
-# Separate window for the classroom control TUI (lock / open-close / goto).
+# Window 2 = the control room, so window 1 stays pure logs. Top pane: the
+# classroom TUI (per-station unlock/lock + goto broadcasts). Bottom pane: the
+# per-person usage TUI (ranks people by summed inference ms; b = ban,
+# t = throttle). Bans/throttles land in server/usage/controls.json, which
+# every replica hot-reloads within ~1s (app/controls.py) — no restart needed.
 # "$SESSION:" (trailing colon) — bare "camp" would match the WINDOW named camp.
-tmux new-window -t "$SESSION:" -c "$ROOT" -n classroom
-tmux send-keys -t "$SESSION:classroom" "node scripts/classroom.mjs" C-m
+tmux new-window -t "$SESSION:" -c "$ROOT" -n control
+tmux send-keys -t "$SESSION:control" "node scripts/classroom.mjs" C-m
+tmux split-window -v -t "$SESSION:control" -c "$ROOT/server"
+tmux send-keys -t "$SESSION:control" "uv run python scripts/usagetui.py" C-m
 
-# Land on the serve window; the TUI is one `next-window` (prefix-n) away.
+# Land on the serve window; the control room is one `next-window` (prefix-n) away.
 tmux select-window -t "$SESSION:camp"
 tmux select-pane -t "$SESSION".0
 if [ -t 0 ]; then exec tmux attach -t "$SESSION"; else

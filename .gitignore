@@ -54,6 +54,14 @@ public/data/**/skyfall/**/*.splat
 # regenerable, ~10 MB/language — never committed)
 precompute/artifacts/
 
+# student roster (names + birthdays = PII, and the birthdays are the login
+# passwords). The real file lives OUTSIDE the repo (see STUDENTS_CSV in
+# server/.env); this pattern is a safety net so a stray copy can't land.
+students-bd.csv
+# per-person usage logs + ban/throttle state (runtime state written by
+# server/app/usage.py and server/scripts/usagetui.py)
+server/usage/
+
 # classroom progression lock — runtime state written by scripts/unlock.sh
 apps/course2/public/unlocked.txt
 # classroom live control (lock / goto broadcasts) — written by scripts/classroom.mjs

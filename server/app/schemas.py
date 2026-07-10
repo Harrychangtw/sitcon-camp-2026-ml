@@ -28,18 +28,24 @@ from camp_precompute.steering import MAX_STRENGTH
 
 
 class AuthRequest(BaseModel):
-    """The shared class password, posted to /auth to mint a session cookie."""
+    """Per-person credentials posted to /auth to mint a session cookie:
+    students use roster name + birthday, staff use own name + STAFF_PASSWORD,
+    `admin` + ADMIN_PASSWORD unlocks /admin (see app/roster.py)."""
 
+    username: str = Field(min_length=1, max_length=100)
     password: str = Field(min_length=1, max_length=200)
 
 
 class AuthResponse(BaseModel):
     """Success body for /auth. Carries no secret — the session rides in an
-    HttpOnly cookie the browser sends automatically; this just tells the login
-    screen how long the client-side "logged in" hint is good for."""
+    HttpOnly cookie the browser sends automatically; this tells the login
+    screen how long the client-side "logged in" hint is good for and who the
+    server thinks just logged in (both already known to the person typing)."""
 
     ok: Literal[True]
     expiresInSeconds: int
+    name: str
+    role: Literal["student", "staff", "admin"]
 
 
 # --- tokenizer -----------------------------------------------------------------
