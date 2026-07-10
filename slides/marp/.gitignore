@@ -4,5 +4,5 @@ assets/fonts/*.ttf
 assets/fonts/*.otf
 
 # generated exports + web bundle
-out/
+
 web/
